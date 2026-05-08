@@ -12,9 +12,10 @@ function renderJabatanSelect() {
     if (!sel) return;
     // Jabatan default mencakup semua peran baru
     const jabDefault = ['Dokter', 'Admin', 'Paramedis', 'Apoteker', 'Kasir', 'ATLM'];
-    const jabList = (typeof JABATAN_MEDIS !== 'undefined' && Array.isArray(JABATAN_MEDIS) && JABATAN_MEDIS.length > 0)
+    // FIX: spread operator agar tidak mutasi array JABATAN_MEDIS global
+    const jabList = [...((typeof JABATAN_MEDIS !== 'undefined' && Array.isArray(JABATAN_MEDIS) && JABATAN_MEDIS.length > 0)
         ? JABATAN_MEDIS
-        : jabDefault;
+        : jabDefault)];
     // Pastikan jabatan baru selalu ada meski tidak di list lama
     const jabatanTambahan = ['Apoteker', 'Kasir', 'ATLM'];
     jabatanTambahan.forEach(j => { if (!jabList.includes(j)) jabList.push(j); });
@@ -163,11 +164,12 @@ async function simpanUserBaru() {
                 user_id: newUser.userId
             });
 
-            // Refresh cache dokter di settings jika sudah dimuat
-            if (typeof _dokterList !== 'undefined') {
+            // FIX: cek window._dokterAktif (variabel yang benar-benar dipakai) bukan _dokterList
+            if (typeof window._dokterAktif !== 'undefined' || typeof _renderDokterList === 'function') {
                 try {
                     const data = await sb_getSettings();
                     if (data.dokter) window._dokterAktif = data.dokter;
+                    if (typeof _renderDokterList === 'function') _renderDokterList();
                 } catch(e) {}
             }
         }
@@ -209,9 +211,10 @@ function openEditUserModal(id) {
     const jabSel = $('edit_u_jabatan');
     if (jabSel) {
         const jabDefault = ['Dokter', 'Admin', 'Paramedis', 'Apoteker', 'Kasir', 'ATLM'];
-        const jabList = (typeof JABATAN_MEDIS !== 'undefined' && Array.isArray(JABATAN_MEDIS) && JABATAN_MEDIS.length > 0)
+        // FIX: spread operator agar tidak mutasi array JABATAN_MEDIS global
+        const jabList = [...((typeof JABATAN_MEDIS !== 'undefined' && Array.isArray(JABATAN_MEDIS) && JABATAN_MEDIS.length > 0)
             ? JABATAN_MEDIS
-            : jabDefault;
+            : jabDefault)];
         const jabatanTambahan = ['Apoteker', 'Kasir', 'ATLM'];
         jabatanTambahan.forEach(j => { if (!jabList.includes(j)) jabList.push(j); });
         const jabListWithResign = jabList.includes('Sudah Resign') ? jabList : [...jabList, 'Sudah Resign'];
@@ -238,6 +241,11 @@ async function updatePinUser() {
 
     if (!newPin && !jabatan) return showToast("⚠️ Tidak ada perubahan untuk disimpan", "warning");
     if (newPin && newPin.length < 4) return showToast("⚠️ PIN minimal 4 digit", "warning");
+
+    // FIX: cek apakah jabatan benar-benar berubah dari nilai sebelumnya
+    const userSekarang = userListCache.find(x => x.id === id);
+    const jabatanBerubah = jabatan && userSekarang && jabatan !== userSekarang.jabatan;
+    if (!newPin && !jabatanBerubah) return showToast("⚠️ Tidak ada perubahan untuk disimpan", "warning");
 
     const btn = $('btnUpdateUser');
     if (btn) { btn.disabled = true; btn.innerText = "Mengupdate..."; }
@@ -270,9 +278,19 @@ async function hapusUser() {
     const id   = $('edit_u_id')   ? $('edit_u_id').value   : '';
     const nama = $('edit_u_nama') ? $('edit_u_nama').value : 'user ini';
 
-    // Konfirmasi ganda karena penghapusan permanen
-    if (!confirm(`⚠️ Hapus akun "${nama}"?\n\nCatatan: Data kunjungan & rekam medis yang pernah dibuat tetap tersimpan di database.\nAksi ini tidak dapat dibatalkan.`)) return;
-    if (!confirm(`Konfirmasi sekali lagi: hapus permanen akun "${nama}"?`)) return;
+    // FIX: gunakan showKonfirmasiDangerZone langsung — tidak bergantung pada patch
+    // dari modal-konfirmasi.js yang mungkin belum aktif saat fungsi dipanggil
+    const konfirmFn = (typeof showKonfirmasiDangerZone === 'function')
+        ? () => showKonfirmasiDangerZone(nama, {
+            message: 'Akun ini akan dihapus permanen. Data kunjungan & rekam medis yang pernah dibuat <b>tetap tersimpan</b>.'
+          })
+        : () => Promise.resolve(
+            confirm(`⚠️ Hapus akun "${nama}"?\n\nData kunjungan & rekam medis tetap tersimpan.\nAksi ini tidak dapat dibatalkan.`) &&
+            confirm(`Konfirmasi sekali lagi: hapus permanen akun "${nama}"?`)
+          );
+
+    const ok = await konfirmFn();
+    if (!ok) return;
 
     const btn = $('btnHapusUser');
     if (btn) { btn.disabled = true; btn.innerText = "Menghapus..."; }
