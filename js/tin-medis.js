@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  KLIKPRO RME — TIM-MEDIS.JS
+//  KLIKPRO RME — TIN-MEDIS.JS
 //  Modul: Tindakan Medis (Hecting, Injeksi, Infus, dll.)
 //
 //  Tanggung jawab file ini:
