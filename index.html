@@ -256,7 +256,7 @@
             const jsKeys = [
                 'jsUtils', 'jsSupabase', 'jsSupabaseStok', 'jsSupabaseBiaya',
                 'jsSettings', 'jsAuth',
-                'jsIcd10', 'jsPasien', 'jsKunj', 'jsResepModal', 'jsModal', 'jsUser',
+                'jsIcd10', 'jsPasien', 'jsKunj', 'jsModalResep', 'jsModal', 'jsUser',
                 'jsLaporan', 'jsStok', 'jsBiaya',
                 'jsPemPenunjang', 'jsTinMedis', 'jsPemLabor',
                 'jsApp', 'jsAiRek'
@@ -576,13 +576,13 @@
             console.log('[Klikpro] ✅ Local patches applied: jabatan, saveAll, status badge, riwayat fetch');
 
             // ── PATCH 5: Resep Modal — override _tampilModalResep ──
-            // Hanya aktif jika resep-modal.js belum berhasil di-inject dari GitHub
+            // Hanya aktif jika modal-resep.js belum berhasil di-inject dari GitHub
             // (misal: file belum ada di repo). Jika sudah ter-inject, fungsi ini
             // tidak akan dijalankan karena _resepModalPatched sudah true.
             if (!window._resepModalPatched && typeof _tampilModalResep === 'function') {
-                // resep-modal.js sudah ter-inject dari GitHub, tandai sebagai aktif
-                window._resepModalPatched = true;
-                console.log('[Klikpro] ✅ resep-modal.js aktif dari GitHub');
+                // modal-resep.js.js sudah ter-inject dari GitHub, tandai sebagai aktif
+                window._ModalResepPatched = true;
+                console.log('[Klikpro] ✅ modal-resep.js aktif dari GitHub');
             }
         }, INTERVAL);
     })();
