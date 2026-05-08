@@ -1,0 +1,66 @@
+<div id="pageUser" class="page">
+        <div class="card">
+            <div class="card-header-section">➕ Tambah User Baru</div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label">Nama Lengkap</label>
+                    <input type="text" id="u_nama" class="form-control" placeholder="Nama user...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Jabatan</label>
+                    <!-- Diisi dinamis oleh renderJabatanSelect() dari user.js saat halaman dibuka -->
+                    <select id="u_jabatan" class="form-control" onchange="_toggleFormDokterBaru()">
+                        <option value="Dokter">Dokter</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Paramedis">Paramedis</option>
+                        <option value="Sudah Resign">Sudah Resign</option>
+                    </select>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">
+                        💡 User dengan jabatan <strong>Dokter</strong> akan otomatis tercatat sebagai dokter pemeriksa di setiap kunjungan pasien (untuk integrasi Satu Sehat).
+                    </div>
+                </div>
+
+                <!-- Panel data Satu Sehat — hanya tampil jika jabatan = Dokter -->
+                <div id="panelDataDokterBaru" style="display:none;margin-top:4px;padding:12px 14px;background:rgba(5,150,105,0.05);border:1px solid rgba(5,150,105,0.2);border-radius:12px;">
+                    <div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                        🏥 Data Satu Sehat / Integrasi FHIR
+                        <span style="font-size:9px;font-weight:600;background:rgba(5,150,105,0.15);color:#059669;padding:2px 7px;border-radius:20px;">Otomatis masuk Daftar Dokter</span>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">
+                                NIK KTP <span style="color:#ef4444;">*</span>
+                            </label>
+                            <input type="tel" id="u_nik" class="form-control" placeholder="16 digit NIK KTP" maxlength="16">
+                        </div>
+                        <div class="col-6">
+                            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Kode IHS (Satu Sehat)</label>
+                            <input type="text" id="u_ihs" class="form-control" placeholder="IHS Number">
+                        </div>
+                        <div class="col-6">
+                            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">SIP / STR</label>
+                            <input type="text" id="u_sip" class="form-control" placeholder="No. SIP/STR">
+                        </div>
+                        <div class="col-12">
+                            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Spesialisasi</label>
+                            <input type="text" id="u_spesialis" class="form-control" placeholder="Umum / Sp.PD / Sp.OG / dll">
+                        </div>
+                    </div>
+                    <div style="font-size:10px;color:#059669;margin-top:8px;">
+                        ✅ Data ini akan otomatis tersimpan di <strong>Settings → Data Dokter</strong> dan terhubung ke akun login ini. Tidak perlu input ulang di halaman Settings.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">PIN (6 Digit)</label>
+                    <input type="number" id="u_pin" class="form-control" placeholder="123456">
+                </div>
+                <button onclick="simpanUserBaru()" id="btnSimpanUser" class="btn-custom btn-primary-custom w-100 mt-3">💾 Simpan Akun User</button>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header-section">👥 Daftar Akun Sistem</div>
+            <div class="card-body" id="listUserContainer" style="padding:14px;display:flex;flex-direction:column;gap:0;">
+                <div class="empty-state"><div class="empty-icon">⏳</div>Memuat data user...</div>
+            </div>
+        </div>
+    </div>

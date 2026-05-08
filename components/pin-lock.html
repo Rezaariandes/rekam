@@ -1,0 +1,35 @@
+<div class="pin-overlay" id="pinScreen">
+    <div class="pin-container">
+        <div class="pin-icon">🔒</div>
+        <div class="pin-title">Masukkan PIN</div>
+        <div class="form-group mb-3 text-start px-1 mt-3">
+            <label class="form-label" style="font-size:10px; color:rgba(255,255,255,0.5); letter-spacing:0.5px;">PILIH AKUN ANDA</label>
+            <select id="loginUserSelect" class="form-control" style="text-align:center;">
+                <option value="">Memuat user...</option>
+            </select>
+        </div>
+        <div class="pin-subtitle" id="pinSubtitle">Masukkan PIN 6 Digit</div>
+        <div class="pin-dots" id="pinDots">
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+        </div>
+        <div class="pin-pad">
+            <button class="pin-btn" onclick="inputPin(1)">1</button>
+            <button class="pin-btn" onclick="inputPin(2)">2</button>
+            <button class="pin-btn" onclick="inputPin(3)">3</button>
+            <button class="pin-btn" onclick="inputPin(4)">4</button>
+            <button class="pin-btn" onclick="inputPin(5)">5</button>
+            <button class="pin-btn" onclick="inputPin(6)">6</button>
+            <button class="pin-btn" onclick="inputPin(7)">7</button>
+            <button class="pin-btn" onclick="inputPin(8)">8</button>
+            <button class="pin-btn" onclick="inputPin(9)">9</button>
+            <button class="pin-btn action-btn" onclick="location.reload()">Batal</button>
+            <button class="pin-btn" onclick="inputPin(0)">0</button>
+            <button class="pin-btn action-btn" onclick="deletePin()">⌫</button>
+        </div>
+    </div>
+</div>

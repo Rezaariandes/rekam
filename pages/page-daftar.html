@@ -1,0 +1,43 @@
+<div id="pageDaftar" class="page active">
+        <div class="card">
+            <div class="card-header-section">👤 Pendaftaran Pasien</div>
+            <div class="card-body">
+                <div class="scan-ktp">
+                    <input type="file" id="camInput" accept="image/*" capture="camera">
+                    <div class="scan-ktp-icon">📷</div>
+                    <div class="scan-ktp-label">Ketuk untuk Scan KTP Otomatis</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nama Pasien</label>
+                    <input list="list-pasien" id="nama" class="form-control" placeholder="Cari atau ketik nama..." onchange="autoFillPasien()">
+                    <datalist id="list-pasien"></datalist>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nomor NIK</label>
+                    <input type="tel" id="nik" class="form-control" placeholder="16 digit NIK" maxlength="16">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label">Jenis Kelamin</label>
+                        <select id="jk" class="form-control">
+                            <option value="L">Laki-Laki</option>
+                            <option value="P">Perempuan</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Tanggal Lahir</label>
+                        <input type="tel" id="tgl_lahir" class="form-control" placeholder="DD/MM/YYYY">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Alamat</label>
+                    <textarea id="alamat" class="form-control" rows="2" placeholder="Alamat lengkap..."></textarea>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <button onclick="simpanDataPasienOnly()" id="btnSimpanPasien" class="btn-custom btn-outline-custom" style="flex:1;">💾 Simpan Data</button>
+                    <button onclick="lanjutPemeriksaan()" id="btnNext" class="btn-custom btn-primary-custom" style="flex:1.4;">Lanjut Periksa ›</button>
+                </div>
+                <div id="riwayatDaftarContainer" style="margin-top:16px;"></div>
+            </div>
+        </div>
+    </div>

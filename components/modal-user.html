@@ -1,0 +1,48 @@
+<div class="modal-overlay" id="modalUser" onclick="if(event.target===this) this.classList.remove('show')">
+    <div class="modal-content">
+        <div style="width:40px;height:4px;background:#e2e8f0;border-radius:2px;margin:0 auto 18px;"></div>
+        <div class="fw-bold text-primary mb-3 pb-2 border-bottom" style="font-size:16px;">✏️ Edit Data User</div>
+        <input type="hidden" id="edit_u_id">
+
+        <div class="form-group">
+            <label class="form-label">Nama User</label>
+            <input type="text" id="edit_u_nama" class="form-control" disabled>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Jabatan</label>
+            <!-- Diisi dinamis oleh openEditUserModal() dari user.js -->
+            <select id="edit_u_jabatan" class="form-control" onchange="
+                const ri = document.getElementById('editResignInfo');
+                if (ri) ri.style.display = this.value.toLowerCase() === 'sudah resign' ? 'block' : 'none';
+            "></select>
+        </div>
+
+        <!-- Info khusus jika status Sudah Resign -->
+        <div id="editResignInfo" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(107,114,128,0.08);border:1px solid rgba(107,114,128,0.22);border-radius:10px;font-size:11px;color:#6b7280;line-height:1.6;">
+            🚪 <strong>Status: Sudah Resign</strong><br>
+            Akun ini tidak dapat digunakan untuk login. Semua data kunjungan &amp; rekam medis yang pernah dibuat tetap tersimpan dan dapat dilacak dari riwayat pasien.
+        </div>
+
+        <div class="form-group">
+            <label class="form-label text-danger">Ubah PIN (6 Digit) <span style="font-weight:400;color:var(--text-muted);font-size:11px;">— kosongkan jika tidak diubah</span></label>
+            <input type="number" id="edit_u_pin" class="form-control" placeholder="Kosongkan jika tidak diubah" maxlength="6">
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn-custom" style="flex:1;background:#e2e8f0;color:#475569;" onclick="document.getElementById('modalUser').classList.remove('show')">Batal</button>
+            <button class="btn-custom btn-warning-custom" id="btnUpdateUser" style="flex:2;" onclick="updatePinUser()">💾 Simpan Perubahan</button>
+        </div>
+
+        <!-- Zona Bahaya: Hapus User -->
+        <div style="margin-top:18px;padding-top:14px;border-top:1px dashed rgba(239,68,68,0.3);">
+            <div style="font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">⚠️ Zona Bahaya</div>
+            <button id="btnHapusUser" onclick="hapusUser()" class="btn-custom w-100" style="background:rgba(239,68,68,0.08);color:#dc2626;border:1px solid rgba(239,68,68,0.25);font-size:12px;">
+                🗑️ Hapus Akun User Permanen
+            </button>
+            <div style="font-size:10px;color:#9ca3af;margin-top:5px;text-align:center;">
+                Data rekam medis tetap tersimpan. Aksi tidak dapat dibatalkan.
+            </div>
+        </div>
+    </div>
+</div>

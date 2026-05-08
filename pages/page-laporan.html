@@ -1,0 +1,143 @@
+<div id="pageLaporan" class="page">
+
+  <!-- ══════════════════════════════════════
+       HEADER HALAMAN
+  ══════════════════════════════════════ -->
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-header-section" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span>📊 Laporan & Statistik Kunjungan</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn-custom btn-primary-custom" onclick="exportLaporanCSV()" id="btnExportCsv" style="font-size:11px;padding:6px 12px;display:none;">
+          📥 Export CSV
+        </button>
+        <button class="btn-custom" onclick="cetakLaporan()" id="btnCetakLaporan" style="font-size:11px;padding:6px 12px;background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.3);border-radius:10px;display:none;">
+          🖨️ Cetak
+        </button>
+      </div>
+    </div>
+
+    <!-- ── PANEL FILTER ── -->
+    <div class="card-body" style="padding:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">
+        🔍 Filter Laporan
+      </div>
+      <div class="row g-2">
+
+        <!-- Periode: Bulan & Tahun -->
+        <div class="col-6">
+          <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Bulan</label>
+          <select id="lpr_bulan" class="form-control" style="font-size:13px;">
+            <option value="01">Januari</option>
+            <option value="02">Februari</option>
+            <option value="03">Maret</option>
+            <option value="04">April</option>
+            <option value="05">Mei</option>
+            <option value="06">Juni</option>
+            <option value="07">Juli</option>
+            <option value="08">Agustus</option>
+            <option value="09">September</option>
+            <option value="10">Oktober</option>
+            <option value="11">November</option>
+            <option value="12">Desember</option>
+          </select>
+        </div>
+
+        <div class="col-6">
+          <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Tahun</label>
+          <select id="lpr_tahun" class="form-control" style="font-size:13px;">
+            <!-- Diisi oleh laporan.js saat init -->
+          </select>
+        </div>
+
+        <!-- Filter Diagnosa -->
+        <div class="col-12">
+          <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Diagnosa (ICD-10)</label>
+          <select id="lpr_diagnosa" class="form-control" style="font-size:12px;">
+            <option value="">— Semua Diagnosa —</option>
+            <!-- Diisi oleh laporan.js dari icd10Data -->
+          </select>
+        </div>
+
+        <!-- Filter Dokter -->
+        <div class="col-12">
+          <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Dokter Pemeriksa</label>
+          <select id="lpr_dokter" class="form-control" style="font-size:12px;">
+            <option value="">— Semua Dokter —</option>
+            <!-- Diisi oleh laporan.js dari daftar users jabatan Dokter -->
+          </select>
+        </div>
+
+        <!-- Filter Jenis Kelamin -->
+        <div class="col-6">
+          <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Jenis Kelamin</label>
+          <select id="lpr_jk" class="form-control" style="font-size:12px;">
+            <option value="">Semua</option>
+            <option value="L">Laki-laki</option>
+            <option value="P">Perempuan</option>
+          </select>
+        </div>
+
+        <!-- Filter Status Kunjungan -->
+        <div class="col-6">
+          <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Status</label>
+          <select id="lpr_status" class="form-control" style="font-size:12px;">
+            <option value="">Semua</option>
+            <option value="Selesai">Selesai</option>
+            <option value="Menunggu">Menunggu</option>
+          </select>
+        </div>
+
+        <!-- Tombol Cari -->
+        <div class="col-12" style="margin-top:4px;">
+          <button class="btn-custom btn-primary-custom w-100" onclick="jalankanLaporan()" id="btnJalankanLaporan" style="font-size:13px;">
+            🔍 Tampilkan Laporan
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       RINGKASAN STATISTIK (Kartu Summary)
+  ══════════════════════════════════════ -->
+  <div id="lpr_summary_wrap" style="display:none;">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px;" id="lpr_summary_cards">
+      <!-- Diisi oleh laporan.js -->
+    </div>
+
+    <!-- ── Grafik Distribusi Diagnosa (Bar sederhana) ── -->
+    <div class="card" style="margin-bottom:12px;" id="lpr_chart_wrap">
+      <div class="card-header-section" style="font-size:13px;">📈 10 Diagnosa Terbanyak</div>
+      <div class="card-body" style="padding:14px;" id="lpr_chart_body">
+        <!-- Diisi laporan.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       TABEL HASIL DETAIL
+  ══════════════════════════════════════ -->
+  <div class="card" id="lpr_result_card" style="display:none;">
+    <div class="card-header-section" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:13px;">
+      <span id="lpr_result_title">Hasil Laporan</span>
+      <span id="lpr_result_count" style="font-size:11px;font-weight:600;background:rgba(37,99,235,0.1);color:#2563eb;padding:3px 10px;border-radius:20px;"></span>
+    </div>
+    <div class="card-body" style="padding:0;overflow-x:auto;" id="lpr_table_wrap">
+      <!-- Tabel diisi laporan.js -->
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       STATE KOSONG / LOADING
+  ══════════════════════════════════════ -->
+  <div id="lpr_empty" class="empty-state" style="margin-top:20px;">
+    <div class="empty-icon">📊</div>
+    <div>Pilih filter di atas lalu klik <strong>Tampilkan Laporan</strong></div>
+  </div>
+
+  <div id="lpr_loading" style="display:none;text-align:center;padding:32px 0;">
+    <div style="display:inline-block;width:36px;height:36px;border:3px solid rgba(59,130,246,0.15);border-top-color:#3b82f6;border-radius:50%;animation:spin 0.75s linear infinite;"></div>
+    <div style="margin-top:12px;font-size:13px;font-weight:600;color:var(--text-muted);">Memuat data laporan...</div>
+  </div>
+
+</div>

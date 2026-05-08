@@ -1,0 +1,194 @@
+<div class="modal-overlay" id="modalRiwayat" onclick="if(event.target===this) closeModal()">
+    <div class="modal-content">
+        <div style="width:40px;height:4px;background:#e2e8f0;border-radius:2px;margin:0 auto 18px;"></div>
+        <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+            <div class="fw-bold text-primary" style="font-size:16px;" id="modalTitle">📋 Detail Rekam Medis</div>
+            <button class="btn p-0 text-secondary" style="font-size:18px;" onclick="closeModal()">✕</button>
+        </div>
+
+        <!-- ══ VIEW MODE ══ -->
+        <div id="modalView">
+            <div id="modalTanggalInfoView" class="mb-3 fw-bold text-primary" style="font-size:12px;">Tanggal: - | Waktu: -</div>
+
+            <!-- TTV & Antropometri -->
+            <div class="detail-row">
+                <div class="detail-label">🩺 TTV & Antropometri</div>
+                <div class="detail-value" id="viewTtv"></div>
+            </div>
+
+            <!-- Riwayat Alergi (dalam blok TTV) -->
+            <div class="detail-row" id="viewAlergiRow">
+                <div class="detail-label" style="color:#b45309;">⚠️ Riwayat Alergi</div>
+                <div class="detail-value" id="viewAlergi" style="color:#b45309;font-weight:600;"></div>
+            </div>
+
+            <!-- Keluhan -->
+            <div class="detail-row">
+                <div class="detail-label">🗣️ Keluhan</div>
+                <div class="detail-value" id="viewKeluhan"></div>
+            </div>
+
+            <!-- Pemeriksaan Fisik -->
+            <div class="detail-row">
+                <div class="detail-label">🩺 Pemeriksaan Fisik</div>
+                <div class="detail-value" id="viewFisik"></div>
+            </div>
+
+            <!-- Laboratorium — disembunyikan jika tidak ada data -->
+            <div class="detail-row" id="viewLabRow" style="display:none;">
+                <div class="detail-label">🔬 Laboratorium</div>
+                <div class="detail-value" id="viewLab"></div>
+            </div>
+
+            <!-- Diagnosa -->
+            <div class="detail-row" id="viewDiagRow">
+                <div class="detail-label">📝 Diagnosa</div>
+                <div class="detail-value text-danger fw-bold" id="viewDiag"></div>
+            </div>
+
+            <!-- Terapi & Obat -->
+            <div class="detail-row" id="viewTerapiRow">
+                <div class="detail-label">💊 Terapi & Obat</div>
+                <div class="detail-value" id="viewTerapi"></div>
+            </div>
+
+            <!-- Dokter Pemeriksa — disembunyikan jika tidak ada data -->
+            <div class="detail-row" id="viewDokterRow" style="display:none;">
+                <div class="detail-label">👨‍⚕️ Dokter Pemeriksa</div>
+                <div class="detail-value" id="viewDokterPemeriksa"></div>
+            </div>
+
+            <!-- Notifikasi kunci edit (>2 hari atau bukan pemilik/dokter) -->
+            <div id="editLockNotif" style="display:none;font-size:11px;padding:8px 12px;border-radius:10px;background:rgba(239,68,68,0.08);color:#dc2626;border:1px solid rgba(239,68,68,0.2);margin-bottom:10px;line-height:1.6;">
+                🔒 <span id="editLockMsg"></span>
+            </div>
+
+            <!-- Invoice button -->
+            <div id="viewInvoiceRow" style="margin-bottom:10px;display:none;">
+                <button onclick="_viewInvoiceFromModal()"
+                    style="width:100%;padding:10px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:11px;font-size:12.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                    🧾 Lihat & Print Invoice
+                </button>
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn-custom" style="flex:1;background:#e2e8f0;color:#475569;" onclick="closeModal()">Tutup</button>
+                <button class="btn-custom btn-warning-custom" id="btnToggleEdit" style="flex:1;" onclick="toggleEditModal(true)">✏️ Edit Data</button>
+            </div>
+        </div>
+
+        <!-- ══ EDIT MODE ══ -->
+        <div id="modalEdit" style="display:none;">
+            <input type="hidden" id="modalIndex">
+            <div id="modalTanggalInfoEdit" class="mb-3 fw-bold text-primary" style="font-size:12px;">Edit Data Tanggal: -</div>
+
+            <!-- 🩺 TTV -->
+            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+                <span>🩺 Tanda-Tanda Vital</span>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <div style="flex:1;">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Sistol</label>
+                            <input type="number" id="modalSistol" class="form-control" placeholder="120">
+                        </div>
+                        <div style="padding-top:22px;font-weight:700;color:#94a3b8;">/</div>
+                        <div style="flex:1;">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Diastol</label>
+                            <input type="number" id="modalDiastol" class="form-control" placeholder="80">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Nadi</label>
+                    <input type="number" id="modalNadi" class="form-control" placeholder="80">
+                </div>
+                <div class="col-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Suhu</label>
+                    <input type="number" id="modalSuhu" class="form-control" step="0.1" placeholder="36.5">
+                </div>
+                <div class="col-4">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">RR</label>
+                    <input type="number" id="modalRr" class="form-control" placeholder="20">
+                </div>
+                <div class="col-4">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">BB (kg)</label>
+                    <input type="number" id="modalBb" class="form-control" placeholder="60">
+                </div>
+                <div class="col-4">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">TB (cm)</label>
+                    <input type="number" id="modalTb" class="form-control" placeholder="165">
+                </div>
+            </div>
+
+            <!-- ⚠️ Riwayat Alergi (bagian dari seksi TTV) -->
+            <div class="mb-3" style="background:rgba(180,83,9,0.06);border:1px solid rgba(180,83,9,0.2);border-radius:10px;padding:10px 12px;">
+                <label class="form-label small fw-bold mb-1" style="color:#b45309;">⚠️ Riwayat Alergi</label>
+                <input type="text" id="modalAlergi" class="form-control" placeholder="Contoh: Penisilin, Sulfa, Udang — kosongkan jika tidak ada" style="border-color:rgba(180,83,9,0.3);">
+                <div style="font-size:10px;color:#92400e;margin-top:4px;">Isi jika pasien memiliki alergi obat atau makanan</div>
+            </div>
+
+            <!-- 🗣️ Keluhan -->
+            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+                <span>🗣️ Keluhan Pasien</span>
+            </div>
+            <div class="mb-3">
+                <textarea id="modalKeluhan" class="form-control" rows="2" placeholder="Keluhan utama..."></textarea>
+            </div>
+
+            <!-- 🩺 Pemeriksaan Fisik -->
+            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+                <span>🩺 Pemeriksaan Fisik</span>
+            </div>
+            <div class="mb-3">
+                <textarea id="modalFisik" class="form-control" rows="2" placeholder="Hasil pemeriksaan fisik..."></textarea>
+            </div>
+
+            <!-- 🔬 Laboratorium -->
+            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+                <span>🔬 Hasil Laboratorium</span>
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-4">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">GDS <span style="font-size:9px;">(mg/dL)</span></label>
+                    <input type="number" id="modalLabGds" class="form-control" placeholder="—" min="0" max="999">
+                </div>
+                <div class="col-4">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Kolesterol <span style="font-size:9px;">(mg/dL)</span></label>
+                    <input type="number" id="modalLabChol" class="form-control" placeholder="—" min="0" max="999">
+                </div>
+                <div class="col-4">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Asam Urat <span style="font-size:9px;">(mg/dL)</span></label>
+                    <input type="number" id="modalLabUa" class="form-control" placeholder="—" step="0.1" min="0" max="30">
+                </div>
+            </div>
+
+            <!-- 📝 Diagnosa & Terapi — disembunyikan jika Paramedis -->
+            <div id="modalEditDiagSection">
+                <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+                    <span>📝 Diagnosa & Terapi</span>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-1">Diagnosa Utama</label>
+                        <input list="list-icd" id="modalDiag1" class="form-control" placeholder="Diagnosa...">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-1">Diag. Sekunder</label>
+                        <input list="list-icd" id="modalDiag2" class="form-control" placeholder="Sekunder...">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Terapi & Obat</label>
+                    <textarea id="modalTerapi" class="form-control" rows="2" placeholder="Resep dan terapi..."></textarea>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-2">
+                <button class="btn-custom" style="flex:1;background:#e2e8f0;color:#475569;" onclick="toggleEditModal(false)">Batal</button>
+                <button class="btn-custom btn-primary-custom" id="btnSaveModal" style="flex:2;" onclick="simpanEditModal()">💾 Simpan Perubahan</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,251 @@
+<style>
+/* ═══════════════════════════════════════════
+   KLIKPRO — BOTTOM NAV v3
+   Strategi: item selalu fit di layar,
+   teks diperkecil, ikon jadi prioritas
+   Max 7 item → masing2 min 50px
+═══════════════════════════════════════════ */
+
+:root {
+    --nav-h: 60px;
+    --nav-active: var(--primary, #6366f1);
+}
+
+.bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 999;
+    background: #fff;
+    border-top: 1px solid rgba(0,0,0,0.09);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    min-height: var(--nav-h);
+
+    /* KUNCI: scroll hanya jika benar-benar tidak muat */
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.bottom-nav::-webkit-scrollbar { display: none; }
+
+/* Setiap item mengisi ruang yang sama */
+.nav-item {
+    flex: 1 1 0;          /* grow + shrink seimbang */
+    min-width: 48px;      /* batas bawah agar tidak terlalu sempit */
+    max-width: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 2px 4px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: background 0.12s;
+}
+.nav-item:active { background: rgba(99,102,241,0.07); border-radius: 10px; }
+
+/* ── Icon ── */
+.nav-icon-wrap {
+    font-size: 18px;
+    line-height: 1;
+    margin-bottom: 2px;
+    transition: transform 0.15s;
+}
+.active-nav .nav-icon-wrap {
+    transform: translateY(-2px) scale(1.08);
+}
+
+/* ── Label — sangat kecil, responsif ── */
+.nav-label {
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    padding: 0 2px;
+    text-align: center;
+    line-height: 1.1;
+}
+.active-nav .nav-label { color: var(--nav-active); }
+
+/* ── Garis aktif ── */
+.active-nav::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 22px; height: 3px;
+    background: var(--nav-active);
+    border-radius: 3px 3px 0 0;
+}
+
+/* ── Dot indicator untuk item aktif ── */
+.active-nav .nav-icon-wrap::after {
+    content: '';
+    display: block;
+    width: 4px; height: 4px;
+    background: var(--nav-active);
+    border-radius: 50%;
+    margin: 1px auto 0;
+}
+
+/* ── LAYAR SANGAT SEMPIT (< 360px) ──
+   Sembunyikan label, tampilkan hanya ikon */
+@media (max-width: 359px) {
+    .nav-label { display: none; }
+    .nav-item   { min-width: 40px; padding: 8px 0; }
+    .nav-icon-wrap { font-size: 20px; margin-bottom: 0; }
+    :root { --nav-h: 52px; }
+}
+
+/* ── LAYAR SEDANG (360-480px) ── */
+@media (min-width: 360px) and (max-width: 479px) {
+    .nav-label { font-size: 8px; }
+    .nav-icon-wrap { font-size: 17px; }
+}
+
+/* ── LAYAR LEBAR (>= 480px) ── */
+@media (min-width: 480px) {
+    .nav-item   { max-width: 90px; }
+    .nav-label  { font-size: 9px; }
+    .nav-icon-wrap { font-size: 19px; }
+}
+
+/* ── TABLET / DESKTOP (>= 640px) ── */
+@media (min-width: 640px) {
+    .bottom-nav { justify-content: center; overflow-x: hidden; }
+    .nav-item   { flex: 0 0 80px; }
+    .nav-label  { font-size: 9.5px; }
+}
+
+/* Konten tidak tertutup nav */
+.page {
+    padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 10px) + 6px) !important;
+}
+</style>
+
+<div class="bottom-nav" id="bottomNav">
+    <div class="nav-item active-nav" id="navDaftar" onclick="switchPage('pageDaftar', this)">
+        <div class="nav-icon-wrap">👤</div>
+        <div class="nav-label">Daftar</div>
+    </div>
+    <div class="nav-item" id="navHariIni" onclick="switchPage('pageHariIni', this)">
+        <div class="nav-icon-wrap">📅</div>
+        <div class="nav-label">Kunjungan</div>
+    </div>
+    <div class="nav-item" id="navBiaya" onclick="switchPage('pageBiaya', this)" style="display:none;">
+        <div class="nav-icon-wrap">🏷️</div>
+        <div class="nav-label">Tarif</div>
+    </div>
+    <div class="nav-item" id="navStok" onclick="switchPage('pageStok', this)" style="display:none;">
+        <div class="nav-icon-wrap">💊</div>
+        <div class="nav-label">Stok</div>
+    </div>
+    <div class="nav-item" id="navLaporan" onclick="switchPage('pageLaporan', this)">
+        <div class="nav-icon-wrap">📊</div>
+        <div class="nav-label">Laporan</div>
+    </div>
+    <div class="nav-item" id="navUser" onclick="switchPage('pageUser', this)">
+        <div class="nav-icon-wrap">👥</div>
+        <div class="nav-label">User</div>
+    </div>
+    <div class="nav-item" id="navSettings" onclick="switchPage('pageSettings', this)">
+        <div class="nav-icon-wrap">🛠️</div>
+        <div class="nav-label">Settings</div>
+    </div>
+</div>
+
+<script>
+(function _initNav() {
+    /* ── Scroll ke item aktif saat tap ── */
+    function _scrollToActive(el) {
+        const nav = document.getElementById('bottomNav');
+        if (!nav || !el) return;
+        const navW = nav.offsetWidth;
+        const elL  = el.offsetLeft;
+        const elW  = el.offsetWidth;
+        nav.scrollTo({ left: elL - navW / 2 + elW / 2, behavior: 'smooth' });
+    }
+    window._scrollNavToActive = _scrollToActive;
+
+    /* ── Resize observer: recalc item lebar ── */
+    function _fitNav() {
+        const nav   = document.getElementById('bottomNav');
+        if (!nav) return;
+        const items = Array.from(nav.querySelectorAll('.nav-item'))
+                          .filter(el => el.style.display !== 'none');
+        const count = items.length;
+        if (count === 0) return;
+        const navW  = nav.offsetWidth;          // lebar tersedia
+        const minW  = 48;                       // minimum per item (px)
+        const total = count * minW;
+
+        if (total <= navW) {
+            // Semua muat — bagikan rata
+            items.forEach(el => {
+                el.style.flex = '1 1 0';
+                el.style.minWidth = minW + 'px';
+            });
+            nav.style.overflowX = 'hidden';
+        } else {
+            // Tidak muat — aktifkan scroll, set lebar tetap
+            const fw = Math.max(minW, Math.floor(navW / Math.min(count, 5.5)));
+            items.forEach(el => {
+                el.style.flex = `0 0 ${fw}px`;
+                el.style.minWidth = fw + 'px';
+            });
+            nav.style.overflowX = 'auto';
+        }
+    }
+
+    // Jalankan saat load & resize
+    window.addEventListener('resize', _fitNav);
+    // Jalankan setelah semua modul aktif (nav item mungkin ditampilkan setelah toggle)
+    window._fitNav = _fitNav;
+
+    // Patch switchPage
+    function _patch() {
+        if (typeof window.switchPage === 'function') {
+            const _orig = window.switchPage;
+            window.switchPage = function(pageId, navEl) {
+                _orig(pageId, navEl);
+                if (navEl) {
+                    setTimeout(() => {
+                        _fitNav();
+                        _scrollToActive(navEl);
+                    }, 50);
+                }
+            };
+            _fitNav(); // run once
+        } else {
+            setTimeout(_patch, 150);
+        }
+    }
+    _patch();
+
+    // Juga run saat visibility change (misal rotate HP)
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) _fitNav();
+    });
+
+    // Support screen orientation change
+    if (screen.orientation) {
+        screen.orientation.addEventListener('change', () => setTimeout(_fitNav, 200));
+    } else {
+        window.addEventListener('orientationchange', () => setTimeout(_fitNav, 200));
+    }
+})();
+</script>

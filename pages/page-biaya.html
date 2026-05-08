@@ -1,0 +1,95 @@
+<div id="pageBiaya" class="page">
+    <div class="card">
+        <div class="card-body">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+                <div>
+                    <div style="font-size:16px;font-weight:800;color:var(--primary-dark);">🏷️ Tarif & Biaya Layanan</div>
+                    <div style="font-size:11px;color:var(--text-muted);">Tarif tersusun otomatis sesuai seksi pemeriksaan medis</div>
+                </div>
+                <button onclick="openModalTarif()" style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--primary);color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">
+                    ➕ Tambah Manual
+                </button>
+            </div>
+
+            <!-- Info banner: cara kerja auto-sync -->
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.07),rgba(139,92,246,0.05));border:1.5px solid rgba(99,102,241,0.2);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:11.5px;color:#3730a3;line-height:1.6;">
+                <div style="font-weight:800;margin-bottom:3px;">⚡ Tarif Terhubung Otomatis ke Form Pemeriksaan</div>
+                <div style="color:#4338ca;font-size:11px;">
+                    Setiap layanan dikelompokkan sesuai seksinya di halaman pemeriksaan medis.
+                    Layanan bertanda <span style="background:rgba(5,150,105,0.1);color:#059669;border:1px solid rgba(5,150,105,0.2);border-radius:10px;padding:1px 6px;font-weight:700;font-size:10px;">⚡ auto</span>
+                    akan masuk tagihan <b>otomatis</b> saat kondisi di form terpenuhi.
+                    Aktifkan/nonaktifkan tiap item lewat toggle. Jika Anda menambah jenis lab baru di Settings → item lab baru akan muncul di sini otomatis.
+                </div>
+            </div>
+
+            <!-- Filter seksi tabs -->
+            <div id="biayaKategoriTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;"></div>
+
+            <!-- Daftar tarif per seksi -->
+            <div id="daftarTarif" style="min-height:120px;">
+                <div class="empty-state"><div class="empty-icon">⏳</div>Memuat tarif...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL TAMBAH/EDIT TARIF ══ -->
+    <div id="modalTarif" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.45);overflow-y:auto;padding:16px;">
+        <div style="background:#fff;border-radius:18px;max-width:440px;margin:0 auto;padding:22px 20px;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <div style="font-size:15px;font-weight:800;color:var(--primary-dark);" id="modalTarifTitle">➕ Tambah Tarif Manual</div>
+                <button onclick="closeModalTarif()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);">✕</button>
+            </div>
+            <input type="hidden" id="tarif_id">
+
+            <!-- Info: item dari registry (tampil saat edit item bawaan sistem) -->
+            <div id="infoTarifRegistry" style="display:none;margin-bottom:12px;padding:10px 12px;background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.06));border:1.5px solid rgba(99,102,241,0.25);border-radius:11px;font-size:11px;color:#3730a3;line-height:1.6;"></div>
+
+            <div class="row g-2">
+                <div class="col-12">
+                    <label class="form-label">Nama Layanan <span style="color:red">*</span></label>
+                    <input type="text" id="tarif_nama" class="form-control" placeholder="Contoh: Konsultasi Medis">
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">
+                        Untuk item bawaan sistem, nama ini terhubung ke field di form pemeriksaan — jangan diubah kecuali perlu.
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Kategori <span style="color:red">*</span></label>
+                    <select id="tarif_kategori" class="form-control" onchange="_onKategoriTarifChange(this.value)">
+                        <option value="Pemeriksaan">🩺 Pemeriksaan</option>
+                        <option value="Laboratorium">🔬 Laboratorium</option>
+                        <option value="Penunjang">🔭 Penunjang</option>
+                        <option value="Obat">💊 Obat</option>
+                        <option value="Administrasi">📋 Administrasi</option>
+                        <option value="Tindakan">⚕️ Tindakan</option>
+                        <option value="Lainnya">📌 Lainnya</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Harga (Rp) <span style="color:red">*</span></label>
+                    <input type="number" id="tarif_harga" class="form-control" placeholder="0" min="0">
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">Boleh diisi 0 untuk layanan yang tidak dipungut biaya</div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Keterangan</label>
+                    <input type="text" id="tarif_keterangan" class="form-control" placeholder="Opsional — deskripsi singkat">
+                </div>
+                <div class="col-12">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                        <input type="checkbox" id="tarif_aktif" checked style="width:15px;height:15px;accent-color:var(--primary);">
+                        Aktif — akan dihitung otomatis di tagihan
+                    </label>
+                </div>
+            </div>
+
+            <!-- Info tarif Lab -->
+            <div id="infoTarifLab" style="display:none;margin-top:10px;padding:10px;background:rgba(124,58,237,0.07);border-radius:10px;font-size:11px;color:#5b21b6;">
+                💡 Nama item Lab harus <b>persis sama</b> dengan nama di registry (mis: <b>GDS</b>, <b>Kolesterol</b>, <b>Asam Urat</b>) agar terhitung otomatis di tagihan.
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button onclick="simpanTarif()" style="flex:1;padding:11px;background:var(--primary);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">💾 Simpan</button>
+                <button onclick="closeModalTarif()" style="padding:11px 18px;background:#f1f5f9;color:var(--text);border:none;border-radius:10px;font-size:13px;cursor:pointer;">Batal</button>
+            </div>
+        </div>
+    </div>
+</div>
