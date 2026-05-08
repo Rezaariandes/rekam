@@ -1,161 +1,421 @@
 <div id="pageMedis" class="page">
-        <div class="card">
-            <div class="card-body">
-                <div class="pasien-banner">
-                    <div>
-                        <strong id="infoPasienNama" style="font-size:16px;color:var(--primary-dark);display:block;">—</strong>
-                        <span id="infoPasienNik" style="font-size:11px;color:var(--text-muted);">NIK: —</span>
-                    </div>
-                    <div style="display:flex;gap:8px;">
-                        <div id="infoTglPemeriksaan" class="pasien-badge" style="background:var(--success);display:none;">Tgl: -</div>
-                        <div id="infoPasienUmur" class="pasien-badge">Umur: -</div>
-                    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECTION 1 — INFO PASIEN                          -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="card rm-card">
+        <div class="card-body" style="padding:14px 16px;">
+            <div class="pasien-banner">
+                <div>
+                    <strong id="infoPasienNama" style="font-size:16px;color:var(--primary-dark);display:block;">—</strong>
+                    <span id="infoPasienNik" style="font-size:11px;color:var(--text-muted);">NIK: —</span>
                 </div>
-
-                <!-- ══ SUB-MODUL: TANDA-TANDA VITAL ══ -->
-                <div id="sectionTTV">
-                    <div class="section-divider"><span>🩺 Tanda-Tanda Vital</span></div>
-                    <div class="row g-2 mb-2">
-                        <div class="col-12 col-sm-4">
-                            <div class="ttv-item d-flex align-items-center w-100">
-                                <div class="flex-fill position-relative"><label>Sistol</label><input type="number" id="sistol" placeholder="120" data-save="true"><span class="high-alert">!</span></div>
-                                <div class="ttv-sep">/</div>
-                                <div class="flex-fill position-relative"><label>Diastol</label><input type="number" id="diastol" placeholder="80" data-save="true"><span class="high-alert">!</span></div>
-                            </div>
-                        </div>
-                        <div class="col-4 col-sm-2"><div class="ttv-item"><label>Nadi</label><input type="number" id="nadi" placeholder="80" data-save="true"></div></div>
-                        <div class="col-4 col-sm-2"><div class="ttv-item"><label>Suhu</label><input type="number" id="suhu" placeholder="36.5" step="0.1" data-save="true"></div></div>
-                        <div class="col-4 col-sm-2"><div class="ttv-item"><label>RR</label><input type="number" id="rr" placeholder="20" data-save="true"></div></div>
-                        <div class="col-6 col-sm-2"><div class="ttv-item"><label>BB (kg)</label><input type="number" id="bb" placeholder="60" data-save="true"></div></div>
-                        <div class="col-6 col-sm-2"><div class="ttv-item"><label>TB (cm)</label><input type="number" id="tb" placeholder="165" data-save="true"></div></div>
-                    </div>
-                    <div id="imtCalc" style="text-align:right;font-size:11px;font-weight:700;color:var(--primary);margin-top:2px;margin-bottom:10px;padding-right:4px;"></div>
-
-                    <!-- ── Riwayat Alergi (bagian dari seksi TTV) ── -->
-                    <div style="background:rgba(180,83,9,0.06);border:1px solid rgba(180,83,9,0.22);border-radius:10px;padding:10px 12px;margin-bottom:4px;">
-                        <label class="form-label" style="color:#b45309;font-weight:700;margin-bottom:6px;display:block;">⚠️ Riwayat Alergi</label>
-                        <input type="text" id="alergi" class="form-control" data-save="true"
-                               placeholder="Contoh: Penisilin, Sulfa, Udang — kosongkan jika tidak ada"
-                               style="border-color:rgba(180,83,9,0.3);">
-                        <div style="font-size:10px;color:#92400e;margin-top:4px;">Isi jika pasien memiliki riwayat alergi obat atau makanan</div>
-                    </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <div id="infoTglPemeriksaan" class="pasien-badge" style="background:var(--success);display:none;">Tgl: -</div>
+                    <div id="infoPasienUmur" class="pasien-badge">Umur: -</div>
                 </div>
-
-                <!-- ══ SUB-MODUL: KELUHAN UTAMA ══ -->
-                <div id="sectionKeluhan">
-                    <div class="section-divider"><span>🗣️ Keluhan Pasien</span></div>
-                    <div class="form-group">
-                        <label class="form-label">Keluhan Utama</label>
-                        <textarea id="keluhan" class="form-control" data-save="true" placeholder="Tuliskan keluhan pasien..." rows="2"></textarea>
-                        <button class="stt-btn" onclick="startSTT('keluhan')">🎙️</button>
-                    </div>
-                </div>
-
-                <!-- ══ SUB-MODUL: PEMERIKSAAN FISIK ══ -->
-                <div id="sectionFisik">
-                    <div class="section-divider"><span>🩺 Pemeriksaan Fisik</span></div>
-                    <div class="form-group">
-                        <label class="form-label">Pemeriksaan Fisik</label>
-                        <textarea id="fisik" class="form-control" data-save="true" placeholder="Hasil pemeriksaan fisik..." rows="2"></textarea>
-                        <button class="stt-btn" onclick="startSTT('fisik')">🎙️</button>
-                    </div>
-                </div>
-
-                <!-- ══ SUB-MODUL: PERMINTAAN LABORATORIUM ══ -->
-                <div id="sectionPermintaanLab"></div>
-
-                <!-- ══ SUB-MODUL: LABORATORIUM ══ -->
-                <div id="sectionLab">
-                    <!-- Dirender dinamis oleh _renderSectionLabDinamic() berdasarkan window._labAktif -->
-                    <div class="section-divider"><span>🔬 Hasil Laboratorium</span></div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-4">
-                            <div class="ttv-item">
-                                <label>GDS <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
-                                <input type="number" id="lab_gds" placeholder="—" data-save="true" min="0" max="999">
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="ttv-item">
-                                <label>Kolesterol <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
-                                <input type="number" id="lab_chol" placeholder="—" data-save="true" min="0" max="999">
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="ttv-item">
-                                <label>Asam Urat <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
-                                <input type="number" id="lab_ua" placeholder="—" step="0.1" data-save="true" min="0" max="30">
-                            </div>
-                        </div>
-                    </div>
-                    <div id="labAlert" style="display:none;font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:rgba(239,68,68,0.09);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"></div>
-                </div>
-
-                <!-- ══ SUB-MODUL: PEMERIKSAAN PENUNJANG ══ -->
-                <div id="sectionPenunjang">
-                    <!-- Dirender dinamis oleh renderSectionPenunjang() berdasarkan window._penunjangList -->
-                </div>
-
-                <!-- ══ SUB-MODUL: DIAGNOSA & TERAPI ══ -->
-                <div id="sectionDiagnosa">
-                    <div class="section-divider"><span>📝 Diagnosa & Terapi</span></div>
-
-                    <!-- AI Rekomendasi -->
-                    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-                        <button onclick="rekomendasiAI()" id="btnAI" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:none;border-radius:20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(99,102,241,0.35);transition:all .2s;white-space:nowrap;font-family:inherit;flex-shrink:0;">
-                            <span id="btnAIIcon">✨</span><span id="btnAILabel">Rekomendasi AI</span>
-                        </button>
-                        <div id="aiNotif" style="display:none;flex:1;min-width:200px;background:linear-gradient(135deg,rgba(99,102,241,0.07),rgba(139,92,246,0.07));border:1.5px solid rgba(99,102,241,0.3);border-radius:12px;padding:9px 12px;font-size:11.5px;line-height:1.6;color:#1e1b4b;animation:aiSlideIn .3s ease;">
-                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
-                                <div id="aiNotifText" style="flex:1;"></div>
-                                <button onclick="tutupAINotif()" style="background:none;border:none;color:#6366f1;font-size:15px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;margin-left:4px;">✕</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row g-2 mb-3">
-                        <div class="col-6"><label class="form-label">Diagnosa Utama</label><input list="list-icd" id="diagnosa" class="form-control" data-save="true" placeholder="Diagnosa..."></div>
-                        <div class="col-6"><label class="form-label">Diagnosa 2</label><input list="list-icd" id="diagnosa2" class="form-control" data-save="true" placeholder="Sekunder..."></div>
-                    </div>
-                    <!-- ══ RESEP OBAT (tampil jika modul stok aktif) ══ -->
-                    <div id="sectionResep" style="display:none;"></div>
-
-                    <!-- Terapi manual (tampil jika modul stok tidak aktif) -->
-                    <div id="sectionTerapiManual" class="form-group">
-                        <label class="form-label">Terapi & Obat</label>
-                        <textarea id="terapi" class="form-control" data-save="true" placeholder="Resep dan terapi..." rows="2"></textarea>
-                        <button class="stt-btn" onclick="startSTT('terapi')">🎙️</button>
-                    </div>
-
-                    <!-- ══ TINDAKAN MEDIS ══ -->
-                    <div id="sectionTindakan">
-                        <!-- Dirender dinamis oleh renderSectionTindakan() berdasarkan window._tindakanList -->
-                    </div>
-                    <div style="margin:12px 0 16px;display:flex;align-items:center;gap:8px;">
-                        <input type="checkbox" id="suratSakit" style="width:16px;height:16px;accent-color:var(--danger);"><label for="suratSakit" style="font-size:12px;font-weight:700;color:var(--danger);cursor:pointer;">Pasien meminta Surat Sakit</label>
-                    </div>
-                </div>
-
-                <!-- Tombol Simpan -->
-                <button onclick="saveAll()" id="btnSave" class="btn-custom btn-success-custom w-100 mt-2">✓ Simpan Rekam Medis</button>
-                <a href="#" onclick="resetSession(); return false;" class="cancel-link">✕ Batalkan & Kembali</a>
             </div>
         </div>
-
-        <!-- ══ SUB-MODUL: RIWAYAT PASIEN ══ -->
-        <div id="sectionRiwayat" class="card">
-            <div class="card-header-section">📁 Riwayat Pasien</div>
-            <div class="card-body" id="historyListMedis">
-                <div class="empty-state"><div class="empty-icon">📂</div>Menunggu data...</div>
-            </div>
-        </div>
-
-        <!-- Inline styles untuk animasi AI -->
-        <style>
-            @keyframes aiSlideIn { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:translateY(0)} }
-            #btnAI:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 14px rgba(99,102,241,0.45)}
-            #btnAI:disabled{opacity:0.7;cursor:not-allowed}
-            .ai-chip{display:inline-block;background:rgba(99,102,241,0.12);color:#4f46e5;border-radius:20px;padding:2px 9px;font-size:10.5px;font-weight:700;margin:2px 2px 0 0;cursor:pointer;border:1px solid rgba(99,102,241,0.2);transition:all .15s;}
-            .ai-chip:hover{background:rgba(99,102,241,0.22);}
-        </style>
     </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECTION 2 — PEMERIKSAAN MEDIS                    -->
+    <!--    a. Tanda-Tanda Vital                           -->
+    <!--    b. Keluhan Pasien                              -->
+    <!--    c. Pemeriksaan Fisik                           -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="card rm-card">
+        <div class="rm-section-header">
+            <span class="rm-section-icon">🩺</span>
+            <span class="rm-section-title">Pemeriksaan Medis</span>
+        </div>
+        <div class="card-body">
+
+            <!-- ── 2a. Tanda-Tanda Vital ── -->
+            <div class="rm-subsection">
+                <div class="rm-subsection-label">
+                    <span class="rm-subsection-dot" style="background:var(--primary);"></span>
+                    Tanda-Tanda Vital
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-12 col-sm-4">
+                        <div class="ttv-item d-flex align-items-center w-100">
+                            <div class="flex-fill position-relative">
+                                <label>Sistol</label>
+                                <input type="number" id="sistol" placeholder="120" data-save="true">
+                                <span class="high-alert">!</span>
+                            </div>
+                            <div class="ttv-sep">/</div>
+                            <div class="flex-fill position-relative">
+                                <label>Diastol</label>
+                                <input type="number" id="diastol" placeholder="80" data-save="true">
+                                <span class="high-alert">!</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4 col-sm-2">
+                        <div class="ttv-item"><label>Nadi</label><input type="number" id="nadi" placeholder="80" data-save="true"></div>
+                    </div>
+                    <div class="col-4 col-sm-2">
+                        <div class="ttv-item"><label>Suhu</label><input type="number" id="suhu" placeholder="36.5" step="0.1" data-save="true"></div>
+                    </div>
+                    <div class="col-4 col-sm-2">
+                        <div class="ttv-item"><label>RR</label><input type="number" id="rr" placeholder="20" data-save="true"></div>
+                    </div>
+                    <div class="col-6 col-sm-2">
+                        <div class="ttv-item"><label>BB (kg)</label><input type="number" id="bb" placeholder="60" data-save="true"></div>
+                    </div>
+                    <div class="col-6 col-sm-2">
+                        <div class="ttv-item"><label>TB (cm)</label><input type="number" id="tb" placeholder="165" data-save="true"></div>
+                    </div>
+                </div>
+
+                <!-- IMT -->
+                <div id="imtCalc" style="text-align:right;font-size:11px;font-weight:700;color:var(--primary);margin-top:2px;margin-bottom:10px;padding-right:4px;"></div>
+
+                <!-- Riwayat Alergi -->
+                <div style="background:rgba(180,83,9,0.06);border:1px solid rgba(180,83,9,0.22);border-radius:10px;padding:10px 12px;">
+                    <label class="form-label" style="color:#b45309;font-weight:700;margin-bottom:6px;display:block;">⚠️ Riwayat Alergi</label>
+                    <input type="text" id="alergi" class="form-control" data-save="true"
+                           placeholder="Contoh: Penisilin, Sulfa, Udang — kosongkan jika tidak ada"
+                           style="border-color:rgba(180,83,9,0.3);">
+                    <div style="font-size:10px;color:#92400e;margin-top:4px;">Isi jika pasien memiliki riwayat alergi obat atau makanan</div>
+                </div>
+            </div>
+
+            <!-- ── 2b. Keluhan Pasien ── -->
+            <div class="rm-subsection">
+                <div class="rm-subsection-label">
+                    <span class="rm-subsection-dot" style="background:#7c3aed;"></span>
+                    Keluhan Pasien
+                </div>
+                <div class="form-group" style="position:relative;">
+                    <label class="form-label">Keluhan Utama</label>
+                    <textarea id="keluhan" class="form-control" data-save="true"
+                              placeholder="Tuliskan keluhan pasien..." rows="2"></textarea>
+                    <button class="stt-btn" onclick="startSTT('keluhan')">🎙️</button>
+                </div>
+            </div>
+
+            <!-- ── 2c. Pemeriksaan Fisik ── -->
+            <div class="rm-subsection" style="border-bottom:none;padding-bottom:0;margin-bottom:0;">
+                <div class="rm-subsection-label">
+                    <span class="rm-subsection-dot" style="background:#059669;"></span>
+                    Pemeriksaan Fisik
+                </div>
+                <div class="form-group" style="position:relative;">
+                    <label class="form-label">Hasil Pemeriksaan Fisik</label>
+                    <textarea id="fisik" class="form-control" data-save="true"
+                              placeholder="Hasil pemeriksaan fisik..." rows="2"></textarea>
+                    <button class="stt-btn" onclick="startSTT('fisik')">🎙️</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECTION 3 — PEMERIKSAAN TAMBAHAN                 -->
+    <!--    a. Hasil Laboratorium                          -->
+    <!--    b. Pemeriksaan Penunjang (chip button)         -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="card rm-card">
+        <div class="rm-section-header">
+            <span class="rm-section-icon">🔬</span>
+            <span class="rm-section-title">Pemeriksaan Tambahan</span>
+        </div>
+        <div class="card-body">
+
+            <!-- ── 3a. Hasil Laboratorium (dirender dinamis oleh kunjungan.js) ── -->
+            <div class="rm-subsection" id="sectionLab">
+                <!-- _renderSectionLabDinamic() akan mengisi bagian ini -->
+                <!-- Konten default jika JS belum render -->
+                <div class="rm-subsection-label">
+                    <span class="rm-subsection-dot" style="background:#2563eb;"></span>
+                    Hasil Laboratorium
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-4">
+                        <div class="ttv-item">
+                            <label>GDS <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
+                            <input type="number" id="lab_gds" placeholder="—" data-save="true" min="0" max="999">
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="ttv-item">
+                            <label>Kolesterol <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
+                            <input type="number" id="lab_chol" placeholder="—" data-save="true" min="0" max="999">
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="ttv-item">
+                            <label>Asam Urat <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
+                            <input type="number" id="lab_ua" placeholder="—" step="0.1" data-save="true" min="0" max="30">
+                        </div>
+                    </div>
+                </div>
+                <div id="labAlert" style="display:none;font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:rgba(239,68,68,0.09);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"></div>
+            </div>
+
+            <!-- ── 3b. Pemeriksaan Penunjang (chip button, dirender oleh lab-request.js) ── -->
+            <div id="sectionPermintaanLab" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:4px;">
+                <!-- renderSectionPermintaanLab() akan mengisi bagian ini -->
+                <!-- Kosong jika tidak ada penunjang aktif di tarif -->
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECTION 4 — DIAGNOSA                             -->
+    <!--    Diagnosa 1 + 2, Tombol AI                      -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="card rm-card">
+        <div class="rm-section-header">
+            <span class="rm-section-icon">📋</span>
+            <span class="rm-section-title">Diagnosa</span>
+        </div>
+        <div class="card-body">
+
+            <!-- AI Rekomendasi -->
+            <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+                <button onclick="rekomendasiAI()" id="btnAI"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:none;border-radius:20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(99,102,241,0.35);transition:all .2s;white-space:nowrap;font-family:inherit;flex-shrink:0;">
+                    <span id="btnAIIcon">✨</span><span id="btnAILabel">Rekomendasi AI</span>
+                </button>
+                <div id="aiNotif"
+                    style="display:none;flex:1;min-width:200px;background:linear-gradient(135deg,rgba(99,102,241,0.07),rgba(139,92,246,0.07));border:1.5px solid rgba(99,102,241,0.3);border-radius:12px;padding:9px 12px;font-size:11.5px;line-height:1.6;color:#1e1b4b;animation:aiSlideIn .3s ease;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
+                        <div id="aiNotifText" style="flex:1;"></div>
+                        <button onclick="tutupAINotif()" style="background:none;border:none;color:#6366f1;font-size:15px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;margin-left:4px;">✕</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kolom Diagnosa -->
+            <div class="row g-2">
+                <div class="col-6">
+                    <label class="form-label">Diagnosa Utama</label>
+                    <input list="list-icd" id="diagnosa" class="form-control" data-save="true" placeholder="Diagnosa...">
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Diagnosa 2</label>
+                    <input list="list-icd" id="diagnosa2" class="form-control" data-save="true" placeholder="Sekunder...">
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECTION 5 — TATALAKSANA                          -->
+    <!--    a. Resep Obat (kondisional — stok aktif)        -->
+    <!--    b. Tindakan Medis (kondisional — tarif aktif)   -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="card rm-card">
+        <div class="rm-section-header">
+            <span class="rm-section-icon">💊</span>
+            <span class="rm-section-title">Tatalaksana</span>
+        </div>
+        <div class="card-body">
+
+            <!-- ── 5a. Resep Obat ── -->
+            <!-- Tampil jika modul stok aktif (renderSectionResep via kunjungan.js) -->
+            <div id="sectionResep" style="display:none;"></div>
+
+            <!-- Terapi manual (tampil jika modul stok tidak aktif) -->
+            <div id="sectionTerapiManual">
+                <div class="rm-subsection-label" style="margin-bottom:8px;">
+                    <span class="rm-subsection-dot" style="background:#7c3aed;"></span>
+                    Resep &amp; Terapi
+                </div>
+                <div class="form-group" style="position:relative;">
+                    <label class="form-label">Terapi &amp; Obat</label>
+                    <textarea id="terapi" class="form-control" data-save="true"
+                              placeholder="Resep dan terapi..." rows="2"></textarea>
+                    <button class="stt-btn" onclick="startSTT('terapi')">🎙️</button>
+                </div>
+            </div>
+
+            <!-- ── 5b. Tindakan Medis (dirender oleh lab-request.js) ── -->
+            <!-- _renderSectionTindakan() inject ke sini via sectionDiagnosa lookup -->
+            <!-- Wrapper ini memastikan tindakan tampil di dalam card Tatalaksana -->
+            <div id="sectionTindakan" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:8px;">
+                <!-- Diisi oleh _renderSectionTindakan() dari lab-request.js -->
+                <!-- Kosong jika tidak ada tindakan aktif di tarif -->
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECTION 6 — DOKUMEN KESEHATAN                    -->
+    <!--    a. Surat Sakit                                 -->
+    <!--    b. (placeholder untuk penambahan berikutnya)   -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="card rm-card">
+        <div class="rm-section-header">
+            <span class="rm-section-icon">📄</span>
+            <span class="rm-section-title">Dokumen Kesehatan</span>
+        </div>
+        <div class="card-body">
+
+            <!-- ── 6a. Surat Sakit ── -->
+            <div class="rm-doc-item">
+                <div class="rm-doc-check">
+                    <input type="checkbox" id="suratSakit" style="width:16px;height:16px;accent-color:var(--danger);">
+                    <label for="suratSakit" class="rm-doc-label" style="color:var(--danger);">
+                        Surat Keterangan Sakit
+                    </label>
+                </div>
+                <div class="rm-doc-desc">Centang jika pasien memerlukan surat keterangan sakit</div>
+            </div>
+
+            <!-- Placeholder: dokumen berikutnya bisa ditambahkan di sini -->
+            <!-- Contoh: Surat Rujukan, Surat Sehat, Visum, dll. -->
+
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECTION 7 — SIMPAN REKAM MEDIS                   -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="card rm-card">
+        <div class="card-body" style="padding:14px 16px;">
+            <button onclick="saveAll()" id="btnSave"
+                class="btn-custom btn-success-custom w-100">
+                ✓ Simpan Rekam Medis
+            </button>
+            <a href="#" onclick="resetSession(); return false;" class="cancel-link">
+                ✕ Batalkan &amp; Kembali
+            </a>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECTION 8 — RIWAYAT PASIEN                       -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div id="sectionRiwayat" class="card">
+        <div class="card-header-section">📁 Riwayat Pasien</div>
+        <div class="card-body" id="historyListMedis">
+            <div class="empty-state">
+                <div class="empty-icon">📂</div>
+                Menunggu data...
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  STYLES LOKAL PAGE MEDIS                          -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <style>
+        /* Animasi notif AI */
+        @keyframes aiSlideIn {
+            from { opacity:0; transform:translateY(-5px); }
+            to   { opacity:1; transform:translateY(0); }
+        }
+
+        /* Hover tombol AI */
+        #btnAI:hover:not(:disabled) {
+            transform:translateY(-1px);
+            box-shadow:0 4px 14px rgba(99,102,241,0.45);
+        }
+        #btnAI:disabled { opacity:0.7; cursor:not-allowed; }
+
+        /* Chip AI */
+        .ai-chip {
+            display:inline-block;
+            background:rgba(99,102,241,0.12);
+            color:#4f46e5;
+            border-radius:20px;
+            padding:2px 9px;
+            font-size:10.5px;
+            font-weight:700;
+            margin:2px 2px 0 0;
+            cursor:pointer;
+            border:1px solid rgba(99,102,241,0.2);
+            transition:all .15s;
+        }
+        .ai-chip:hover { background:rgba(99,102,241,0.22); }
+
+        /* Card section rekam medis */
+        .rm-card {
+            border-radius:14px;
+            margin-bottom:12px;
+            overflow:hidden;
+            box-shadow:0 1px 4px rgba(0,0,0,0.07);
+        }
+
+        /* Header section berwarna */
+        .rm-section-header {
+            display:flex;
+            align-items:center;
+            gap:8px;
+            padding:10px 16px;
+            background:var(--surface-2, rgba(0,0,0,0.03));
+            border-bottom:1px solid var(--border);
+        }
+        .rm-section-icon {
+            font-size:15px;
+            line-height:1;
+        }
+        .rm-section-title {
+            font-size:13px;
+            font-weight:700;
+            color:var(--primary-dark, #1e40af);
+            letter-spacing:0.2px;
+        }
+
+        /* Sub-section di dalam card */
+        .rm-subsection {
+            padding-bottom:14px;
+            margin-bottom:14px;
+            border-bottom:1px dashed var(--border);
+        }
+        .rm-subsection-label {
+            display:flex;
+            align-items:center;
+            gap:6px;
+            font-size:11.5px;
+            font-weight:700;
+            color:var(--text-muted);
+            text-transform:uppercase;
+            letter-spacing:0.5px;
+            margin-bottom:10px;
+        }
+        .rm-subsection-dot {
+            width:6px;
+            height:6px;
+            border-radius:50%;
+            flex-shrink:0;
+        }
+
+        /* Dokumen kesehatan item */
+        .rm-doc-item {
+            padding:10px 12px;
+            background:rgba(239,68,68,0.04);
+            border:1px solid rgba(239,68,68,0.15);
+            border-radius:10px;
+            margin-bottom:8px;
+        }
+        .rm-doc-check {
+            display:flex;
+            align-items:center;
+            gap:8px;
+            margin-bottom:3px;
+        }
+        .rm-doc-label {
+            font-size:13px;
+            font-weight:700;
+            cursor:pointer;
+            margin:0;
+        }
+        .rm-doc-desc {
+            font-size:10.5px;
+            color:var(--text-muted);
+            padding-left:24px;
+        }
+    </style>
+
+</div>
