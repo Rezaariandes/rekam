@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════
-//  KLIKPRO RME — TIN-MEDIS.JS
+//  KLIKPRO RME — TIM-MEDIS.JS
 //  Modul: Tindakan Medis (Hecting, Injeksi, Infus, dll.)
 //
 //  Tanggung jawab file ini:
@@ -185,7 +185,7 @@ function _refreshTindakanChipUI() {
     window._renderSectionLabDinamic = function() {
         _orig.apply(this, arguments);
         try { _renderSectionTindakan(); } catch(e) {
-            console.warn('[tim-medis] Gagal render tindakan:', e.message);
+            console.warn('[tin-medis] Gagal render tindakan:', e.message);
         }
     };
 })();
@@ -201,13 +201,12 @@ function _refreshTindakanChipUI() {
     if (typeof _orig !== 'function') return;
 
     window.sb_autoTagihanFromKunjungan = async function(kunjunganId, kunjunganData) {
+        // Jalankan chain sebelumnya (termasuk penunjang dari pem-penunjang.js)
         const items = await _orig.apply(this, arguments);
 
-        let tarifAktif = [];
-        try {
-            const semua = await sb_getTarif();
-            tarifAktif  = semua.filter(t => t.aktif);
-        } catch(e) { return items; }
+        // Gunakan _tarifCache yang sudah ada — hindari fetch ulang
+        // pem-penunjang.js sudah fetch sb_getTarif() sebelumnya dalam chain ini
+        const tarifAktif = (window._tarifCache || []).filter(t => t.aktif);
 
         const reqParsed = (() => {
             try { return kunjunganData.req_lab ? JSON.parse(kunjunganData.req_lab) : {}; }

@@ -12,7 +12,7 @@
 //
 //  Bergantung pada (harus di-load lebih dulu):
 //    - pem-penunjang.js  → _getPenunjangList, _reqLab, _reqLabHasil, _refreshPenunjangChipUI
-//    - tim-medis.js      → _getTindakanList,  _reqTindakan, _refreshTindakanChipUI
+//    - tin-medis.js      → _getTindakanList,  _reqTindakan, _refreshTindakanChipUI
 //
 //  File ini MENGGANTIKAN peran koordinasi dari lab-request.js lama.
 //  Nama tetap memakai prefix "pem-labor" sesuai kesepakatan penamaan.
@@ -107,7 +107,7 @@ function _refreshAllChipUI() {
     if (typeof _refreshPenunjangChipUI === 'function') {
         _refreshPenunjangChipUI();
     }
-    // Refresh chip tindakan (didelegasikan ke tim-medis.js)
+    // Refresh chip tindakan (didelegasikan ke tin-medis.js)
     if (typeof _refreshTindakanChipUI === 'function') {
         _refreshTindakanChipUI();
     }
