@@ -1009,79 +1009,302 @@ function _printInvoiceFromWindow() {
 }
 
 // ════════════════════════════════════════
-//  PRINT INVOICE
+//  PRINT INVOICE — VERSI PROFESIONAL
 // ════════════════════════════════════════
 function printInvoice(tagihan, pasienNama, tgl) {
-    const klinikNama  = window.KLINIK_NAMA  || 'Klinik';
-    const klinikAlamat = window._settingsFull?.klinik_alamat || '';
-    const klinikTelp   = window._settingsFull?.klinik_telp   || '';
+    const klinikNama   = window.KLINIK_NAMA                   || 'Klinik';
+    const klinikAlamat = window._settingsFull?.klinik_alamat  || '';
+    const klinikTelp   = window._settingsFull?.klinik_telp    || '';
+    const klinikEmail  = window._settingsFull?.klinik_email   || '';
+    const dokterNama   = window._settingsFull?.dokter_nama    || '';
+    const logoUrl      = window._settingsFull?.klinik_logo    || '';
 
-    const win = window.open('', '_blank', 'width=420,height=700');
+    const win = window.open('', '_blank', 'width=820,height=1000');
     if (!win) return showToast('⚠️ Izinkan popup untuk print invoice', 'error');
 
+    // ── Nomor & tanggal invoice ──
+    const noInvoice  = 'INV-' + String(tagihan.id || '').substring(0, 8).toUpperCase();
+    const tglCetak   = new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
+    const tglInvoice = tgl ? formatTglIndo(tgl) : tglCetak;
+
+    // ── Status ──
+    const lunas       = (tagihan.status || '').toLowerCase() === 'lunas' || !!tagihan.status_bayar;
+    const statusLabel = lunas ? 'LUNAS' : 'BELUM LUNAS';
+    const statusColor = lunas ? '#16a34a' : '#dc2626';
+    const statusBg    = lunas ? '#dcfce7' : '#fee2e2';
+    const statusBorder= lunas ? '#86efac' : '#fca5a5';
+
+    // ── Angka ──
+    const subtotal = Number(tagihan.subtotal || 0);
+    const diskon   = Number(tagihan.diskon   || 0);
+    const total    = Number(tagihan.total    || subtotal - diskon);
+
+    // ── Terbilang ──
+    function _terbilang(n) {
+        const sat = ['','satu','dua','tiga','empat','lima','enam','tujuh','delapan','sembilan','sepuluh','sebelas'];
+        if (n === 0)  return 'nol';
+        if (n < 12)   return sat[n];
+        if (n < 20)   return sat[n-10] + ' belas';
+        if (n < 100)  return sat[Math.floor(n/10)] + ' puluh' + (n%10 ? ' '+sat[n%10] : '');
+        if (n < 200)  return 'seratus' + (n%100 ? ' '+_terbilang(n%100) : '');
+        if (n < 1000) return sat[Math.floor(n/100)] + ' ratus' + (n%100 ? ' '+_terbilang(n%100) : '');
+        if (n < 2000) return 'seribu' + (n%1000 ? ' '+_terbilang(n%1000) : '');
+        if (n < 1e6)  return _terbilang(Math.floor(n/1000)) + ' ribu' + (n%1000 ? ' '+_terbilang(n%1000) : '');
+        if (n < 1e9)  return _terbilang(Math.floor(n/1e6)) + ' juta' + (n%1e6 ? ' '+_terbilang(n%1e6) : '');
+        return _terbilang(Math.floor(n/1e9)) + ' miliar' + (n%1e9 ? ' '+_terbilang(n%1e9) : '');
+    }
+    const totalTerbilang = _terbilang(total).replace(/\b\w/g, c => c.toUpperCase()) + ' Rupiah';
+
+    // ── QR Code dari nomor invoice ──
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(noInvoice)}&size=80x80&margin=2`;
+
+    // ── Kelompokkan item per kategori ──
+    const items = tagihan.tagihan_item || [];
+    const KAT_ORDER = ['Pemeriksaan','Laboratorium','Penunjang','Tindakan','Obat','Administrasi','Lainnya'];
+    const grouped = {};
+    items.forEach(i => {
+        const kat = i.kategori || 'Lainnya';
+        if (!grouped[kat]) grouped[kat] = [];
+        grouped[kat].push(i);
+    });
+    // Susun sesuai urutan prioritas
+    const katUrut = [
+        ...KAT_ORDER.filter(k => grouped[k]),
+        ...Object.keys(grouped).filter(k => !KAT_ORDER.includes(k))
+    ];
+
+    const KAT_ICON = {
+        'Pemeriksaan':'🩺','Laboratorium':'🔬','Penunjang':'🔭',
+        'Tindakan':'⚕️','Obat':'💊','Administrasi':'📋','Lainnya':'📌'
+    };
+
+    // ── Build baris tabel per grup ──
+    let rowNum = 0;
+    const tableBody = katUrut.map(kat => {
+        const rows = grouped[kat].map(i => {
+            rowNum++;
+            const sub = Number(i.subtotal || (Number(i.jumlah) * Number(i.harga_satuan)));
+            return `<tr>
+              <td class="row-no">${rowNum}</td>
+              <td><div class="item-nama">${escHtml(i.nama_item)}</div></td>
+              <td class="tc">${Number(i.jumlah)}</td>
+              <td class="tr">Rp ${_fmtRp(i.harga_satuan)}</td>
+              <td class="tr">Rp ${_fmtRp(sub)}</td>
+            </tr>`;
+        }).join('');
+        return `<tr class="kat-header">
+          <td colspan="5">
+            <span class="kat-icon">${KAT_ICON[kat]||'📌'}</span> ${kat}
+          </td>
+        </tr>${rows}`;
+    }).join('');
+
+    // ── Logo HTML ──
+    const logoHtml = logoUrl
+        ? `<img src="${escHtml(logoUrl)}" class="logo" alt="Logo">`
+        : `<div class="logo-initials">${escHtml(klinikNama.substring(0,2).toUpperCase())}</div>`;
+
     win.document.write(`<!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
 <meta charset="utf-8">
-<title>Invoice - ${escHtml(pasienNama)}</title>
+<title>Invoice ${noInvoice} — ${escHtml(pasienNama)}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;0,9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  * { margin:0;padding:0;box-sizing:border-box; }
-  body { font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1e293b;background:#fff; }
-  .wrap { max-width:380px;margin:0 auto;padding:20px 16px; }
-  .kop { text-align:center;border-bottom:2px solid #1e293b;padding-bottom:10px;margin-bottom:12px; }
-  .kop h1 { font-size:16px;font-weight:800; }
-  .kop p  { font-size:10px;color:#475569;margin-top:2px; }
-  .inv-title { text-align:center;font-size:13px;font-weight:800;letter-spacing:2px;margin-bottom:10px;border:1.5px dashed #94a3b8;padding:5px;border-radius:4px; }
-  .meta { display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10.5px;margin-bottom:12px; }
-  .meta dt { color:#64748b;font-weight:600; }
-  .meta dd { font-weight:700; }
-  table { width:100%;border-collapse:collapse;margin-bottom:10px; }
-  thead th { background:#f1f5f9;padding:5px 6px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px; }
-  tbody td { padding:5px 6px;font-size:11px;border-bottom:1px solid #f1f5f9; }
-  tbody td:last-child, thead th:last-child { text-align:right; }
-  .subtotal-row td { font-weight:600;color:#475569; }
-  .diskon-row td   { color:#dc2626; }
-  .total-row  td   { font-size:13px;font-weight:900;color:#1d4ed8;border-top:2px solid #1e293b;border-bottom:none;padding-top:8px; }
-  .footer { text-align:center;font-size:10px;color:#94a3b8;border-top:1px dashed #e2e8f0;margin-top:14px;padding-top:10px; }
-  .status-badge { display:inline-block;background:#dcfce7;color:#166534;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:800;margin-left:8px; }
-  @media print { @page { size:80mm auto;margin:0; } .wrap { padding:8px; } }
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --ink:#0f172a;--ink2:#334155;--muted:#64748b;
+    --border:#e2e8f0;--border2:#cbd5e1;--soft:#f8fafc;
+    --blue:#1d4ed8;--blue2:#3b82f6;--green:#16a34a;--red:#dc2626;
+  }
+  body{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--ink);background:#f1f5f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{max-width:760px;margin:28px auto;background:#fff;border-radius:16px;box-shadow:0 6px 40px rgba(0,0,0,.12);overflow:hidden}
+  .accent{height:5px;background:linear-gradient(90deg,#1d4ed8,#3b82f6,#818cf8)}
+
+  /* HEADER */
+  .hdr{display:grid;grid-template-columns:1fr auto;gap:20px;padding:32px 40px 26px;border-bottom:1.5px solid var(--border)}
+  .logo{width:52px;height:52px;border-radius:10px;object-fit:contain;border:1px solid var(--border);margin-bottom:10px;display:block}
+  .logo-initials{width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:900;margin-bottom:10px;letter-spacing:-1px}
+  .klinik-nama{font-size:19px;font-weight:800;color:var(--ink);letter-spacing:-.3px;line-height:1.2}
+  .klinik-info{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.9}
+  .klinik-info span{display:block}
+  .hdr-right{text-align:right}
+  .inv-badge{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 10px;display:inline-block;margin-bottom:8px}
+  .inv-no{font-family:'DM Mono',monospace;font-size:17px;font-weight:500;color:var(--ink);letter-spacing:.5px}
+  .inv-dates{margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.9}
+  .inv-dates span{display:block}
+  .inv-dates strong{color:var(--ink2)}
+
+  /* INFO PASIEN */
+  .info-row{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)}
+  .info-box{padding:18px 40px}
+  .info-box+.info-box{border-left:1px solid var(--border)}
+  .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:6px}
+  .val{font-size:14px;font-weight:700;color:var(--ink)}
+  .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+  /* TABEL ITEM */
+  .items{padding:22px 40px 0}
+  table{width:100%;border-collapse:collapse}
+  .row-no{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);width:28px;padding:10px 8px}
+  thead th{padding:9px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);background:var(--soft);border-bottom:1px solid var(--border)}
+  thead th.tc{text-align:center}
+  thead th.tr{text-align:right}
+  tbody td{padding:10px 10px;font-size:12.5px;color:var(--ink2);vertical-align:middle}
+  tbody td.tc{text-align:center}
+  tbody td.tr{text-align:right;font-weight:600;color:var(--ink)}
+  .item-nama{font-weight:700;color:var(--ink);font-size:13px}
+  /* Kategori header row */
+  tr.kat-header td{
+    padding:8px 10px 5px;
+    font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+    color:var(--muted);background:var(--soft);
+    border-top:2px solid var(--border2);border-bottom:1px solid var(--border);
+  }
+  tr.kat-header:first-child td{border-top:none}
+  .kat-icon{font-size:12px}
+  /* garis antar item */
+  tbody tr:not(.kat-header){border-bottom:1px solid var(--border)}
+  tbody tr:not(.kat-header):last-child{border-bottom:none}
+
+  /* Watermark */
+  .tbl-wrap{position:relative}
+  .lunas-stamp{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%) rotate(-28deg);
+    font-size:72px;font-weight:900;letter-spacing:4px;
+    color:rgba(22,163,74,.09);border:6px solid rgba(22,163,74,.09);
+    padding:8px 24px;border-radius:8px;pointer-events:none;white-space:nowrap;user-select:none
+  }
+
+  /* RINGKASAN */
+  .summary{display:grid;grid-template-columns:1fr 280px;padding:22px 40px;border-top:1px solid var(--border);align-items:start}
+  .terbilang-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+  .terbilang-txt{font-size:12px;color:var(--ink2);font-style:italic;line-height:1.5;border-left:3px solid var(--blue2);padding-left:10px}
+  .sum-rows{}
+  .sum-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:12.5px;color:var(--muted)}
+  .sum-row .sv{font-weight:600;color:var(--ink2)}
+  .sum-row.dk .sv{color:var(--red)}
+  .sum-row.tot{border-top:2px solid var(--ink);margin-top:8px;padding-top:12px;font-size:15px;font-weight:800;color:var(--ink)}
+  .sum-row.tot .sv{font-size:18px;color:var(--blue)}
+
+  /* FOOTER */
+  .ftr{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end;padding:18px 40px 26px;border-top:1px solid var(--border);background:var(--soft)}
+  .ftr-note{font-size:11.5px;color:var(--muted);line-height:1.7}
+  .ftr-cetak{font-size:11px;color:var(--muted);margin-top:4px;font-style:italic}
+  .qr-col{text-align:center}
+  .qr-col img{border:1px solid var(--border);border-radius:8px;display:block}
+  .qr-cap{font-size:9.5px;color:var(--muted);margin-top:3px;font-family:'DM Mono',monospace}
+
+  /* TTD inline di info-box */
+  .ttd-inline{display:flex;flex-direction:column;justify-content:space-between}
+  .ttd-space-inline{flex:1;min-height:60px;border-bottom:1.5px solid var(--ink2);margin-top:8px;margin-right:24px}
+
+  /* PRINT */
+  .no-print{text-align:center;padding:18px}
+  .no-print button{padding:11px 32px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(29,78,216,.3);margin:0 4px}
+  .no-print button.sec{background:#f1f5f9;color:var(--ink2);box-shadow:none}
+  @media print{
+    body{background:#fff}
+    .page{margin:0;box-shadow:none;border-radius:0;max-width:100%}
+    .no-print{display:none}
+    @page{margin:8mm;size:A4}
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="kop">
-    <h1>${escHtml(klinikNama)}</h1>
-    ${klinikAlamat ? `<p>${escHtml(klinikAlamat)}</p>` : ''}
-    ${klinikTelp   ? `<p>Telp: ${escHtml(klinikTelp)}</p>` : ''}
+<div class="page">
+  <div class="accent"></div>
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div>
+      ${logoHtml}
+      <div class="klinik-nama">${escHtml(klinikNama)}</div>
+      <div class="klinik-info">
+        ${klinikAlamat ? `<span>📍 ${escHtml(klinikAlamat)}</span>` : ''}
+        ${klinikTelp   ? `<span>📞 ${escHtml(klinikTelp)}</span>`   : ''}
+        ${klinikEmail  ? `<span>✉️ ${escHtml(klinikEmail)}</span>`  : ''}
+        ${dokterNama   ? `<span>👨‍⚕️ ${escHtml(dokterNama)}</span>`: ''}
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="inv-badge">Invoice</div>
+      <div class="inv-no">${noInvoice}</div>
+      <div class="inv-dates">
+        <span>Tanggal: <strong>${tglInvoice}</strong></span>
+        <span>Dicetak: <strong>${tglCetak}</strong></span>
+      </div>
+
+    </div>
   </div>
-  <div class="inv-title">INVOICE / KWITANSI <span class="status-badge">${escHtml(tagihan.status || 'Lunas')}</span></div>
-  <dl class="meta">
-    <dt>No. Tagihan</dt><dd>${String(tagihan.id || '').substring(0,8).toUpperCase()}</dd>
-    <dt>Tanggal</dt><dd>${tgl ? formatTglIndo(tgl) : '—'}</dd>
-    <dt>Pasien</dt><dd>${escHtml(pasienNama)}</dd>
-    ${tagihan.catatan ? `<dt>Catatan</dt><dd>${escHtml(tagihan.catatan)}</dd>` : ''}
-  </dl>
-  <table>
-    <thead><tr><th>Item</th><th>Qty</th><th>Harga</th><th>Total</th></tr></thead>
-    <tbody>
-      ${(tagihan.tagihan_item || []).map(i => `
-      <tr>
-        <td>${escHtml(i.nama_item)}${i.keterangan ? `<br><span style="font-size:9.5px;color:#94a3b8;">${escHtml(i.keterangan)}</span>` : ''}</td>
-        <td>${i.jumlah}</td>
-        <td>Rp ${_fmtRp(i.harga_satuan)}</td>
-        <td>Rp ${_fmtRp(i.subtotal)}</td>
-      </tr>`).join('')}
-      <tr class="subtotal-row"><td colspan="3">Subtotal</td><td>Rp ${_fmtRp(tagihan.subtotal)}</td></tr>
-      ${tagihan.diskon > 0 ? `<tr class="diskon-row"><td colspan="3">Diskon</td><td>- Rp ${_fmtRp(tagihan.diskon)}</td></tr>` : ''}
-      <tr class="total-row"><td colspan="3">TOTAL</td><td>Rp ${_fmtRp(tagihan.total)}</td></tr>
-    </tbody>
-  </table>
-  <div class="footer">
-    <p>Terima kasih atas kepercayaan Anda</p>
-    <p style="margin-top:4px;">Dicetak: ${new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>
+
+  <!-- INFO PASIEN + TTD -->
+  <div class="info-row">
+    <div class="info-box">
+      <div class="lbl">Tagihan Kepada</div>
+      <div class="val">${escHtml(pasienNama)}</div>
+      <div class="sub">Pasien</div>
+    </div>
+    <div class="info-box ttd-inline">
+      <div class="lbl">Tanda Tangan &amp; Cap Praktek</div>
+      <div class="ttd-space-inline"></div>
+    </div>
   </div>
+
+  <!-- TABEL ITEM -->
+  <div class="items">
+    <div class="tbl-wrap">
+      ${lunas ? '<div class="lunas-stamp">LUNAS</div>' : ''}
+      <table>
+        <thead>
+          <tr>
+            <th class="row-no">#</th>
+            <th>Layanan / Item</th>
+            <th class="tc">Qty</th>
+            <th class="tr">Harga Satuan</th>
+            <th class="tr">Total</th>
+          </tr>
+        </thead>
+        <tbody>${tableBody}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RINGKASAN -->
+  <div class="summary">
+    <div>
+      <div class="terbilang-lbl">Terbilang</div>
+      <div class="terbilang-txt">${totalTerbilang}</div>
+    </div>
+    <div class="sum-rows">
+      <div class="sum-row"><span>Subtotal</span><span class="sv">Rp ${_fmtRp(subtotal)}</span></div>
+      ${diskon > 0 ? `<div class="sum-row dk"><span>Diskon</span><span class="sv">– Rp ${_fmtRp(diskon)}</span></div>` : ''}
+      <div class="sum-row tot"><span>TOTAL</span><span class="sv">Rp ${_fmtRp(total)}</span></div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="ftr">
+    <div>
+      <div class="ftr-note">Terima kasih atas kepercayaan Anda kepada ${escHtml(klinikNama)}.</div>
+      <div class="ftr-cetak">Dicetak pada ${tglCetak}</div>
+    </div>
+    <div class="qr-col">
+      <img src="${qrUrl}" width="80" height="80" alt="QR Invoice">
+      <div class="qr-cap">${noInvoice}</div>
+    </div>
+  </div>
+
+
 </div>
-<script>window.onload = function(){ window.print(); window.onafterprint = function(){ window.close(); }; }<\/script>
+
+<div class="no-print">
+  <button onclick="window.print()">🖨️ Cetak Invoice</button>
+  <button class="sec" onclick="window.close()">Tutup</button>
+</div>
+
+<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};}<\/script>
 </body></html>`);
     win.document.close();
 }
