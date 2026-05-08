@@ -24,7 +24,6 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
     min-height: var(--nav-h);
 
-    /* KUNCI: scroll hanya jika benar-benar tidak muat */
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
@@ -33,10 +32,9 @@
 }
 .bottom-nav::-webkit-scrollbar { display: none; }
 
-/* Setiap item mengisi ruang yang sama */
 .nav-item {
-    flex: 1 1 0;          /* grow + shrink seimbang */
-    min-width: 48px;      /* batas bawah agar tidak terlalu sempit */
+    flex: 1 1 0;
+    min-width: 48px;
     max-width: 100px;
     display: flex;
     flex-direction: column;
@@ -53,7 +51,6 @@
 }
 .nav-item:active { background: rgba(99,102,241,0.07); border-radius: 10px; }
 
-/* ── Icon ── */
 .nav-icon-wrap {
     font-size: 18px;
     line-height: 1;
@@ -64,7 +61,6 @@
     transform: translateY(-2px) scale(1.08);
 }
 
-/* ── Label — sangat kecil, responsif ── */
 .nav-label {
     font-size: 8.5px;
     font-weight: 700;
@@ -81,7 +77,6 @@
 }
 .active-nav .nav-label { color: var(--nav-active); }
 
-/* ── Garis aktif ── */
 .active-nav::after {
     content: '';
     position: absolute;
@@ -92,7 +87,6 @@
     border-radius: 3px 3px 0 0;
 }
 
-/* ── Dot indicator untuk item aktif ── */
 .active-nav .nav-icon-wrap::after {
     content: '';
     display: block;
@@ -102,8 +96,6 @@
     margin: 1px auto 0;
 }
 
-/* ── LAYAR SANGAT SEMPIT (< 360px) ──
-   Sembunyikan label, tampilkan hanya ikon */
 @media (max-width: 359px) {
     .nav-label { display: none; }
     .nav-item   { min-width: 40px; padding: 8px 0; }
@@ -111,58 +103,54 @@
     :root { --nav-h: 52px; }
 }
 
-/* ── LAYAR SEDANG (360-480px) ── */
 @media (min-width: 360px) and (max-width: 479px) {
     .nav-label { font-size: 8px; }
     .nav-icon-wrap { font-size: 17px; }
 }
 
-/* ── LAYAR LEBAR (>= 480px) ── */
 @media (min-width: 480px) {
     .nav-item   { max-width: 90px; }
     .nav-label  { font-size: 9px; }
     .nav-icon-wrap { font-size: 19px; }
 }
 
-/* ── TABLET / DESKTOP (>= 640px) ── */
 @media (min-width: 640px) {
     .bottom-nav { justify-content: center; overflow-x: hidden; }
     .nav-item   { flex: 0 0 80px; }
     .nav-label  { font-size: 9.5px; }
 }
 
-/* Konten tidak tertutup nav */
 .page {
     padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 10px) + 6px) !important;
 }
 </style>
 
 <div class="bottom-nav" id="bottomNav">
-    <div class="nav-item active-nav" id="navDaftar" onclick="switchPage('pageDaftar', this)">
+    <div class="nav-item active-nav" id="navDaftar" onclick="_navGo('pageDaftar', this)">
         <div class="nav-icon-wrap">👤</div>
         <div class="nav-label">Daftar</div>
     </div>
-    <div class="nav-item" id="navHariIni" onclick="switchPage('pageKunjungan', this)">
+    <div class="nav-item" id="navHariIni" onclick="_navGo('pageKunjungan', this)">
         <div class="nav-icon-wrap">📅</div>
         <div class="nav-label">Kunjungan</div>
     </div>
-    <div class="nav-item" id="navBiaya" onclick="switchPage('pageBiaya', this)" style="display:none;">
+    <div class="nav-item" id="navBiaya" onclick="_navGo('pageBiaya', this)" style="display:none;">
         <div class="nav-icon-wrap">🏷️</div>
         <div class="nav-label">Tarif</div>
     </div>
-    <div class="nav-item" id="navStok" onclick="switchPage('pageStok', this)" style="display:none;">
+    <div class="nav-item" id="navStok" onclick="_navGo('pageStok', this)" style="display:none;">
         <div class="nav-icon-wrap">💊</div>
         <div class="nav-label">Stok</div>
     </div>
-    <div class="nav-item" id="navLaporan" onclick="switchPage('pageLaporan', this)">
+    <div class="nav-item" id="navLaporan" onclick="_navGo('pageLaporan', this)">
         <div class="nav-icon-wrap">📊</div>
         <div class="nav-label">Laporan</div>
     </div>
-    <div class="nav-item" id="navUser" onclick="switchPage('pageUser', this)">
+    <div class="nav-item" id="navUser" onclick="_navGo('pageUser', this)">
         <div class="nav-icon-wrap">👥</div>
         <div class="nav-label">User</div>
     </div>
-    <div class="nav-item" id="navSettings" onclick="switchPage('pageSettings', this)">
+    <div class="nav-item" id="navSettings" onclick="_navGo('pageSettings', this)">
         <div class="nav-icon-wrap">🛠️</div>
         <div class="nav-label">Settings</div>
     </div>
@@ -170,7 +158,28 @@
 
 <script>
 (function _initNav() {
-    /* ── Scroll ke item aktif saat tap ── */
+
+    // ── _navGo: wrapper aman yang selalu memanggil switchPage terkini ──
+    // Tidak membungkus switchPage saat inject — melainkan memanggil
+    // window.switchPage pada saat klik, sehingga selalu mendapat
+    // versi terbaru meski app.js di-inject belakangan.
+    window._navGo = function(pageId, navEl) {
+        if (typeof window.switchPage === 'function') {
+            window.switchPage(pageId, navEl);
+        } else {
+            // Fallback manual jika switchPage belum siap
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            const target = document.getElementById(pageId);
+            if (target) target.classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active-nav'));
+            if (navEl) navEl.classList.add('active-nav');
+        }
+        // Scroll nav ke item yang diklik
+        _scrollToActive(navEl);
+        setTimeout(_fitNav, 50);
+    };
+
+    // ── Scroll ke item aktif ──
     function _scrollToActive(el) {
         const nav = document.getElementById('bottomNav');
         if (!nav || !el) return;
@@ -181,27 +190,24 @@
     }
     window._scrollNavToActive = _scrollToActive;
 
-    /* ── Resize observer: recalc item lebar ── */
+    // ── Hitung & set lebar item nav ──
     function _fitNav() {
-        const nav   = document.getElementById('bottomNav');
+        const nav = document.getElementById('bottomNav');
         if (!nav) return;
         const items = Array.from(nav.querySelectorAll('.nav-item'))
                           .filter(el => el.style.display !== 'none');
         const count = items.length;
         if (count === 0) return;
-        const navW  = nav.offsetWidth;          // lebar tersedia
-        const minW  = 48;                       // minimum per item (px)
-        const total = count * minW;
+        const navW = nav.offsetWidth;
+        const minW = 48;
 
-        if (total <= navW) {
-            // Semua muat — bagikan rata
+        if (count * minW <= navW) {
             items.forEach(el => {
                 el.style.flex = '1 1 0';
                 el.style.minWidth = minW + 'px';
             });
             nav.style.overflowX = 'hidden';
         } else {
-            // Tidak muat — aktifkan scroll, set lebar tetap
             const fw = Math.max(minW, Math.floor(navW / Math.min(count, 5.5)));
             items.forEach(el => {
                 el.style.flex = `0 0 ${fw}px`;
@@ -211,41 +217,21 @@
         }
     }
 
-    // Jalankan saat load & resize
-    window.addEventListener('resize', _fitNav);
-    // Jalankan setelah semua modul aktif (nav item mungkin ditampilkan setelah toggle)
     window._fitNav = _fitNav;
+    window.addEventListener('resize', _fitNav);
 
-    // Patch switchPage
-    function _patch() {
-        if (typeof window.switchPage === 'function') {
-            const _orig = window.switchPage;
-            window.switchPage = function(pageId, navEl) {
-                _orig(pageId, navEl);
-                if (navEl) {
-                    setTimeout(() => {
-                        _fitNav();
-                        _scrollToActive(navEl);
-                    }, 50);
-                }
-            };
-            _fitNav(); // run once
-        } else {
-            setTimeout(_patch, 150);
-        }
-    }
-    _patch();
+    // Jalankan _fitNav sekali setelah DOM siap
+    setTimeout(_fitNav, 100);
 
-    // Juga run saat visibility change (misal rotate HP)
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) _fitNav();
     });
 
-    // Support screen orientation change
     if (screen.orientation) {
         screen.orientation.addEventListener('change', () => setTimeout(_fitNav, 200));
     } else {
         window.addEventListener('orientationchange', () => setTimeout(_fitNav, 200));
     }
+
 })();
 </script>
