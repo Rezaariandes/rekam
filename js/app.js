@@ -30,7 +30,7 @@ function switchPage(id, navEl) {
     }
 
     const filterDate = document.getElementById('filterDate');
-    if (id === 'pageHariIni' && filterDate && filterDate.value) fetchByDate();
+    if (id === 'pageKunjungan' && filterDate && filterDate.value) fetchByDate();
     if (id === 'pageUser')     fetchUsers();
     if (id === 'pageMedis' && typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
     // BUG FIX: Selalu reset checkbox surat sakit ke unchecked saat masuk pageMedis
