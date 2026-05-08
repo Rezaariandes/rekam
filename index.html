@@ -579,7 +579,7 @@
             // Hanya aktif jika modal-resep.js belum berhasil di-inject dari GitHub
             // (misal: file belum ada di repo). Jika sudah ter-inject, fungsi ini
             // tidak akan dijalankan karena _resepModalPatched sudah true.
-            if (!window._resepModalPatched && typeof _tampilModalResep === 'function') {
+            if (!window._ModalResepPatched && typeof _tampilModalResep === 'function') {
                 // modal-resep.js.js sudah ter-inject dari GitHub, tandai sebagai aktif
                 window._ModalResepPatched = true;
                 console.log('[Klikpro] ✅ modal-resep.js aktif dari GitHub');
