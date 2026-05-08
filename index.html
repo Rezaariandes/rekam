@@ -37,7 +37,7 @@
             nav:          BASE_URL + '/components/nav.html',
             pageDaftar:   BASE_URL + '/pages/page-daftar.html',
             pageMedis:    BASE_URL + '/pages/page-medis.html',
-            pageHariIni:  BASE_URL + '/pages/page-hari-ini.html',
+            pageKunjungan:  BASE_URL + '/pages/page-kunjungan.html',
             pageUser:     BASE_URL + '/pages/page-user.html',
             pageSettings: BASE_URL + '/pages/page-settings.html',
             pageLaporan:  BASE_URL + '/pages/page-laporan.html',
@@ -186,7 +186,7 @@
 
         <div id="slot-page-daftar"></div>
         <div id="slot-page-medis"></div>
-        <div id="slot-page-hari-ini"></div>
+        <div id="slot-page-kunjungan"></div>
         <div id="slot-page-user"></div>
         <div id="slot-page-settings"></div>
         <div id="slot-page-laporan"></div>
@@ -214,7 +214,7 @@
             // Ini menghilangkan race condition di mana tombol PIN (onclick="inputPin()")
             // bisa diklik SEBELUM script auth-secure.js selesai di-inject.
             const htmlKeys = ['css','modalRiwayat','modalUser','header','nav',
-                              'pageDaftar','pageMedis','pageHariIni','pageUser',
+                              'pageDaftar','pageMedis','pageKunjungan','pageUser',
                               'pageSettings','pageLaporan','pageStok','pageBiaya'];
             const htmlResults = await Promise.all(
                 htmlKeys.map(key =>
@@ -237,7 +237,7 @@
             document.getElementById('slot-nav').innerHTML           = nav;
             document.getElementById('slot-page-daftar').innerHTML   = pageDaftar;
             document.getElementById('slot-page-medis').innerHTML    = pageMedis;
-            document.getElementById('slot-page-hari-ini').innerHTML = pageHariIni;
+            document.getElementById('slot-page-kunjungan').innerHTML = pageKunjungan;
             document.getElementById('slot-page-user').innerHTML     = pageUser;
             document.getElementById('slot-page-settings').innerHTML = pageSettings;
             document.getElementById('slot-page-laporan').innerHTML  = pageLaporan;
