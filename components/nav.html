@@ -126,31 +126,31 @@
 </style>
 
 <div class="bottom-nav" id="bottomNav">
-    <div class="nav-item active-nav" id="navDaftar" onclick="_navGo('pageDaftar', this)">
+    <div class="nav-item active-nav" id="navDaftar" onclick="switchPage('pageDaftar', this)">
         <div class="nav-icon-wrap">👤</div>
         <div class="nav-label">Daftar</div>
     </div>
-    <div class="nav-item" id="navHariIni" onclick="_navGo('pageKunjungan', this)">
+    <div class="nav-item" id="navHariIni" onclick="switchPage('pageKunjungan', this)">
         <div class="nav-icon-wrap">📅</div>
         <div class="nav-label">Kunjungan</div>
     </div>
-    <div class="nav-item" id="navBiaya" onclick="_navGo('pageBiaya', this)" style="display:none;">
+    <div class="nav-item" id="navBiaya" onclick="switchPage('pageBiaya', this)" style="display:none;">
         <div class="nav-icon-wrap">🏷️</div>
         <div class="nav-label">Tarif</div>
     </div>
-    <div class="nav-item" id="navStok" onclick="_navGo('pageStok', this)" style="display:none;">
+    <div class="nav-item" id="navStok" onclick="switchPage('pageStok', this)" style="display:none;">
         <div class="nav-icon-wrap">💊</div>
         <div class="nav-label">Stok</div>
     </div>
-    <div class="nav-item" id="navLaporan" onclick="_navGo('pageLaporan', this)">
+    <div class="nav-item" id="navLaporan" onclick="switchPage('pageLaporan', this)">
         <div class="nav-icon-wrap">📊</div>
         <div class="nav-label">Laporan</div>
     </div>
-    <div class="nav-item" id="navUser" onclick="_navGo('pageUser', this)">
+    <div class="nav-item" id="navUser" onclick="switchPage('pageUser', this)">
         <div class="nav-icon-wrap">👥</div>
         <div class="nav-label">User</div>
     </div>
-    <div class="nav-item" id="navSettings" onclick="_navGo('pageSettings', this)">
+    <div class="nav-item" id="navSettings" onclick="switchPage('pageSettings', this)">
         <div class="nav-icon-wrap">🛠️</div>
         <div class="nav-label">Settings</div>
     </div>
@@ -159,38 +159,13 @@
 <script>
 (function _initNav() {
 
-    // ── _navGo: wrapper aman yang selalu memanggil switchPage terkini ──
-    // Tidak membungkus switchPage saat inject — melainkan memanggil
-    // window.switchPage pada saat klik, sehingga selalu mendapat
-    // versi terbaru meski app.js di-inject belakangan.
-    window._navGo = function(pageId, navEl) {
-        if (typeof window.switchPage === 'function') {
-            window.switchPage(pageId, navEl);
-        } else {
-            // Fallback manual jika switchPage belum siap
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            const target = document.getElementById(pageId);
-            if (target) target.classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active-nav'));
-            if (navEl) navEl.classList.add('active-nav');
-        }
-        // Scroll nav ke item yang diklik
-        _scrollToActive(navEl);
-        setTimeout(_fitNav, 50);
-    };
-
-    // ── Scroll ke item aktif ──
     function _scrollToActive(el) {
         const nav = document.getElementById('bottomNav');
         if (!nav || !el) return;
-        const navW = nav.offsetWidth;
-        const elL  = el.offsetLeft;
-        const elW  = el.offsetWidth;
-        nav.scrollTo({ left: elL - navW / 2 + elW / 2, behavior: 'smooth' });
+        nav.scrollTo({ left: el.offsetLeft - nav.offsetWidth / 2 + el.offsetWidth / 2, behavior: 'smooth' });
     }
     window._scrollNavToActive = _scrollToActive;
 
-    // ── Hitung & set lebar item nav ──
     function _fitNav() {
         const nav = document.getElementById('bottomNav');
         if (!nav) return;
@@ -200,38 +175,45 @@
         if (count === 0) return;
         const navW = nav.offsetWidth;
         const minW = 48;
-
         if (count * minW <= navW) {
-            items.forEach(el => {
-                el.style.flex = '1 1 0';
-                el.style.minWidth = minW + 'px';
-            });
+            items.forEach(el => { el.style.flex = '1 1 0'; el.style.minWidth = minW + 'px'; });
             nav.style.overflowX = 'hidden';
         } else {
             const fw = Math.max(minW, Math.floor(navW / Math.min(count, 5.5)));
-            items.forEach(el => {
-                el.style.flex = `0 0 ${fw}px`;
-                el.style.minWidth = fw + 'px';
-            });
+            items.forEach(el => { el.style.flex = `0 0 ${fw}px`; el.style.minWidth = fw + 'px'; });
             nav.style.overflowX = 'auto';
         }
     }
-
     window._fitNav = _fitNav;
     window.addEventListener('resize', _fitNav);
-
-    // Jalankan _fitNav sekali setelah DOM siap
     setTimeout(_fitNav, 100);
 
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) _fitNav();
-    });
+    // ── Patch switchPage: tunggu sampai app.js mendefinisikannya,
+    //    lalu wrap SEKALI untuk tambahkan fitNav + scrollToActive.
+    //    Gunakan flag agar tidak di-wrap berulang kali.
+    function _patchOnce() {
+        if (window._switchPagePatched) return;
+        if (typeof window.switchPage !== 'function') {
+            setTimeout(_patchOnce, 150);
+            return;
+        }
+        window._switchPagePatched = true;
+        const _orig = window.switchPage;
+        window.switchPage = function(pageId, navEl) {
+            _orig(pageId, navEl);
+            if (navEl) {
+                setTimeout(() => { _fitNav(); _scrollToActive(navEl); }, 50);
+            }
+        };
+        _fitNav();
+    }
+    _patchOnce();
 
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) _fitNav(); });
     if (screen.orientation) {
         screen.orientation.addEventListener('change', () => setTimeout(_fitNav, 200));
     } else {
         window.addEventListener('orientationchange', () => setTimeout(_fitNav, 200));
     }
-
 })();
 </script>
