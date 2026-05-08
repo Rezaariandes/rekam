@@ -4,7 +4,7 @@
 //  Menggantikan fungsi _tampilModalResep di kunjungan.js
 //  
 //  CARA INTEGRASI:
-//  1. Tambahkan <script src="resep-modal.js"></script> di index.html
+//  1. Tambahkan <script src="modal-resep.js"></script> di index.html
 //     (setelah kunjungan.js)
 //  2. Fungsi _tampilModalResep akan otomatis ter-override
 // ════════════════════════════════════════════════════════
