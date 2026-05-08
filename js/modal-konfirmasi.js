@@ -15,10 +15,10 @@
         s.id = 'mk-style';
         s.textContent = `
         #mkOverlay {
-            position: fixed; inset: 0; z-index: 9000;
-            background: rgba(15,23,42,0.55);
-            display: flex; align-items: flex-end; justify-content: center;
-            padding: 0;
+            position: fixed; inset: 0; z-index: 99999;
+            background: rgba(15,23,42,0.6);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
             opacity: 0; transition: opacity 0.22s ease;
             pointer-events: none;
         }
@@ -27,24 +27,26 @@
         }
         #mkSheet {
             background: #fff;
-            width: 100%; max-width: 480px;
-            border-radius: 22px 22px 0 0;
-            box-shadow: 0 -8px 40px rgba(0,0,0,0.18);
-            padding: 0 0 env(safe-area-inset-bottom,12px);
-            transform: translateY(60px);
-            transition: transform 0.28s cubic-bezier(.34,1.56,.64,1);
+            width: 100%; max-width: 420px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            padding: 0 0 16px;
+            transform: scale(0.92) translateY(10px);
+            transition: transform 0.28s cubic-bezier(.34,1.56,.64,1), opacity 0.22s ease;
+            opacity: 0;
+            max-height: 90vh;
+            overflow-y: auto;
         }
         #mkOverlay.mk-visible #mkSheet {
-            transform: translateY(0);
+            transform: scale(1) translateY(0);
+            opacity: 1;
         }
         .mk-handle {
-            width: 40px; height: 4px;
-            background: #e2e8f0; border-radius: 2px;
-            margin: 12px auto 0;
+            display: none;
         }
         .mk-icon-wrap {
             font-size: 40px; text-align: center;
-            margin: 16px 0 8px;
+            margin: 24px 0 8px;
             line-height: 1;
         }
         .mk-title {
