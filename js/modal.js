@@ -204,14 +204,20 @@ function openModal(index) {
     if ($('modalLabChol')) $('modalLabChol').value = r.lab_chol || '';
     if ($('modalLabUa'))   $('modalLabUa').value   = r.lab_ua   || '';
 
-    // Diagnosa
-    const diagLama = String(r.diag || '');
-    if (diagLama.includes(" | ")) {
-        if ($('modalDiag1')) $('modalDiag1').value = diagLama.split(" | ")[0];
-        if ($('modalDiag2')) $('modalDiag2').value = diagLama.split(" | ")[1];
+    // Diagnosa — prioritaskan kolom diagnosa2 terpisah dari DB.
+    // Fallback parse " | " hanya untuk data lama yang masih digabung.
+    if (r.diagnosa2) {
+        if ($('modalDiag1')) $('modalDiag1').value = r.diag      || '';
+        if ($('modalDiag2')) $('modalDiag2').value = r.diagnosa2 || '';
     } else {
-        if ($('modalDiag1')) $('modalDiag1').value = diagLama;
-        if ($('modalDiag2')) $('modalDiag2').value = '';
+        const diagLama = String(r.diag || '');
+        if (diagLama.includes(' | ')) {
+            if ($('modalDiag1')) $('modalDiag1').value = diagLama.split(' | ')[0];
+            if ($('modalDiag2')) $('modalDiag2').value = diagLama.split(' | ')[1];
+        } else {
+            if ($('modalDiag1')) $('modalDiag1').value = diagLama;
+            if ($('modalDiag2')) $('modalDiag2').value = '';
+        }
     }
     if ($('modalTerapi')) $('modalTerapi').value = r.terapi || '';
 
@@ -271,9 +277,10 @@ async function simpanEditModal() {
         return showToast("⛔ " + hakEdit.alasan, "error");
     }
 
-    const d1 = $('modalDiag1') ? $('modalDiag1').value : '';
-    const d2 = $('modalDiag2') ? $('modalDiag2').value : '';
-    const diagGabung = d2 ? (d1 + " | " + d2) : d1;
+    const d1 = $('modalDiag1') ? $('modalDiag1').value.trim() : '';
+    const d2 = $('modalDiag2') ? $('modalDiag2').value.trim() : '';
+    // BUG FIX: kirim diagnosa & diagnosa2 sebagai kolom terpisah
+    // (bukan digabung "d1 | d2") agar kolom diagnosa2 di DB tidak terhapus
 
     // Gabungkan sistol/diastol ke format "120/80"
     const sistol  = $('modalSistol')  ? $('modalSistol').value.trim()  : '';
@@ -315,8 +322,14 @@ async function simpanEditModal() {
         lab_sgpt:        r.lab_sgpt        || '',
         lab_ureum:       r.lab_ureum       || '',
         lab_creatinin:   r.lab_creatinin   || '',
-        diagnosa: diagGabung,
-        terapi:   $('modalTerapi')  ? $('modalTerapi').value  : ''
+        // BUG FIX: diagnosa & diagnosa2 terpisah
+        diagnosa:   d1,
+        diagnosa2:  d2,
+        terapi:     $('modalTerapi') ? $('modalTerapi').value : '',
+        // BUG FIX: pertahankan surat_sakit & req_lab dari data lama
+        // agar tidak tertimpa null saat edit modal (field ini tidak ada di form modal)
+        suratSakit: r.surat_sakit || null,
+        req_lab:    r.req_lab     || null
     };
 
     try {
@@ -360,7 +373,12 @@ async function simpanEditModal() {
             lab_hba1c:     payload.lab_hba1c,     lab_sgot:       payload.lab_sgot,
             lab_sgpt:      payload.lab_sgpt,      lab_ureum:      payload.lab_ureum,
             lab_creatinin: payload.lab_creatinin,
-            diag:     payload.diagnosa, terapi:   payload.terapi
+            // BUG FIX: sync diagnosa2 & surat_sakit ke cache agar modal berikutnya
+            // menampilkan data yang benar tanpa perlu fetch ulang dari server
+            diag:        payload.diagnosa,
+            diagnosa2:   payload.diagnosa2,
+            terapi:      payload.terapi,
+            surat_sakit: payload.suratSakit
         });
 
         // BUG-08 FIX: Update status ke "Selesai" jika diagnosa & terapi sudah diisi,
