@@ -218,7 +218,11 @@ async function simpanTarif() {
     const nama  = document.getElementById('tarif_nama')?.value.trim();
     const harga = document.getElementById('tarif_harga')?.value;
     if (!nama)  return showToast('⚠️ Nama layanan wajib diisi', 'error');
-    if (!harga) return showToast('⚠️ Harga wajib diisi', 'error');
+    if (!harga && harga !== '0') return showToast('⚠️ Harga wajib diisi', 'error');
+
+    const btn = document.querySelector('#modalTarif button[onclick="simpanTarif()"]');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Menyimpan...'; }
+
     try {
         await sb_saveTarif({
             id:         document.getElementById('tarif_id')?.value || null,
@@ -228,12 +232,16 @@ async function simpanTarif() {
             keterangan: document.getElementById('tarif_keterangan')?.value || null,
             aktif:      document.getElementById('tarif_aktif')?.checked !== false
         });
-        showToast('✅ Tarif tersimpan', 'success');
+        // Tutup modal DULU sebelum tampilkan toast
+        // agar toast tidak tertutup oleh overlay modal (z-index conflict)
         closeModalTarif();
         await _refreshTarifCache();
         renderDaftarTarif();
+        showToast('✅ Tarif berhasil disimpan', 'success');
     } catch(e) {
         showToast('❌ Gagal menyimpan: ' + (e.message || ''), 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Simpan'; }
     }
 }
 

@@ -36,8 +36,11 @@ function hitungUmur(tglStr) {
 function showToast(msg, type) {
     const c = $('toastContainer');
     if (!c) return;
+    // Pastikan toastContainer selalu di atas semua overlay/modal
+    c.style.cssText = 'position:fixed;top:16px;right:16px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
     const t = document.createElement('div');
     t.className = `toast ${type}`;
+    t.style.pointerEvents = 'auto';
     t.innerText = msg;
     c.appendChild(t);
     setTimeout(() => {
