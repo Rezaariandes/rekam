@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Klikpro RME V 2.0 — Praktek Dokter Reza Ariandes</title>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         KONFIGURASI SISTEM & SUPABASE
-    ═══════════════════════════════════════════════════════════ -->
     <script>
         const SUPABASE_URL = 'https://aqqlxytpryuwdggadjlt.supabase.co';
         const supabaseClient = null;
@@ -27,10 +24,8 @@
             cohere:     [''],
         };
 
-        // ─── URL Fragment — pin-lock DIHAPUS dari sini (sekarang inline di HTML) ───
         const FRAGMENT_URLS = {
             css:          BASE_URL + '/css/style.css',
-            // pinLock: TIDAK lagi di-fetch dari GitHub — sudah inline di bawah
             modalRiwayat: BASE_URL + '/components/modal-riwayat.html',
             modalUser:    BASE_URL + '/components/modal-user.html',
             header:       BASE_URL + '/components/header.html',
@@ -44,30 +39,33 @@
             pageStok:     BASE_URL + '/pages/page-stok.html',
             pageBiaya:    BASE_URL + '/pages/page-biaya.html',
 
-            jsUtils:         BASE_URL + '/js/utils.js',
-            jsSupabase:      BASE_URL + '/js/supabase-secure.js',
-            jsAuth:          BASE_URL + '/js/auth-secure.js',
-            jsIcd10:         BASE_URL + '/js/icd10.js',
-            jsPasien:        BASE_URL + '/js/pasien.js',
-            jsKunj:          BASE_URL + '/js/kunjungan.js',
-            jsModal:         BASE_URL + '/js/modal.js',
-            jsUser:          BASE_URL + '/js/user.js',
-            jsSettings:      BASE_URL + '/js/settings.js',
-            jsLaporan:       BASE_URL + '/js/laporan.js',
-            jsApp:           BASE_URL + '/js/app.js',
-            jsAiRek:         BASE_URL + '/js/ai-rekomendasi.js',
-            jsSupabaseStok:  BASE_URL + '/js/supabase-stok.js',
-            jsStok:          BASE_URL + '/js/stok.js',
-            jsSupabaseBiaya: BASE_URL + '/js/supabase-biaya.js',
-            jsBiaya:         BASE_URL + '/js/biaya.js',
-            jsPemPenunjang:  BASE_URL + '/js/pem-penunjang.js',
-            jsPemLabor:      BASE_URL + '/js/pem-labor.js',
-            jsTinMedis:      BASE_URL + '/js/tin-medis.js',
-            jsModalResep:    BASE_URL + '/js/modal-resep.js'
+            jsUtils:              BASE_URL + '/js/utils.js',
+            jsSupabase:           BASE_URL + '/js/supabase-secure.js',
+            jsAuth:               BASE_URL + '/js/auth-secure.js',
+            jsIcd10:              BASE_URL + '/js/icd10.js',
+            jsPasien:             BASE_URL + '/js/pasien.js',
+            jsKunj:               BASE_URL + '/js/kunjungan.js',
+            jsModal:              BASE_URL + '/js/modal.js',
+            jsUser:               BASE_URL + '/js/user.js',
+            jsSettings:           BASE_URL + '/js/settings.js',
+            jsLaporan:            BASE_URL + '/js/laporan.js',
+            jsApp:                BASE_URL + '/js/app.js',
+            jsAiRek:              BASE_URL + '/js/ai-rekomendasi.js',
+            jsSupabaseStok:       BASE_URL + '/js/supabase-stok.js',
+            jsStok:               BASE_URL + '/js/stok.js',
+            jsSupabaseBiaya:      BASE_URL + '/js/supabase-biaya.js',
+            jsBiaya:              BASE_URL + '/js/biaya.js',
+            jsInvoice:            BASE_URL + '/js/invoice.js',
+            jsPemPenunjang:       BASE_URL + '/js/pem-penunjang.js',
+            jsPemLabor:           BASE_URL + '/js/pem-labor.js',
+            jsTinMedis:           BASE_URL + '/js/tin-medis.js',
+            jsMedisDinamis:       BASE_URL + '/js/medis-dinamis.js',
+            jsModalResep:         BASE_URL + '/js/modal-resep.js',
+            jsModalKonfirmasi:    BASE_URL + '/js/modal-konfirmasi.js',
+            jsModalPasienDetail:  BASE_URL + '/js/modal-pasien-detail.js',
         };
     </script>
 
-    <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,800;1,700&display=swap" rel="stylesheet">
@@ -132,12 +130,6 @@
         <div class="bg-mesh"><div class="bg-orb"></div></div>
         <div id="toastContainer"></div>
 
-        <!-- ═══════════════════════════════════════════════════════════
-             PIN LOCK — INLINE (tidak lagi di-fetch dari GitHub)
-             FIX: Tombol memanggil fungsi dari auth-secure.js.
-             Dengan inline, tombol ini SELALU tersedia segera setelah
-             DOM siap — tidak perlu menunggu fetch dari GitHub selesai.
-        ═══════════════════════════════════════════════════════════ -->
         <div id="slot-pin-lock">
             <div class="pin-overlay" id="pinScreen">
                 <div class="pin-container">
@@ -175,7 +167,6 @@
                 </div>
             </div>
         </div>
-        <!-- ═══════════════════════════════════════════ end pin-lock ═ -->
 
         <datalist id="list-icd"></datalist>
         <div id="slot-modal-riwayat"></div>
@@ -210,9 +201,6 @@
         try {
             setLoadStep('Mengunduh tampilan...');
 
-            // FIX: Hapus 'pinLock' dari daftar fetch — sudah inline di HTML.
-            // Ini menghilangkan race condition di mana tombol PIN (onclick="inputPin()")
-            // bisa diklik SEBELUM script auth-secure.js selesai di-inject.
             const htmlKeys = ['css','modalRiwayat','modalUser','header','nav',
                               'pageDaftar','pageMedis','pageKunjungan','pageUser',
                               'pageSettings','pageLaporan','pageStok','pageBiaya'];
@@ -230,7 +218,6 @@
 
             setLoadStep('Memuat antarmuka...');
             document.getElementById('dynamic-style').innerHTML      = css;
-            // slot-pin-lock TIDAK di-set di sini — sudah ada kontennya (inline)
             document.getElementById('slot-modal-riwayat').innerHTML = modalRiwayat;
             document.getElementById('slot-modal-user').innerHTML    = modalUser;
             document.getElementById('slot-header').innerHTML        = header;
@@ -251,20 +238,24 @@
 
             setLoadStep('Memuat modul aplikasi...');
 
-            // FIX URUTAN: jsUtils → jsSupabase → jsAuth (tiga ini harus berurutan ketat)
-            // jsSettings HARUS sebelum jsAuth (applyModuleAccess ada di settings.js)
+            // URUTAN PENTING:
+            // 1. jsUtils, jsSupabase              — fondasi
+            // 2. jsSupabaseStok, jsSupabaseBiaya
+            // 3. jsSettings, jsAuth               — settings sebelum auth
+            // 4. Modul fitur
+            // 5. jsBiaya → jsInvoice              — invoice butuh _tarifCache & helpers dari biaya
+            // 6. jsApp, jsAiRek                   — controller utama, terakhir
+            // 7. jsModalKonfirmasi, jsModalPasienDetail
             const jsKeys = [
                 'jsUtils', 'jsSupabase', 'jsSupabaseStok', 'jsSupabaseBiaya',
                 'jsSettings', 'jsAuth',
                 'jsIcd10', 'jsPasien', 'jsKunj', 'jsModalResep', 'jsModal', 'jsUser',
-                'jsLaporan', 'jsStok', 'jsBiaya',
-                'jsPemPenunjang', 'jsTinMedis', 'jsPemLabor',
-                'jsApp', 'jsAiRek'
+                'jsLaporan', 'jsStok', 'jsBiaya', 'jsInvoice',
+                'jsPemPenunjang', 'jsTinMedis', 'jsMedisDinamis', 'jsPemLabor',
+                'jsApp', 'jsAiRek',
+                'jsModalKonfirmasi', 'jsModalPasienDetail',
             ];
 
-            // FIX: Fetch semua script secara paralel, tapi inject SECARA BERURUTAN.
-            // Ini memastikan _sha256 (utils.js) & _sbFetch (supabase-secure.js)
-            // sudah terdefinisi sebelum auth-secure.js berjalan.
             const jsTexts = await Promise.all(
                 jsKeys.map(key =>
                     fetch(FRAGMENT_URLS[key]).then(r => {
@@ -279,10 +270,6 @@
                 try { injectScript(scriptText); } catch (e) { console.warn('Peringatan modul:', e); }
             }
 
-            // FIX: Setelah semua script ter-inject, tampilkan app dan panggil initApp.
-            // Dengan pin-lock sudah inline, pinScreen sudah ada di DOM sejak awal —
-            // loadLoginUsers() (dipanggil oleh initPinLock di dalam initApp) akan
-            // langsung bisa mengisi dropdown karena script sudah siap.
             document.getElementById('app-loading').style.display = 'none';
             document.getElementById('app-root').style.display    = 'block';
 
@@ -300,9 +287,6 @@
     window.addEventListener('DOMContentLoaded', bootstrap);
     </script>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         PATCH LOKAL — Override fungsi dari GitHub yang outdated
-    ═══════════════════════════════════════════════════════════ -->
     <script>
     (function applyLocalPatches() {
         const MAX_WAIT = 8000;
@@ -346,7 +330,7 @@
                 };
             }
 
-            // ── PATCH 2: saveAll — Simpan Rekam Medis ──
+            // ── PATCH 2: saveAll ──
             window.saveAll = async function() {
                 const btn = document.getElementById('btnSave');
                 if (btn) { btn.disabled = true; btn.innerText = '⏳ Menyimpan...'; }
@@ -371,18 +355,15 @@
                     const _todayDate = (new Date(today.getTime() - tzOffset)).toISOString().slice(0, 10);
                     const _todayTime = String(today.getHours()).padStart(2,'0') + ':' + String(today.getMinutes()).padStart(2,'0');
 
-                    // GUARD TANGGAL: jika edit kunjungan lama, pakai tanggal asli bukan hari ini
                     let localDate = _todayDate;
                     let localTime = _todayTime;
                     if (currentKunjunganId) {
-                        // Coba dari cache kunjunganHariIni
                         const _kc = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : [])
                             .find(x => x.id === currentKunjunganId);
                         if (_kc && _kc.tgl) {
                             localDate = _kc.tgl;
                             if (_kc.waktu) localTime = _kc.waktu;
                         } else {
-                            // Fallback: baca dari localStorage cTglEdit (format "Tgl: DD/MM/YYYY")
                             const _cTgl = (localStorage.getItem('cTglEdit') || '').replace('Tgl: ', '').trim();
                             if (_cTgl && _cTgl.includes('/')) {
                                 const _p = _cTgl.split('/');
@@ -394,18 +375,14 @@
                     const sistol  = $('sistol')  ? $('sistol').value.trim()  : '';
                     const diastol = $('diastol') ? $('diastol').value.trim() : '';
                     const td      = (sistol && diastol) ? `${sistol}/${diastol}` : (sistol || diastol || '');
-
-                    const diag1 = $('diagnosa')  ? $('diagnosa').value.trim()  : '';
-                    const diag2 = $('diagnosa2') ? $('diagnosa2').value.trim() : '';
-
+                    const diag1   = $('diagnosa')  ? $('diagnosa').value.trim()  : '';
+                    const diag2   = $('diagnosa2') ? $('diagnosa2').value.trim() : '';
                     const suratSakit = ($('suratSakit') && $('suratSakit').checked) ? 'YA' : null;
                     const userId = (typeof loggedInUser !== 'undefined' && loggedInUser) ? loggedInUser.id : null;
 
                     const payload = {
-                        pasienId:    currentPasienId,
-                        kunjunganId: currentKunjunganId,
-                        localDate,   localTime,
-                        userId,
+                        pasienId: currentPasienId, kunjunganId: currentKunjunganId,
+                        localDate, localTime, userId,
                         nama:     $('nama')      ? $('nama').value.trim()      : '',
                         nik:      $('nik')       ? $('nik').value.trim()       : '',
                         jk:       $('jk')        ? $('jk').value               : 'L',
@@ -440,15 +417,13 @@
                         lab_creatinin:$('lab_creatinin')? $('lab_creatinin').value: '',
                         keluhan:  $('keluhan') ? $('keluhan').value  : '',
                         fisik:    $('fisik')   ? $('fisik').value    : '',
-                        diagnosa: diag1,
-                        diagnosa2: diag2,
+                        diagnosa: diag1, diagnosa2: diag2,
                         terapi:   $('terapi')  ? $('terapi').value   : '',
                         suratSakit,
                         req_lab: (typeof getReqLabPayload === 'function') ? getReqLabPayload() : null
                     };
 
                     const result = await sb_saveKunjungan(payload);
-
                     if (result && result.kunjunganId) {
                         currentKunjunganId = result.kunjunganId;
                         localStorage.setItem('cK_id', currentKunjunganId);
@@ -457,9 +432,7 @@
                     if (window._stokAktif && currentKunjunganId && typeof _getResepItems === 'function') {
                         try {
                             const resepItems = _getResepItems();
-                            if (resepItems && resepItems.length > 0) {
-                                await sb_saveResep(currentKunjunganId, resepItems);
-                            }
+                            if (resepItems && resepItems.length > 0) await sb_saveResep(currentKunjunganId, resepItems);
                         } catch(e) { console.warn('[saveAll] Resep gagal:', e.message); }
                     }
 
@@ -528,7 +501,7 @@
                 };
             }
 
-            // ── PATCH 4: Status badge persist ke Supabase ──
+            // ── PATCH 4: Status badge ──
             window._statusCache = window._statusCache || {};
 
             window._getStatusKunjungan = function(kId) {
@@ -553,13 +526,12 @@
 
                 const badge = document.getElementById(`badge_${field}_${kId}`);
                 if (badge) {
-                    const active = val;
                     const isObat = field === 'obat';
-                    badge.innerHTML = active
+                    badge.innerHTML = val
                         ? `<span style="font-size:10px;">${isObat ? '💊' : '💰'}</span> ${isObat ? 'Resep' : 'Bayar'} ✓`
                         : `<span style="font-size:10px;">✕</span> ${isObat ? 'Resep' : 'Bayar'}`;
                     const base = 'cursor:pointer;display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;';
-                    badge.style.cssText = base + (active
+                    badge.style.cssText = base + (val
                         ? (isObat ? 'background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;' : 'background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;')
                         : 'background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;');
                 }
@@ -573,17 +545,13 @@
                 } catch(e) { console.warn('[Klikpro] Gagal simpan status:', e.message); }
             };
 
-            console.log('[Klikpro] ✅ Local patches applied: jabatan, saveAll, status badge, riwayat fetch');
-
-            // ── PATCH 5: Resep Modal — override _tampilModalResep ──
-            // Hanya aktif jika modal-resep.js belum berhasil di-inject dari GitHub
-            // (misal: file belum ada di repo). Jika sudah ter-inject, fungsi ini
-            // tidak akan dijalankan karena _resepModalPatched sudah true.
+            // ── PATCH 5: Resep Modal ──
             if (!window._ModalResepPatched && typeof _tampilModalResep === 'function') {
-                // modal-resep.js.js sudah ter-inject dari GitHub, tandai sebagai aktif
                 window._ModalResepPatched = true;
                 console.log('[Klikpro] ✅ modal-resep.js aktif dari GitHub');
             }
+
+            console.log('[Klikpro] ✅ Local patches applied');
         }, INTERVAL);
     })();
     </script>
