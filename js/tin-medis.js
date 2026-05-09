@@ -10,7 +10,7 @@
 //    • Hook ke _renderSectionLabDinamic agar render ikut dipanggil
 //
 //  Data bersumber dari: window._tarifCache (diisi biaya.js)
-//  Fallback ke: window._tindakanList (dari Settings)
+//  Sumber tunggal: window._tarifCache (Page Biaya)
 //  State disimpan di kolom req_lab tabel kunjungan (via getReqLabPayload di pem-labor.js)
 //
 //  Bergantung pada (harus di-load lebih dulu):
@@ -49,35 +49,19 @@ const _TINDAKAN_ICONS = {
 
 /**
  * Kembalikan daftar tindakan aktif.
- * Prioritas: window._tarifCache → window._tindakanList (Settings) → []
+ * Sumber tunggal: window._tarifCache (Page Biaya).
+ * Tidak ada fallback ke Settings — tarif_layanan adalah single source of truth.
  */
 function _getTindakanList() {
     const cache     = window._tarifCache || [];
     const fromTarif = cache.filter(t => t.aktif && t.kategori === 'Tindakan');
 
-    if (fromTarif.length > 0) {
-        return fromTarif.map(t => ({
-            id        : _slugTarifId('tindakan', t.nama),
-            label     : t.nama,
-            icon      : _iconForNama(t.nama, _TINDAKAN_ICONS, '⚕️'),
-            _tarifNama: t.nama
-        }));
-    }
-
-    // Fallback dari Settings (window._tindakanList)
-    const fromSettings = (window._tindakanList || [])
-        .filter(it => it && it.aktif !== false && it.nama && it.nama.trim());
-
-    if (fromSettings.length > 0) {
-        return fromSettings.map(it => ({
-            id        : _slugTarifId('tindakan', it.nama),
-            label     : it.nama,
-            icon      : _iconForNama(it.nama, _TINDAKAN_ICONS, '⚕️'),
-            _tarifNama: it.nama
-        }));
-    }
-
-    return [];
+    return fromTarif.map(t => ({
+        id        : _slugTarifId('tindakan', t.nama),
+        label     : t.nama,
+        icon      : _iconForNama(t.nama, _TINDAKAN_ICONS, '⚕️'),
+        _tarifNama: t.nama
+    }));
 }
 
 // Alias global agar kode lama yang masih pakai TINDAKAN_LIST tetap jalan

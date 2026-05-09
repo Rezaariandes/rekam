@@ -561,8 +561,35 @@ function renderRiwayatList(list, containerId) {
 }
 
 // ════════════════════════════════════════════════════════
-//  DYNAMIC LAB SECTION — render berdasarkan window._labAktif
+//  DYNAMIC LAB SECTION
+//  Sumber data: window._tarifCache (Page Biaya) — single source of truth
+//  Fallback ke window._labAktif (Settings) jika _tarifCache kosong
 // ════════════════════════════════════════════════════════
+
+// Peta nama tarif di DB → id field input di form
+// Nama HARUS persis sama dengan kolom `nama` di tarif_layanan
+const LAB_TARIF_TO_FIELD = {
+    'GDS'               : 'lab_gds',
+    'Kolesterol'        : 'lab_chol',
+    'Asam Urat'         : 'lab_ua',
+    'Hemoglobin (HB)'   : 'lab_hb',
+    'Trombosit'         : 'lab_trombosit',
+    'Leukosit'          : 'lab_leukosit',
+    'Eritrosit'         : 'lab_eritrosit',
+    'Hematokrit'        : 'lab_hematokrit',
+    'HIV'               : 'lab_hiv',
+    'Sifilis'           : 'lab_sifilis',
+    'Hepatitis B'       : 'lab_hepatitis',
+    'HDL'               : 'lab_hdl',
+    'LDL'               : 'lab_ldl',
+    'Trigliserida'      : 'lab_tg',
+    'GDP'               : 'lab_gdp',
+    'HbA1c'             : 'lab_hba1c',
+    'SGOT'              : 'lab_sgot',
+    'SGPT'              : 'lab_sgpt',
+    'Ureum'             : 'lab_ureum',
+    'Creatinin'         : 'lab_creatinin',
+};
 
 const ALL_LAB_FIELDS = [
     { id: 'lab_gds',       label: 'GDS',           unit: 'mg/dL',    step: '1',   group: 'dasar' },
@@ -601,6 +628,7 @@ function _renderSectionLabDinamic() {
     const section = $('sectionLab');
     if (!section) return;
 
+    // ── Tangani section resep / terapi (tidak berubah) ──
     if (window._stokAktif && typeof renderSectionResep === 'function') {
         renderSectionResep(currentKunjunganId || null);
         const secResep  = document.getElementById('sectionResep');
@@ -609,11 +637,34 @@ function _renderSectionLabDinamic() {
         if (secManual) secManual.style.display = 'none';
     }
 
-    const labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
-    const activeFields = ALL_LAB_FIELDS.filter(f => labAktif[f.id]);
+    // ── Tentukan field lab aktif: prioritas _tarifCache, fallback _labAktif ──
+    let activeFields = [];
+
+    const tarifLab = (window._tarifCache || []).filter(
+        t => t.aktif && t.kategori === 'Laboratorium'
+    );
+
+    if (tarifLab.length > 0) {
+        // Mode baru: baca dari tarif_layanan (Page Biaya)
+        tarifLab.forEach(t => {
+            const fieldId  = LAB_TARIF_TO_FIELD[t.nama];
+            if (!fieldId) return;
+            const fieldDef = ALL_LAB_FIELDS.find(f => f.id === fieldId);
+            if (fieldDef) activeFields.push(fieldDef);
+        });
+        // Hapus duplikat
+        activeFields = activeFields.filter(
+            (f, idx, arr) => arr.findIndex(x => x.id === f.id) === idx
+        );
+    } else {
+        // Fallback: _labAktif dari Settings (klinik belum pakai modul Biaya)
+        const labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
+        activeFields = ALL_LAB_FIELDS.filter(f => labAktif[f.id]);
+    }
 
     if (activeFields.length === 0) {
         section.style.display = 'none';
+        if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
         return;
     }
     section.style.display = '';
@@ -666,7 +717,7 @@ function _renderSectionLabDinamic() {
 
     checkLabAlert();
 
-    // ── Render section permintaan lab setelah section lab selesai ──
+    // ── Render section permintaan penunjang setelah lab selesai ──
     if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
 }
 

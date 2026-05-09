@@ -85,8 +85,6 @@ const MODULE_DEFINITIONS = [
     { group: 'Seksi Pengaturan', id: 'mod_settings_akses',     label: '🔐 Settings: Hak Akses',              desc: 'Akses seksi hak akses per jabatan di Pengaturan' },
     { group: 'Seksi Pengaturan', id: 'mod_settings_dokter',    label: '👨‍⚕️ Settings: Data Dokter',          desc: 'Akses seksi data dokter & tenaga medis di Pengaturan' },
     { group: 'Seksi Pengaturan', id: 'mod_settings_lab',       label: '🔬 Settings: Lab',                    desc: 'Akses seksi konfigurasi lab aktif di Pengaturan' },
-    { group: 'Seksi Pengaturan', id: 'mod_settings_penunjang', label: '🔭 Settings: Jenis Penunjang',        desc: 'Akses seksi konfigurasi penunjang di Pengaturan' },
-    { group: 'Seksi Pengaturan', id: 'mod_settings_tindakan',  label: '⚕️ Settings: Jenis Tindakan',         desc: 'Akses seksi konfigurasi tindakan medis di Pengaturan' },
     { group: 'Seksi Pengaturan', id: 'mod_settings_stok',      label: '💊 Settings: Stok Obat',              desc: 'Akses seksi modul stok di Pengaturan' },
     { group: 'Seksi Pengaturan', id: 'mod_settings_biaya',     label: '🏷️ Settings: Pembiayaan',            desc: 'Akses seksi sistem biaya di Pengaturan' },
     { group: 'Seksi Pengaturan', id: 'mod_settings_ai',        label: '🤖 Settings: AI & API Key',           desc: 'Akses seksi konfigurasi AI di Pengaturan' },
@@ -197,18 +195,11 @@ function _renderSettingsPage() {
           'lab'
       )}
 
-      <!-- ═══ SEKSI 3b2: PEMERIKSAAN PENUNJANG ═══ -->
-      ${_buildAccordion('sec_penunjang', '🔭 Jenis Pemeriksaan Penunjang',
-          'Kelola USG, Otoscopy, Endoscopy, dll — tampil di halaman pemeriksaan medis',
-          _htmlPenunjangSection(),
-          'penunjang'
-      )}
-
-      <!-- ═══ SEKSI 3b3: JENIS TINDAKAN ═══ -->
-      ${_buildAccordion('sec_tindakan', '⚕️ Jenis Tindakan Medis',
-          'Kelola Perawatan Luka, Eksisi, Sirkumsisi, dll — terintegrasi ke pembiayaan',
-          _htmlTindakanSection(),
-          'tindakan'
+      <!-- ═══ SEKSI 3b2: PENUNJANG & TINDAKAN (info banner) ═══ -->
+      ${_buildAccordion('sec_layanan_medis', '🔭⚕️ Penunjang & Tindakan Medis',
+          'Dikelola di halaman Tarif & Biaya — aktif otomatis di form pemeriksaan',
+          _htmlPenunjangTindakanInfo(),
+          'layanan_medis'
       )}
 
       <!-- ═══ SEKSI 3c: STOK OBAT ═══ -->
@@ -544,159 +535,40 @@ function _getLabAktifPayload() {
 }
 
 // ════════════════════════════════════════
-//  SEKSI: PEMERIKSAAN PENUNJANG
-//  Daftar penunjang dikelola bebas oleh admin
+//  SEKSI: PENUNJANG & TINDAKAN (Info Banner)
+//  Keduanya sekarang dikelola di Page Biaya (tarif_layanan)
+//  sebagai single source of truth.
 // ════════════════════════════════════════
 
-// State penunjang aktif: array of string nama
-window._penunjangList = window._penunjangList || [];
-
-const PENUNJANG_DEFAULT = [
-    'USG Abdomen', 'USG Obstetri', 'Otoscopy', 'Spirometri', 'EKG / ECG',
-    'Rontgen Thorax', 'Endoscopy', 'Foto Polos', 'Treadmill Test', 'Peak Flow Meter'
-];
-
-function _htmlPenunjangSection() {
+function _htmlPenunjangTindakanInfo() {
     return `
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;padding:8px 10px;background:rgba(var(--primary-rgb,37,99,235),0.05);border-radius:8px;">
-        💡 Tambahkan jenis pemeriksaan penunjang yang tersedia. Setiap item akan muncul sebagai pilihan di halaman pemeriksaan medis dan terintegrasi ke tarif biaya.
-    </div>
-    <div id="penunjangListContainer"></div>
-    <button class="btn-add-row" onclick="_tambahPenunjang()">➕ Tambah Jenis Penunjang</button>`;
-}
-
-function _renderPenunjangList() {
-    const c = document.getElementById('penunjangListContainer');
-    if (!c) return;
-    const list = window._penunjangList || [];
-    if (list.length === 0) {
-        c.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:12px;">Belum ada penunjang — klik ➕ untuk menambahkan.</div>`;
-        return;
-    }
-    c.innerHTML = list.map((item, i) => `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;background:rgba(var(--primary-rgb,37,99,235),0.03);border:1px solid rgba(var(--primary-rgb,37,99,235),0.1);border-radius:10px;padding:8px 10px;">
-        <span style="font-size:16px;">🔭</span>
-        <input type="text" class="form-control" id="penunjang_nama_${i}" value="${escHtml(item)}"
-               placeholder="Nama penunjang..."
-               style="flex:1;font-size:12px;font-weight:600;"
-               oninput="window._penunjangList[${i}] = this.value">
-        <button onclick="_hapusPenunjang(${i})"
-            style="background:rgba(239,68,68,0.08);color:#dc2626;border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;flex-shrink:0;">
-            🗑️
-        </button>
-    </div>`).join('');
-}
-
-function _tambahPenunjang() {
-    if (!window._penunjangList) window._penunjangList = [];
-    window._penunjangList.push('');
-    _renderPenunjangList();
-    // Fokus ke field baru
-    const inputs = document.querySelectorAll('[id^="penunjang_nama_"]');
-    if (inputs.length) inputs[inputs.length - 1].focus();
-}
-
-function _hapusPenunjang(i) {
-    window._penunjangList.splice(i, 1);
-    _renderPenunjangList();
-}
-
-function _loadPenunjang(s) {
-    try {
-        window._penunjangList = s.penunjang_aktif ? JSON.parse(s.penunjang_aktif) : [...PENUNJANG_DEFAULT];
-    } catch(e) {
-        window._penunjangList = [...PENUNJANG_DEFAULT];
-    }
-    _renderPenunjangList();
-}
-
-function _getPenunjangPayload() {
-    const list = (window._penunjangList || []).map(n => (n || '').trim()).filter(n => n);
-    return JSON.stringify(list);
-}
-
-// ════════════════════════════════════════
-//  SEKSI: JENIS TINDAKAN
-//  Nama + harga, disimpan di DB tabel jenis_tindakan
-// ════════════════════════════════════════
-
-window._tindakanList = window._tindakanList || [];  // [{id?, nama, harga, keterangan, aktif}]
-
-function _htmlTindakanSection() {
-    return `
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;padding:8px 10px;background:rgba(var(--primary-rgb,37,99,235),0.05);border-radius:8px;">
-        💡 Kelola jenis tindakan medis beserta tarifnya. Tindakan yang dipilih dokter akan otomatis masuk ke tagihan pasien.
-    </div>
-    <div id="tindakanListContainer"></div>
-    <button class="btn-add-row" onclick="_tambahTindakan()">➕ Tambah Jenis Tindakan</button>`;
-}
-
-function _renderTindakanList() {
-    const c = document.getElementById('tindakanListContainer');
-    if (!c) return;
-    const list = window._tindakanList || [];
-    if (list.length === 0) {
-        c.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:12px;">Belum ada tindakan — klik ➕ untuk menambahkan.</div>`;
-        return;
-    }
-    c.innerHTML = list.map((item, i) => `
-    <div style="margin-bottom:8px;background:rgba(var(--primary-rgb,37,99,235),0.03);border:1px solid rgba(var(--primary-rgb,37,99,235),0.1);border-radius:10px;padding:10px 12px;">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span style="font-size:16px;">⚕️</span>
-            <input type="text" class="form-control" id="tindakan_nama_${i}"
-                   value="${escHtml(item.nama||'')}"
-                   placeholder="Nama tindakan..."
-                   style="flex:2;min-width:130px;font-size:12px;font-weight:600;"
-                   oninput="window._tindakanList[${i}].nama = this.value">
-            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Rp</span>
-                <input type="number" class="form-control" id="tindakan_harga_${i}"
-                       value="${item.harga||0}"
-                       min="0" placeholder="0"
-                       style="width:90px;font-size:12px;"
-                       oninput="window._tindakanList[${i}].harga = Number(this.value)||0">
-            </div>
-            <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;">
-                <input type="checkbox" id="tindakan_aktif_${i}"
-                       ${item.aktif !== false ? 'checked' : ''}
-                       style="accent-color:var(--primary);"
-                       onchange="window._tindakanList[${i}].aktif = this.checked">
-                Aktif
-            </label>
-            <button onclick="_hapusTindakanRow(${i})"
-                style="background:rgba(239,68,68,0.08);color:#dc2626;border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;flex-shrink:0;">
-                🗑️
+    <div style="background:linear-gradient(135deg,rgba(99,102,241,0.06),rgba(139,92,246,0.04));
+                border:1.5px solid rgba(99,102,241,0.18);border-radius:14px;
+                padding:14px 16px;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:800;color:#3730a3;margin-bottom:8px;">
+            ⚡ Cara kerja baru
+        </div>
+        <div style="font-size:11.5px;color:#4338ca;line-height:1.8;margin-bottom:12px;">
+            Jenis pemeriksaan <b>Penunjang</b> (EKG, USG, Rontgen, dll.) dan
+            <b>Tindakan Medis</b> (Hecting, Injeksi, Nebulisasi, dll.) kini
+            dikelola langsung di halaman <b>🏷️ Tarif &amp; Biaya</b>.<br><br>
+            Tambahkan item baru atau aktifkan/nonaktifkan di sana —
+            item yang aktif akan <b>otomatis muncul</b> sebagai chip pilihan
+            di halaman Pemeriksaan Medis dan masuk ke tagihan secara otomatis.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="switchPage('pageBiaya', document.getElementById('navBiaya'))"
+                style="padding:8px 16px;background:var(--primary);color:#fff;border:none;
+                       border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;">
+                🏷️ Buka Tarif &amp; Biaya
             </button>
         </div>
-        <input type="text" class="form-control" id="tindakan_ket_${i}"
-               value="${escHtml(item.keterangan||'')}"
-               placeholder="Keterangan singkat (opsional)..."
-               style="margin-top:6px;font-size:11px;color:var(--text-muted);"
-               oninput="window._tindakanList[${i}].keterangan = this.value">
-    </div>`).join('');
-}
-
-function _tambahTindakan() {
-    if (!window._tindakanList) window._tindakanList = [];
-    window._tindakanList.push({ nama: '', harga: 0, keterangan: '', aktif: true });
-    _renderTindakanList();
-    const inputs = document.querySelectorAll('[id^="tindakan_nama_"]');
-    if (inputs.length) inputs[inputs.length - 1].focus();
-}
-
-function _hapusTindakanRow(i) {
-    window._tindakanList.splice(i, 1);
-    _renderTindakanList();
-}
-
-async function _loadTindakan() {
-    try {
-        const rows = await _sbFetch('jenis_tindakan?select=*&order=nama.asc');
-        window._tindakanList = rows;
-    } catch(e) {
-        window._tindakanList = [];
-    }
-    _renderTindakanList();
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);padding:8px 4px;line-height:1.7;">
+        💡 <b>Tip:</b> Kategori <b>Penunjang</b> untuk chip EKG/USG/Rontgen,
+        kategori <b>Tindakan</b> untuk chip Hecting/Injeksi/Infus.
+        Harga yang Anda isi di tarif akan langsung dipakai saat membuat tagihan pasien.
+    </div>`;
 }
 
 // ────────────────────────────────────────
@@ -796,13 +668,11 @@ async function memuatSettings() {
         _dokterList    = data.dokter   || [];
 
         _isiFormDariSettings(_settingsCache);
-        await _loadUserList();  // muat daftar user agar dropdown link dokter↔akun tersedia
+        await _loadUserList();
         _renderDokterList();
         _renderAiKeys(_settingsCache);
         _initModuleAccess();
         _loadLabAktif(_settingsCache);
-        _loadPenunjang(_settingsCache);
-        await _loadTindakan();
         _loadStokAktif(_settingsCache);
         _loadBiayaAktif(_settingsCache);
         _loadLogoKlinik(_settingsCache);
@@ -828,9 +698,6 @@ function _fallbackDariKonstanta() {
     _renderAiKeys({});
     _initModuleAccess();
     _loadLabAktif({});
-    _loadPenunjang({});
-    // _loadTindakan bersifat async (fetch DB) — fallback ke array kosong
-    window._tindakanList = window._tindakanList || [];
 }
 
 // ────────────────────────────────────────
@@ -1082,16 +949,14 @@ function applyModuleAccess(jabatan) {
     // ══ SETTINGS PAGE: sembunyikan seksi yang tidak diizinkan ══
     // (diterapkan saat initSettings dipanggil — lihat _applySettingsSeksiAccess)
     window._settingsAccess = {
-        klinik:     has('mod_settings_klinik'),
-        akses:      has('mod_settings_akses'),
-        dokter:     has('mod_settings_dokter'),
-        lab:        has('mod_settings_lab'),
-        penunjang:  has('mod_settings_penunjang'),
-        tindakan:   has('mod_settings_tindakan'),
-        stok:       has('mod_settings_stok'),
-        biaya:      has('mod_settings_biaya'),
-        ai:         has('mod_settings_ai'),
-        integrasi:  has('mod_settings_integrasi'),
+        klinik:    has('mod_settings_klinik'),
+        akses:     has('mod_settings_akses'),
+        dokter:    has('mod_settings_dokter'),
+        lab:       has('mod_settings_lab'),
+        stok:      has('mod_settings_stok'),
+        biaya:     has('mod_settings_biaya'),
+        ai:        has('mod_settings_ai'),
+        integrasi: has('mod_settings_integrasi'),
     };
 
     if (typeof window._fitNav === 'function') setTimeout(window._fitNav, 200);
@@ -1111,16 +976,15 @@ function _setElVis(id, visible) {
 function _applySettingsSeksiAccess() {
     const sa = window._settingsAccess || {};
     const secMap = {
-        sec_klinik:    sa.klinik    !== false,
-        sec_akses:     sa.akses     !== false,
-        sec_dokter:    sa.dokter    !== false,
-        sec_lab:       sa.lab       !== false,
-        sec_penunjang: sa.penunjang !== false,
-        sec_tindakan:  sa.tindakan  !== false,
-        sec_stok:      sa.stok      !== false,
-        sec_biaya:     sa.biaya     !== false,
-        sec_ai:        sa.ai        !== false,
-        sec_integrasi: sa.integrasi !== false,
+        sec_klinik:       sa.klinik       !== false,
+        sec_akses:        sa.akses        !== false,
+        sec_dokter:       sa.dokter       !== false,
+        sec_lab:          sa.lab          !== false,
+        sec_layanan_medis: true, // banner info — selalu tampil
+        sec_stok:         sa.stok         !== false,
+        sec_biaya:        sa.biaya        !== false,
+        sec_ai:           sa.ai           !== false,
+        sec_integrasi:    sa.integrasi    !== false,
     };
     Object.entries(secMap).forEach(([secId, visible]) => {
         const wrap = document.getElementById(`${secId}_wrap`);
@@ -1360,7 +1224,8 @@ async function simpanSeksi(seksi) {
             _terapkanSettingsRuntime(aiKeysPayload, window._dokterAktif || []);
             showToast("✅ API Key AI disimpan", "success");
 
-        } else if (seksi === 'lab') {            // Kumpulkan state toggle dari DOM
+        } else if (seksi === 'lab') {
+            // Kumpulkan state toggle dari DOM
             LAB_GROUPS.forEach(g => {
                 g.items.forEach(item => {
                     const chk = $(`labtog_${item.id}`);
@@ -1369,39 +1234,22 @@ async function simpanSeksi(seksi) {
             });
             await sb_saveSettings({ lab_aktif: _getLabAktifPayload() });
             window._labAktif = _labAktif;
-            // Rebuild section lab di halaman medis jika sudah terbuka
+            // Sync ke tarif_layanan jika modul Biaya aktif
+            if (window._biayaAktif && typeof sb_getTarif === 'function') {
+                try {
+                    await _syncLabKeTarif();
+                    showToast('✅ Lab disimpan & disinkronkan ke tarif', 'success');
+                } catch(e) {
+                    showToast('✅ Lab disimpan (sync tarif gagal: ' + (e.message||'') + ')', 'info');
+                }
+            } else {
+                showToast('✅ Konfigurasi laboratorium disimpan', 'success');
+            }
+            // Rebuild section lab di halaman medis
             if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
-            showToast("✅ Konfigurasi laboratorium disimpan", "success");
 
-        } else if (seksi === 'penunjang') {
-            // Kumpulkan dari DOM (input oninput sudah update array, tapi pastikan sync)
-            const inputs = document.querySelectorAll('[id^="penunjang_nama_"]');
-            window._penunjangList = Array.from(inputs).map(el => el.value.trim()).filter(v => v);
-            await sb_saveSettings({ penunjang_aktif: _getPenunjangPayload() });
-            // Rebuild section penunjang di halaman medis jika terbuka
-            if (typeof renderSectionPenunjang === 'function') renderSectionPenunjang();
-            showToast("✅ Jenis penunjang disimpan", "success");
-
-        } else if (seksi === 'tindakan') {
-            // Sync dari DOM inputs dulu
-            const listLen = (window._tindakanList || []).length;
-            for (let i = 0; i < listLen; i++) {
-                const nm = document.getElementById(`tindakan_nama_${i}`);
-                const hg = document.getElementById(`tindakan_harga_${i}`);
-                const kt = document.getElementById(`tindakan_ket_${i}`);
-                const ak = document.getElementById(`tindakan_aktif_${i}`);
-                if (nm) window._tindakanList[i].nama       = nm.value.trim();
-                if (hg) window._tindakanList[i].harga      = Number(hg.value) || 0;
-                if (kt) window._tindakanList[i].keterangan = kt.value.trim();
-                if (ak) window._tindakanList[i].aktif      = ak.checked;
-            }
-            // Upsert ke DB via sb_saveTindakan (loop)
-            if (typeof sb_saveTindakanList === 'function') {
-                await sb_saveTindakanList(window._tindakanList);
-            }
-            // Rebuild section tindakan di halaman medis
-            if (typeof renderSectionTindakan === 'function') renderSectionTindakan();
-            showToast("✅ Jenis tindakan disimpan", "success");
+        } else if (seksi === 'layanan_medis') {
+            showToast('ℹ️ Kelola Penunjang & Tindakan di halaman Tarif & Biaya', 'info');
 
         } else if (seksi === 'biaya') {
             const aktif = !!document.getElementById('cfg_biaya_aktif')?.checked;
@@ -1488,7 +1336,6 @@ async function simpanSemuaSettings() {
         ss_client_secret: _getVal('cfg_ss_client_secret'),
         module_access:    JSON.stringify(_moduleAccess),
         lab_aktif:        _getLabAktifPayload(),
-        penunjang_aktif:  _getPenunjangPayload(),
         stok_aktif:       document.getElementById('cfg_stok_aktif')?.checked ? '1' : '0',
         biaya_aktif:      document.getElementById('cfg_biaya_aktif')?.checked ? '1' : '0',
         dokter:           JSON.stringify(dokterPayload),
@@ -1501,6 +1348,10 @@ async function simpanSemuaSettings() {
         window._labAktif = _labAktif;
         _terapkanSettingsRuntime(payload, dokterPayload);
         _setVal('cfg_ss_client_secret', '');
+        // Sync lab ke tarif_layanan jika modul Biaya aktif
+        if (window._biayaAktif && typeof sb_getTarif === 'function') {
+            try { await _syncLabKeTarif(); } catch(e) {}
+        }
         showSettingsBanner("✅ Semua pengaturan berhasil disimpan!", "success");
         showToast("✅ Semua pengaturan disimpan", "success");
     } catch (e) {
@@ -1508,6 +1359,79 @@ async function simpanSemuaSettings() {
         showToast("❌ Gagal menyimpan", "error");
     } finally {
         if (btn) { btn.disabled = false; btn.innerText = "💾 Simpan Semua Pengaturan"; }
+    }
+}
+
+// ════════════════════════════════════════
+//  SYNC LAB → tarif_layanan
+//  Dipanggil setelah simpan lab di Settings.
+//  Buat entry baru di tarif_layanan jika belum ada,
+//  atau update aktif/nonaktif jika sudah ada.
+//  Harga 0 untuk entry baru — admin isi harga di Page Biaya.
+// ════════════════════════════════════════
+
+const _LAB_FIELD_TO_TARIF_NAMA = {
+    'lab_gds'       : 'GDS',
+    'lab_chol'      : 'Kolesterol',
+    'lab_ua'        : 'Asam Urat',
+    'lab_hb'        : 'Hemoglobin (HB)',
+    'lab_trombosit' : 'Trombosit',
+    'lab_leukosit'  : 'Leukosit',
+    'lab_eritrosit' : 'Eritrosit',
+    'lab_hematokrit': 'Hematokrit',
+    'lab_hiv'       : 'HIV',
+    'lab_sifilis'   : 'Sifilis',
+    'lab_hepatitis' : 'Hepatitis B',
+    'lab_hdl'       : 'HDL',
+    'lab_ldl'       : 'LDL',
+    'lab_tg'        : 'Trigliserida',
+    'lab_gdp'       : 'GDP',
+    'lab_hba1c'     : 'HbA1c',
+    'lab_sgot'      : 'SGOT',
+    'lab_sgpt'      : 'SGPT',
+    'lab_ureum'     : 'Ureum',
+    'lab_creatinin' : 'Creatinin',
+};
+
+async function _syncLabKeTarif() {
+    const semuaTarif = await sb_getTarif();
+    const tarifLab   = semuaTarif.filter(t => t.kategori === 'Laboratorium');
+
+    // Buat map: nama → record tarif
+    const tarifMap = {};
+    tarifLab.forEach(t => { tarifMap[t.nama] = t; });
+
+    for (const [fieldId, namaTarif] of Object.entries(_LAB_FIELD_TO_TARIF_NAMA)) {
+        const aktif = !!_labAktif[fieldId];
+
+        if (tarifMap[namaTarif]) {
+            // Sudah ada → update aktif jika berubah
+            if (tarifMap[namaTarif].aktif !== aktif) {
+                await sb_saveTarif({
+                    id        : tarifMap[namaTarif].id,
+                    nama      : namaTarif,
+                    kategori  : 'Laboratorium',
+                    harga     : tarifMap[namaTarif].harga,
+                    keterangan: tarifMap[namaTarif].keterangan,
+                    aktif
+                });
+            }
+        } else if (aktif) {
+            // Belum ada tapi diaktifkan → buat baru dengan harga 0
+            await sb_saveTarif({
+                nama     : namaTarif,
+                kategori : 'Laboratorium',
+                harga    : 0,
+                keterangan: null,
+                aktif    : true
+            });
+        }
+        // Belum ada dan nonaktif → tidak perlu buat record
+    }
+
+    // Refresh _tarifCache agar page medis langsung update
+    if (typeof sb_getTarif === 'function') {
+        window._tarifCache = await sb_getTarif();
     }
 }
 
