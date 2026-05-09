@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Klikpro RME V 2.0 — Praktek Dokter Reza Ariandes</title>
 
     <script>
@@ -107,6 +107,45 @@
             font-weight: 700; cursor: pointer;
             font-family: 'Sora', sans-serif;
             margin-top: 8px; font-size: 14px;
+        }
+    </style>
+
+    <style id="nav-fix">
+        /*
+         * KLIKPRO — Navbar Fix
+         * .bottom-nav sudah position:fixed di nav.html — jangan dioverride.
+         * Yang kita fix di sini:
+         * 1. Pastikan #slot-nav tidak menciptakan stacking context baru
+         * 2. Pastikan #app-root tidak mengubur fixed children
+         */
+
+        /* Slot nav: tidak punya position/transform/overflow yang
+           bisa membuat stacking context dan mengubur fixed child */
+        #slot-nav {
+            position: static !important;
+            transform: none !important;
+            overflow: visible !important;
+            will-change: auto !important;
+            isolation: auto !important;
+        }
+
+        /* app-root: sama, jangan ada stacking context */
+        #app-root {
+            transform: none !important;
+            will-change: auto !important;
+            isolation: auto !important;
+            overflow-x: clip; /* cegah horizontal scroll tanpa buat stacking context */
+        }
+
+        /* Naikkan z-index bottomNav sedikit untuk keamanan */
+        #bottomNav,
+        .bottom-nav {
+            z-index: 1000 !important;
+        }
+
+        /* Konten page diberi padding bawah agar tidak tertutup navbar */
+        .page {
+            padding-bottom: calc(60px + env(safe-area-inset-bottom, 10px) + 8px) !important;
         }
     </style>
 </head>
@@ -272,6 +311,22 @@
 
             document.getElementById('app-loading').style.display = 'none';
             document.getElementById('app-root').style.display    = 'block';
+
+            // ── Navbar reflow fix untuk mobile browser ──
+            // Beberapa Android/iOS browser tidak langsung render
+            // position:fixed setelah parent berubah display:none→block
+            (function _navReflow() {
+                var nav = document.getElementById('bottomNav');
+                if (!nav) return;
+                // Force reflow: baca offsetHeight lalu set ulang bottom
+                void nav.offsetHeight;
+                nav.style.bottom = '0';
+                nav.style.display = 'flex';
+                nav.style.visibility = 'visible';
+                // Trigger _fitNav jika sudah tersedia
+                if (typeof _fitNav === 'function') { _fitNav(); }
+                else { setTimeout(function(){ if(typeof _fitNav==='function') _fitNav(); }, 300); }
+            })();
 
             if (typeof initApp === 'function') initApp();
 
