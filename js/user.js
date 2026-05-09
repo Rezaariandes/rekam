@@ -280,9 +280,11 @@ async function hapusUser() {
 
     // FIX: gunakan showKonfirmasiDangerZone langsung — tidak bergantung pada patch
     // dari modal-konfirmasi.js yang mungkin belum aktif saat fungsi dipanggil
+    // FIX BUG 7: message tidak mengganti instruksi "ketik nama" —
+    // gabungkan pesan custom + instruksi ketik nama agar user tidak bingung
     const konfirmFn = (typeof showKonfirmasiDangerZone === 'function')
         ? () => showKonfirmasiDangerZone(nama, {
-            message: 'Akun ini akan dihapus permanen. Data kunjungan & rekam medis yang pernah dibuat <b>tetap tersimpan</b>.'
+            message: `Akun ini akan dihapus permanen. Data kunjungan & rekam medis yang pernah dibuat <b>tetap tersimpan</b>.<br><br>Ketik <b>${nama}</b> di bawah untuk mengkonfirmasi.`
           })
         : () => Promise.resolve(
             confirm(`⚠️ Hapus akun "${nama}"?\n\nData kunjungan & rekam medis tetap tersimpan.\nAksi ini tidak dapat dibatalkan.`) &&

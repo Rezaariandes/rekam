@@ -132,13 +132,15 @@
         ov.id = 'mkOverlay';
         ov.innerHTML = `<div id="mkSheet"><div class="mk-handle"></div><div id="mkBody"></div></div>`;
         document.body.appendChild(ov);
-        // Tutup jika klik backdrop
+        // Tutup jika klik backdrop — BUG 2+3 FIX:
+        // guard _resolve null & blokir backdrop dismiss saat requireInput aktif
         ov.addEventListener('click', e => {
-            if (e.target === ov) _resolve(false);
+            if (e.target === ov && typeof _resolve === 'function' && !_requireInput) _resolve(false);
         });
     }
 
     let _resolve = null;
+    let _requireInput = false; // BUG 3 FIX: flag blokir backdrop dismiss saat DangerZone
 
     function _open() {
         // _ensureDOM() sudah dipanggil sebelum _setBody(), ini hanya safety guard
@@ -212,6 +214,7 @@
 
             // FIX: _ensureDOM() harus dipanggil SEBELUM _setBody()
             // agar #mkBody sudah ada di DOM saat diisi konten
+            _requireInput = !!requireInput; // BUG 3 FIX: set flag backdrop dismiss
             _ensureDOM();
 
             _setBody(`
@@ -314,7 +317,10 @@
     let elapsed = 0;
     const iv = setInterval(() => {
         elapsed += TICK;
-        if (typeof hapusTarif !== 'function' && elapsed < MAX_WAIT) return;
+        // BUG 6 FIX: trigger setelah modul utama siap — cek hapusObat ATAU elapsed MAX_WAIT
+        // Tidak bergantung hanya pada hapusTarif yang mungkin tidak ada jika biaya.js tidak load
+        const modulSiap = typeof hapusTarif === 'function' || typeof hapusObat === 'function' || typeof hapusUser === 'function';
+        if (!modulSiap && elapsed < MAX_WAIT) return;
         clearInterval(iv);
 
         // ── PATCH hapusTarif (biaya.js) ──
@@ -370,31 +376,9 @@
         }
 
         // ── PATCH hapusUser (user.js) ──
-        if (typeof hapusUser === 'function') {
-            window.hapusUser = async function() {
-                const id   = document.getElementById('edit_u_id')?.value   || '';
-                const nama = document.getElementById('edit_u_nama')?.value || 'user ini';
-                const ok = await showKonfirmasiDangerZone(nama, {
-                    message: 'Akun ini akan dihapus permanen. Data kunjungan & rekam medis yang pernah dibuat <b>tetap tersimpan</b>.'
-                });
-                if (!ok) return;
-                const btn = document.getElementById('btnHapusUser');
-                if (btn) { btn.disabled = true; btn.innerText = 'Menghapus...'; }
-                try {
-                    await sb_deleteUser(id);
-                    showToast(`🗑️ Akun "${nama}" berhasil dihapus`, 'success');
-                    window.userListCache = (window.userListCache || []).filter(x => x.id !== id);
-                    const modal = document.getElementById('modalUser');
-                    if (modal) modal.classList.remove('show');
-                    if (typeof renderUserList === 'function') renderUserList();
-                    if (typeof loadLoginUsers === 'function') loadLoginUsers();
-                } catch(e) {
-                    showToast('❌ Gagal menghapus user: ' + (e.message || ''), 'error');
-                } finally {
-                    if (btn) { btn.disabled = false; btn.innerText = '🗑️ Hapus User'; }
-                }
-            };
-        }
+        // BUG 1 FIX: TIDAK di-patch di sini — user.js versi baru sudah
+        // memanggil showKonfirmasiDangerZone() langsung tanpa perlu patch override.
+        // Patch ini dihapus agar tidak ada konflik dua definisi hapusUser.
 
         // ── PATCH toggleAllLabGroup di settings.js (konfirmasi sebelum reset) ──
         if (typeof _resetDefaultModul === 'function') {
