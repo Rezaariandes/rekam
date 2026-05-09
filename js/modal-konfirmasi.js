@@ -141,9 +141,14 @@
     let _resolve = null;
 
     function _open() {
+        // _ensureDOM() sudah dipanggil sebelum _setBody(), ini hanya safety guard
         _ensureDOM();
+        // Double rAF: pastikan konten sudah ter-render di DOM sebelum animasi CSS berjalan
         requestAnimationFrame(() => {
-            document.getElementById('mkOverlay').classList.add('mk-visible');
+            requestAnimationFrame(() => {
+                const ov = document.getElementById('mkOverlay');
+                if (ov) ov.classList.add('mk-visible');
+            });
         });
     }
 
@@ -204,6 +209,10 @@
                      </div>
                    </div>`
                 : '';
+
+            // FIX: _ensureDOM() harus dipanggil SEBELUM _setBody()
+            // agar #mkBody sudah ada di DOM saat diisi konten
+            _ensureDOM();
 
             _setBody(`
                 <div class="mk-icon-wrap">${icon}</div>
