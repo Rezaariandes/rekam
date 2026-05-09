@@ -65,8 +65,8 @@
         }
         .mk-input-label {
             font-size: 11px; font-weight: 700;
-            color: #64748b; text-transform: uppercase;
-            letter-spacing: .5px; margin-bottom: 5px;
+            color: #64748b; text-transform: none;
+            letter-spacing: .3px; margin-bottom: 5px;
             display: block;
         }
         .mk-input {
