@@ -146,6 +146,15 @@ function _toggleTindakan(id) {
 
 // ── Refresh visual semua chip tindakan (dipanggil oleh pem-labor.js) ──
 function _refreshTindakanChipUI() {
+    const container = document.getElementById('sectionTindakan');
+
+    // BUG FIX: jika #sectionTindakan ada di DOM tapi chip belum dirender
+    // (terjadi setelah page refresh / buka kunjungan lama), render ulang dulu.
+    if (container) {
+        _renderSectionTindakan();
+    }
+
+    // Update gaya chip sesuai state terkini
     _getTindakanList().forEach(t => {
         const btn = document.getElementById('chip_' + t.id);
         if (!btn) return;
@@ -158,20 +167,55 @@ function _refreshTindakanChipUI() {
 
 // ════════════════════════════════════════════════════════
 //  HOOK — ikut dirender saat _renderSectionLabDinamic dipanggil
-//  Wrap fungsi dari kunjungan.js agar tindakan selalu sinkron
-//  dengan kondisi lab yang aktif.
+//  Wrap fungsi dari kunjungan.js agar tindakan selalu sinkron.
+//
+//  BUG FIX: hook lama gagal karena _renderSectionLabDinamic
+//  belum terdefinisi saat tin-medis.js di-load (race condition).
+//  Solusi: retry loop sampai fungsi tersedia, lalu wrap.
 // ════════════════════════════════════════════════════════
 
 (function _hookRenderSectionLabDinamicTindakan() {
-    const _orig = window._renderSectionLabDinamic;
-    if (typeof _orig !== 'function') return;
+    function _tryHook() {
+        const _orig = window._renderSectionLabDinamic;
 
-    window._renderSectionLabDinamic = function() {
-        _orig.apply(this, arguments);
-        try { _renderSectionTindakan(); } catch(e) {
-            console.warn('[tin-medis] Gagal render tindakan:', e.message);
+        if (typeof _orig !== 'function') {
+            // Belum tersedia — coba lagi 100 ms kemudian
+            setTimeout(_tryHook, 100);
+            return;
         }
-    };
+
+        // Cegah double-wrap
+        if (_orig._tindakanHooked) return;
+
+        window._renderSectionLabDinamic = function() {
+            _orig.apply(this, arguments);
+            try { _renderSectionTindakan(); } catch(e) {
+                console.warn('[tin-medis] Gagal render tindakan:', e.message);
+            }
+        };
+        window._renderSectionLabDinamic._tindakanHooked = true;
+    }
+
+    _tryHook();
+})();
+
+// ════════════════════════════════════════════════════════
+//  SAFETY NET — render tindakan saat DOM siap
+//  Jika #sectionTindakan sudah ada di halaman saat script
+//  ini di-load (misal setelah hard-refresh), render langsung
+//  tanpa menunggu hook _renderSectionLabDinamic dipanggil.
+// ════════════════════════════════════════════════════════
+(function _renderOnDOMReady() {
+    function _tryRender() {
+        if (document.getElementById('sectionTindakan')) {
+            _renderSectionTindakan();
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _tryRender);
+    } else {
+        setTimeout(_tryRender, 0);
+    }
 })();
 
 // ════════════════════════════════════════════════════════
