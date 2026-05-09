@@ -99,7 +99,7 @@
             </div>
 
             <!-- ── 2c. Pemeriksaan Fisik ── -->
-            <div class="rm-subsection" style="border-bottom:none;padding-bottom:0;margin-bottom:0;">
+            <div class="rm-subsection" style="border-bottom:1px dashed var(--border);padding-bottom:14px;margin-bottom:14px;">
                 <div class="rm-subsection-label">
                     <span class="rm-subsection-dot" style="background:#059669;"></span>
                     Pemeriksaan Fisik
@@ -111,6 +111,14 @@
                     <button class="stt-btn" onclick="startSTT('fisik')">🎙️</button>
                 </div>
             </div>
+
+            <!-- ── 2d. Pemeriksaan Tambahan Dinamis ──
+                 Diisi otomatis oleh medis-dinamis.js berdasarkan
+                 item kategori "Pemeriksaan" yang ditambahkan di halaman Biaya.
+                 Item bawaan (Vital Sign, Konsultasi Medis, Pemeriksaan Fisik, Anamnesa)
+                 tidak dirender di sini — sudah ditangani di atas.
+            -->
+            <div id="sectionPemeriksaanDinamis" style="display:none;"></div>
 
         </div>
     </div>
@@ -272,8 +280,13 @@
                 <div class="rm-doc-desc">Centang jika pasien memerlukan surat keterangan sakit</div>
             </div>
 
-            <!-- Placeholder: dokumen berikutnya bisa ditambahkan di sini -->
-            <!-- Contoh: Surat Rujukan, Surat Sehat, Visum, dll. -->
+            <!-- ── 6b. Dokumen Administrasi Dinamis ──
+                 Diisi otomatis oleh medis-dinamis.js berdasarkan
+                 item kategori "Administrasi" yang ditambahkan di halaman Biaya.
+                 "Surat Keterangan Sakit" tidak dirender di sini (sudah ada di atas).
+                 Contoh: Surat Keterangan Sehat, Surat Rujukan, Visum, dll.
+            -->
+            <div id="sectionAdministrasiDinamis" style="display:none;"></div>
 
         </div>
     </div>
