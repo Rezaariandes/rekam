@@ -1,21 +1,266 @@
 // ════════════════════════════════════════════════════════
-//  KLIKPRO RME — PEM-PENUNJANG.JS
+//  KLIKPRO RME — PEM-PENUNJANG.JS  (v3 — Supabase Storage)
 //  Modul: Pemeriksaan Penunjang (EKG, Rontgen, USG, dll.)
 //
-//  Tanggung jawab file ini:
-//    • Mendefinisikan daftar penunjang dari tarif DB
-//    • Merender chip button di #sectionPermintaanLab
-//    • Menyimpan state pilihan ke window._reqLab
-//    • Menyediakan _getPenunjangList() untuk dipakai modul lain
+//  Perubahan v3:
+//    • Textarea hasil berukuran besar (min-height 96px, lebar penuh)
+//      tampil BERSAMA di bawah baris chip (bukan per-chip inline)
+//    • Setiap chip aktif mendapat satu panel hasil dengan:
+//        - Label ikon + nama penunjang
+//        - Textarea resize-vertical + animasi fade-in halus
+//        - Tombol 🎙️ Speech-to-Text di pojok kanan atas
+//        - Upload foto → Supabase Storage (bucket: penunjang-foto)
+//          Hanya URL publik yang disimpan, TIDAK ada Base64 di DB
+//    • window._reqLabFoto[id] = ['https://…', …]  (URL publik)
+//    • Nilai teks tersimpan ke window._reqLabHasil[id]
+//    • Semua state ter-restore saat loadReqLabFromKunjungan()
 //
-//  Data bersumber dari: window._tarifCache (diisi biaya.js)
-//  Fallback ke: window._penunjangList (dari Settings)
-//  State disimpan di kolom req_lab tabel kunjungan (via getReqLabPayload)
+//  ┌──────────────────────────────────────────────────────┐
+//  │  PRASYARAT — buat sekali di Supabase Dashboard:      │
+//  │  Storage → New bucket                                │
+//  │    Nama   : penunjang-foto                           │
+//  │    Public : ✅ (URL bisa diakses tanpa token)        │
+//  │  Storage Policies → INSERT allowed for anon/auth     │
+//  └──────────────────────────────────────────────────────┘
+//
+//  Bergantung pada (harus di-load lebih dulu):
+//    - supabase-secure.js  → _SB_URL, _SB_KEY
+//    - supabase-biaya.js   → sb_getTarif
 // ════════════════════════════════════════════════════════
 
-// ── State penunjang ──
+// ── State ──
 window._reqLab      = window._reqLab      || {};
 window._reqLabHasil = window._reqLabHasil || {};
+window._reqLabFoto  = window._reqLabFoto  || {};   // { [id]: ['https://…', …] }
+
+// ── Nama bucket Supabase Storage ──
+const _PNJ_BUCKET = 'penunjang-foto';
+
+// ════════════════════════════════════════════════════════
+//  SUPABASE STORAGE HELPERS
+// ════════════════════════════════════════════════════════
+
+/**
+ * Upload satu File ke Supabase Storage → kembalikan URL publik.
+ * @param {File}   file         - objek File dari input[type=file]
+ * @param {string} penunjangId  - slug id chip (untuk subfolder)
+ * @returns {Promise<string>}   - URL publik
+ */
+async function _sbStorageUploadFoto(file, penunjangId) {
+    const ext      = file.name.split('.').pop().toLowerCase() || 'jpg';
+    const ts       = Date.now();
+    const rand     = Math.random().toString(36).slice(2, 7);
+    const filePath = `${penunjangId}/${ts}_${rand}.${ext}`;
+
+    const res = await fetch(
+        `${_SB_URL}/storage/v1/object/${_PNJ_BUCKET}/${filePath}`,
+        {
+            method: 'POST',
+            headers: {
+                'apikey':        _SB_KEY,
+                'Authorization': 'Bearer ' + _SB_KEY,
+                'Content-Type':  file.type || 'image/jpeg',
+                'x-upsert':      'true'
+            },
+            body: file
+        }
+    );
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || err.error || 'Storage upload gagal (HTTP ' + res.status + ')');
+    }
+
+    return `${_SB_URL}/storage/v1/object/public/${_PNJ_BUCKET}/${filePath}`;
+}
+
+/**
+ * Hapus file dari Storage berdasarkan URL publik.
+ * Fire-and-forget — error tidak ditampilkan ke pengguna.
+ */
+async function _sbStorageDeleteFoto(publicUrl) {
+    try {
+        const marker   = `/object/public/${_PNJ_BUCKET}/`;
+        const filePath = publicUrl.includes(marker)
+            ? publicUrl.split(marker)[1]
+            : null;
+        if (!filePath) return;
+
+        await fetch(
+            `${_SB_URL}/storage/v1/object/${_PNJ_BUCKET}/${filePath}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    'apikey':        _SB_KEY,
+                    'Authorization': 'Bearer ' + _SB_KEY
+                }
+            }
+        );
+    } catch(e) {
+        console.warn('[pem-penunjang] Gagal hapus Storage:', e.message);
+    }
+}
+
+// ════════════════════════════════════════════════════════
+//  CSS — inject sekali ke <head>
+// ════════════════════════════════════════════════════════
+(function _injectPenunjangCSS() {
+    if (document.getElementById('_css_penunjang_panel')) return;
+    const s = document.createElement('style');
+    s.id = '_css_penunjang_panel';
+    s.textContent = `
+    @keyframes _pnj_fadeIn {
+        from { opacity:0; transform:translateY(-6px); }
+        to   { opacity:1; transform:translateY(0); }
+    }
+    .pnj-panel {
+        animation: _pnj_fadeIn .22s ease forwards;
+        background: #f0f7ff;
+        border: 1.5px solid var(--primary,#2563eb);
+        border-radius: 12px;
+        padding: 10px 12px 12px;
+        margin-top: 8px;
+        position: relative;
+    }
+    .pnj-panel-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--primary,#2563eb);
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .pnj-textarea {
+        width: 100%;
+        min-height: 96px;
+        resize: vertical;
+        font-size: 12px;
+        line-height: 1.55;
+        padding: 9px 44px 9px 10px;
+        border: 1.5px solid #c7d9f5;
+        border-radius: 8px;
+        background: #fff;
+        color: #1e3a8a;
+        outline: none;
+        box-sizing: border-box;
+        font-family: inherit;
+        transition: border-color .15s;
+    }
+    .pnj-textarea:focus {
+        border-color: var(--primary,#2563eb);
+        box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    .pnj-stt-btn {
+        position: absolute;
+        top: 38px;
+        right: 18px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 1.5px solid #c7d9f5;
+        background: #fff;
+        cursor: pointer;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all .15s;
+        z-index: 2;
+        padding: 0;
+    }
+    .pnj-stt-btn:hover  { background:#e0eaff; border-color:var(--primary,#2563eb); }
+    .pnj-stt-btn.recording {
+        background:#fee2e2;
+        border-color:#ef4444;
+        animation: _pnj_pulse 1s infinite;
+    }
+    @keyframes _pnj_pulse {
+        0%,100% { box-shadow:0 0 0 0 rgba(239,68,68,.4); }
+        50%      { box-shadow:0 0 0 6px rgba(239,68,68,0); }
+    }
+    .pnj-foto-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #64748b;
+        margin: 10px 0 6px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .pnj-foto-area {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        align-items: flex-start;
+    }
+    /* Tombol tambah foto */
+    .pnj-foto-add {
+        width: 58px;
+        height: 58px;
+        border: 2px dashed #c7d9f5;
+        border-radius: 9px;
+        background: #f8fbff;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        color: #93afd4;
+        transition: border-color .15s, background .15s, color .15s;
+        flex-shrink: 0;
+        user-select: none;
+    }
+    .pnj-foto-add:hover { border-color:var(--primary,#2563eb); background:#e8f0fe; color:var(--primary,#2563eb); }
+    .pnj-foto-add.uploading { pointer-events:none; opacity:.6; }
+    .pnj-spinner {
+        width: 20px; height: 20px;
+        border: 2.5px solid #c7d9f5;
+        border-top-color: var(--primary,#2563eb);
+        border-radius: 50%;
+        animation: _pnj_spin .7s linear infinite;
+    }
+    @keyframes _pnj_spin { to { transform:rotate(360deg); } }
+    /* Thumbnail */
+    .pnj-foto-thumb {
+        position: relative;
+        width: 58px;
+        height: 58px;
+        border-radius: 9px;
+        overflow: hidden;
+        border: 1.5px solid #c7d9f5;
+        flex-shrink: 0;
+        cursor: pointer;
+        transition: border-color .15s;
+    }
+    .pnj-foto-thumb:hover { border-color:var(--primary,#2563eb); }
+    .pnj-foto-thumb img {
+        width: 100%; height: 100%;
+        object-fit: cover; display: block;
+    }
+    .pnj-foto-del {
+        position: absolute;
+        top: 2px; right: 2px;
+        width: 17px; height: 17px;
+        border-radius: 50%;
+        background: rgba(220,38,38,.88);
+        color: #fff;
+        font-size: 10px;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        padding: 0;
+        z-index: 3;
+        line-height: 1;
+    }
+    .pnj-foto-del:hover { background:#b91c1c; }
+    `;
+    document.head.appendChild(s);
+})();
 
 // ── Icon map penunjang ──
 const _PENUNJANG_ICONS = {
@@ -26,25 +271,18 @@ const _PENUNJANG_ICONS = {
     'USG Abdomen'            : '📡',
     'USG'                    : '📡',
     'Spirometri'             : '🌬️',
+    'Otoscopy'               : '🔬',
+    'Otoskop'                : '🔬',
 };
 
 // ════════════════════════════════════════════════════════
-//  HELPERS BERSAMA (dipakai juga oleh pem-labor.js & tim-medis.js)
+//  HELPERS BERSAMA (dipakai pem-labor.js & tin-medis.js)
 // ════════════════════════════════════════════════════════
-
-/**
- * Buat slug id dari nama tarif.
- * Contoh: "EKG / Elektrokardiogram" → "penunjang_ekg_elektrokardiogram"
- */
 function _slugTarifId(prefix, nama) {
     return prefix + '_' + nama.toLowerCase()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '');
 }
-
-/**
- * Cari icon dari map berdasarkan nama, fallback ke emoji default.
- */
 function _iconForNama(nama, map, def) {
     for (const [k, v] of Object.entries(map)) {
         if (nama.toLowerCase().includes(k.toLowerCase())) return v;
@@ -55,11 +293,6 @@ function _iconForNama(nama, map, def) {
 // ════════════════════════════════════════════════════════
 //  DAFTAR PENUNJANG — dinamis dari tarif DB
 // ════════════════════════════════════════════════════════
-
-/**
- * Kembalikan daftar penunjang aktif.
- * Prioritas: window._tarifCache → window._penunjangList (Settings) → []
- */
 function _getPenunjangList() {
     const cache     = window._tarifCache || [];
     const fromTarif = cache.filter(t => t.aktif && t.kategori === 'Penunjang');
@@ -86,22 +319,15 @@ function _getPenunjangList() {
     return [];
 }
 
-// Alias global agar kode lama yang masih pakai PENUNJANG_LIST tetap jalan
 Object.defineProperty(window, 'PENUNJANG_LIST', { get: _getPenunjangList, configurable: true });
 
 // ════════════════════════════════════════════════════════
-//  RENDER — chip button pemeriksaan penunjang
+//  RENDER UTAMA
 // ════════════════════════════════════════════════════════
-
-/**
- * Render chip penunjang ke dalam #sectionPermintaanLab.
- * Dipanggil oleh kunjungan.js setelah lab section selesai dirender.
- */
 function renderSectionPermintaanLab() {
     const container = document.getElementById('sectionPermintaanLab');
     if (!container) return;
 
-    // Jika tarif cache belum tersedia tapi modul biaya aktif → muat dulu
     if ((!window._tarifCache || window._tarifCache.length === 0)
         && window._biayaAktif
         && typeof sb_getTarif === 'function') {
@@ -115,6 +341,15 @@ function renderSectionPermintaanLab() {
     _renderPenunjangChips(container);
 }
 
+// ────────────────────────────────────────────────────────
+//  Layout:
+//   [chip A] [chip B ✓] [chip C]   ← baris chip tetap
+//  ┌─────────────────────────────────────────────────┐
+//  │ ✏️ Hasil 📡 USG Abdomen                         │
+//  │ [___textarea lebar penuh___________________] 🎙️ │
+//  │ 📎 Foto  [📷+] [thumb1 ✕] [thumb2 ✕]           │
+//  └─────────────────────────────────────────────────┘
+// ────────────────────────────────────────────────────────
 function _renderPenunjangChips(container) {
     const penunjangList = _getPenunjangList();
 
@@ -124,110 +359,400 @@ function _renderPenunjangChips(container) {
         return;
     }
 
-    // Pastikan border sub-section terlihat saat ada konten
     container.style.cssText = 'border-top:1px dashed var(--border);padding-top:14px;margin-top:4px;';
 
-    const chips = penunjangList.map(p => {
-        const active   = !!window._reqLab[p.id];
-        const hasilVal = (window._reqLabHasil && window._reqLabHasil[p.id]) || '';
-        return `
-        <div style="display:inline-block;margin:3px 3px 0 0;vertical-align:top;">
-            <button
-                id="chip_${p.id}"
-                onclick="_togglePenunjang('${p.id}')"
-                style="
-                    display:inline-flex;align-items:center;gap:5px;
-                    padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;
-                    cursor:pointer;
-                    border:1.5px solid ${active ? 'var(--primary,#2563eb)' : '#e2e8f0'};
-                    background:${active ? 'var(--primary,#2563eb)' : '#fff'};
-                    color:${active ? '#fff' : 'var(--text,#334155)'};
-                    transition:all .15s;
-                ">
-                ${p.icon} ${p.label}
-            </button>
-            <div id="hasil_wrap_${p.id}" style="display:${active ? 'block' : 'none'};margin-top:4px;">
-                <input type="text"
-                    id="hasil_${p.id}"
-                    placeholder="Tulis hasil ${p.label}..."
-                    value="${hasilVal.replace(/"/g, '&quot;')}"
-                    oninput="_simpanHasilPenunjang('${p.id}', this.value)"
-                    style="width:100%;font-size:11px;padding:5px 9px;
-                           border:1.5px solid var(--primary,#2563eb);border-radius:8px;
-                           outline:none;background:#f0f6ff;color:#1e3a8a;
-                           min-width:160px;box-sizing:border-box;">
-            </div>
-        </div>`;
+    const chipsHtml = penunjangList.map(p => {
+        const active = !!window._reqLab[p.id];
+        return `<button
+            id="chip_${p.id}"
+            onclick="_togglePenunjang('${p.id}')"
+            style="
+                display:inline-flex;align-items:center;gap:5px;
+                padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;
+                cursor:pointer;margin:3px 3px 0 0;
+                border:1.5px solid ${active ? 'var(--primary,#2563eb)' : '#e2e8f0'};
+                background:${active ? 'var(--primary,#2563eb)' : '#fff'};
+                color:${active ? '#fff' : 'var(--text,#334155)'};
+                transition:all .15s;
+            ">${p.icon} ${p.label}</button>`;
     }).join('');
 
     container.innerHTML = `
         <div class="rm-subsection-label" style="margin-bottom:8px;">
-            <span class="rm-subsection-dot" style="background:#0891b2;width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;margin-right:6px;"></span>
-            <span style="font-size:11.5px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Pemeriksaan Penunjang</span>
+            <span class="rm-subsection-dot"
+                  style="background:#0891b2;width:6px;height:6px;border-radius:50%;
+                         flex-shrink:0;display:inline-block;margin-right:6px;"></span>
+            <span style="font-size:11.5px;font-weight:700;color:var(--text-muted);
+                         text-transform:uppercase;letter-spacing:0.5px;">Pemeriksaan Penunjang</span>
         </div>
-        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:8px;">
-            Pilih pemeriksaan lalu isi hasil. Item terpilih akan masuk ke tagihan otomatis.
+        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:10px;">
+            Pilih pemeriksaan lalu isi hasil &amp; foto. Item terpilih akan masuk ke tagihan otomatis.
         </div>
-        <div style="display:flex;flex-wrap:wrap;margin-bottom:4px;align-items:flex-start;">
-            ${chips}
+        <div id="_pnj_chips_row" style="display:flex;flex-wrap:wrap;margin-bottom:4px;">
+            ${chipsHtml}
         </div>
+        <div id="_pnj_panels_area"></div>
     `;
+
+    _renderSemuaPanel();
 }
 
-// ── Toggle satu chip penunjang ──
+// ── Render ulang semua panel aktif ──
+function _renderSemuaPanel() {
+    const area = document.getElementById('_pnj_panels_area');
+    if (!area) return;
+    area.innerHTML = '';
+    _getPenunjangList().forEach(p => {
+        if (!window._reqLab[p.id]) return;
+        area.appendChild(_buatPanel(p));
+    });
+}
+
+// ── Buat satu panel DOM untuk penunjang p ──
+function _buatPanel(p) {
+    const hasilVal = (window._reqLabHasil || {})[p.id] || '';
+    const fotoUrls = (window._reqLabFoto  || {})[p.id] || [];
+
+    const panel = document.createElement('div');
+    panel.className = 'pnj-panel';
+    panel.id        = `_pnj_panel_${p.id}`;
+
+    // Label
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'pnj-panel-label';
+    labelDiv.innerHTML = `✏️ Hasil&nbsp;${p.icon}&nbsp;<strong>${p.label}</strong>`;
+    panel.appendChild(labelDiv);
+
+    // Wrapper textarea + STT
+    const taWrapper = document.createElement('div');
+    taWrapper.style.position = 'relative';
+
+    const ta = document.createElement('textarea');
+    ta.className   = 'pnj-textarea';
+    ta.id          = `hasil_${p.id}`;
+    ta.placeholder = `Tulis hasil atau interpretasi ${p.label} di sini…`;
+    ta.value       = hasilVal;
+    ta.addEventListener('input', () => _simpanHasilPenunjang(p.id, ta.value));
+    taWrapper.appendChild(ta);
+
+    // Tombol STT
+    const sttBtn = document.createElement('button');
+    sttBtn.type      = 'button';
+    sttBtn.className = 'pnj-stt-btn';
+    sttBtn.title     = 'Ucapkan hasil (Speech-to-Text)';
+    sttBtn.innerHTML = '🎙️';
+    sttBtn.addEventListener('click', () => _startSTTPenunjang(p.id, sttBtn));
+    taWrapper.appendChild(sttBtn);
+
+    panel.appendChild(taWrapper);
+
+    // Label foto
+    const fotoLbl = document.createElement('div');
+    fotoLbl.className = 'pnj-foto-label';
+    fotoLbl.innerHTML =
+        '📎 Foto hasil pemeriksaan' +
+        '<span style="font-weight:400;color:#94a3b8;">(opsional · maks 5 MB/foto)</span>';
+    panel.appendChild(fotoLbl);
+
+    // Area foto
+    const fotoArea = document.createElement('div');
+    fotoArea.className = 'pnj-foto-area';
+    fotoArea.id        = `_pnj_foto_area_${p.id}`;
+
+    // Tombol tambah foto
+    fotoArea.appendChild(_buatAddBtn(p.id, fotoArea));
+
+    // Thumbnail foto yang sudah ada (restore dari DB)
+    fotoUrls.forEach(url => _tambahThumb(fotoArea, p.id, url));
+
+    panel.appendChild(fotoArea);
+
+    // Auto-focus textarea
+    requestAnimationFrame(() => ta.focus());
+
+    return panel;
+}
+
+// ════════════════════════════════════════════════════════
+//  TOGGLE CHIP
+// ════════════════════════════════════════════════════════
 function _togglePenunjang(id) {
     window._reqLab[id] = !window._reqLab[id];
-    const btn  = document.getElementById('chip_' + id);
-    const wrap = document.getElementById('hasil_wrap_' + id);
-    if (!btn) return;
-    const active = window._reqLab[id];
-    btn.style.background  = active ? 'var(--primary,#2563eb)' : '#fff';
-    btn.style.borderColor = active ? 'var(--primary,#2563eb)' : '#e2e8f0';
-    btn.style.color       = active ? '#fff' : 'var(--text,#334155)';
-    if (wrap) {
-        wrap.style.display = active ? 'block' : 'none';
-        if (active) {
-            const inp = wrap.querySelector('input');
-            if (inp) setTimeout(() => inp.focus(), 80);
-        } else {
-            if (window._reqLabHasil) delete window._reqLabHasil[id];
+
+    const chipBtn = document.getElementById('chip_' + id);
+    if (chipBtn) {
+        const active = window._reqLab[id];
+        chipBtn.style.background  = active ? 'var(--primary,#2563eb)' : '#fff';
+        chipBtn.style.borderColor = active ? 'var(--primary,#2563eb)' : '#e2e8f0';
+        chipBtn.style.color       = active ? '#fff' : 'var(--text,#334155)';
+    }
+
+    const area = document.getElementById('_pnj_panels_area');
+    if (!area) return;
+
+    if (window._reqLab[id]) {
+        // Tambahkan panel baru
+        const p = _getPenunjangList().find(x => x.id === id);
+        if (p) area.appendChild(_buatPanel(p));
+    } else {
+        // Sembunyikan dan hapus panel
+        const panel = document.getElementById('_pnj_panel_' + id);
+        if (panel) {
+            panel.style.transition = 'opacity .18s, transform .18s';
+            panel.style.opacity    = '0';
+            panel.style.transform  = 'translateY(-6px)';
+            setTimeout(() => panel.remove(), 185);
         }
+        if (window._reqLabHasil) delete window._reqLabHasil[id];
+        // Foto di Storage tidak dihapus otomatis saat chip di-uncheck
+        // (hapus hanya via tombol ✕ di thumbnail)
+        if (window._reqLabFoto)  delete window._reqLabFoto[id];
     }
 }
 
-/** Simpan nilai hasil penunjang ke state global */
+// ════════════════════════════════════════════════════════
+//  SIMPAN TEKS HASIL
+// ════════════════════════════════════════════════════════
 function _simpanHasilPenunjang(id, val) {
     if (!window._reqLabHasil) window._reqLabHasil = {};
     window._reqLabHasil[id] = val;
 }
 
 // ════════════════════════════════════════════════════════
-//  RESTORE state chip dari data kunjungan
-//  Dipanggil oleh pem-labor.js → loadReqLabFromKunjungan()
+//  SPEECH-TO-TEXT
+// ════════════════════════════════════════════════════════
+function _startSTTPenunjang(id, btn) {
+    const ta = document.getElementById('hasil_' + id);
+    if (!ta) return;
+
+    const SRClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SRClass) {
+        if (typeof showToast === 'function')
+            showToast('❌ Mikrofon tidak didukung browser ini', 'error');
+        return;
+    }
+
+    const rec = new SRClass();
+    rec.lang           = 'id-ID';
+    rec.continuous     = false;
+    rec.interimResults = false;
+
+    btn.classList.add('recording');
+    if (typeof showToast === 'function') showToast('🎙️ Mendengarkan…', 'info');
+
+    rec.start();
+
+    rec.onresult = (e) => {
+        ta.value += (ta.value ? ' ' : '') + e.results[0][0].transcript;
+        _simpanHasilPenunjang(id, ta.value);
+        if (typeof showToast === 'function') showToast('✅ Teks ditambahkan', 'success');
+        btn.classList.remove('recording');
+    };
+    rec.onerror = (e) => {
+        if (typeof showToast === 'function') showToast('❌ Gagal: ' + e.error, 'error');
+        btn.classList.remove('recording');
+    };
+    rec.onend = () => btn.classList.remove('recording');
+}
+
+// ════════════════════════════════════════════════════════
+//  UPLOAD FOTO → SUPABASE STORAGE
 // ════════════════════════════════════════════════════════
 
+/** Buat tombol 📷 dengan spinner saat proses upload */
+function _buatAddBtn(penunjangId, fotoArea) {
+    const addBtn = document.createElement('div');
+    addBtn.className = 'pnj-foto-add';
+    addBtn.title     = 'Tambah foto hasil (maks 5 MB/foto)';
+
+    function _resetAddBtn() {
+        addBtn.innerHTML =
+            '<span style="font-size:22px">📷</span>' +
+            '<span style="font-size:9px;margin-top:2px">Foto</span>';
+        addBtn.classList.remove('uploading');
+    }
+    _resetAddBtn();
+
+    addBtn.addEventListener('click', () => {
+        const input    = document.createElement('input');
+        input.type     = 'file';
+        input.accept   = 'image/*';
+        input.multiple = true;
+
+        input.addEventListener('change', async () => {
+            const files = Array.from(input.files);
+            if (!files.length) return;
+
+            // Validasi ukuran
+            files.filter(f => f.size > 5 * 1024 * 1024).forEach(f => {
+                if (typeof showToast === 'function')
+                    showToast(`❌ "${f.name}" melebihi 5 MB`, 'error');
+            });
+            const valid = files.filter(f => f.size <= 5 * 1024 * 1024);
+            if (!valid.length) return;
+
+            // Tampilkan spinner
+            addBtn.classList.add('uploading');
+            addBtn.innerHTML = '<div class="pnj-spinner"></div>';
+
+            for (const file of valid) {
+                try {
+                    const url = await _sbStorageUploadFoto(file, penunjangId);
+
+                    // Simpan URL ke state
+                    if (!window._reqLabFoto)                window._reqLabFoto = {};
+                    if (!window._reqLabFoto[penunjangId])   window._reqLabFoto[penunjangId] = [];
+                    window._reqLabFoto[penunjangId].push(url);
+
+                    // Tambah thumbnail
+                    _tambahThumb(fotoArea, penunjangId, url);
+
+                    if (typeof showToast === 'function')
+                        showToast('📷 Foto berhasil diupload', 'success');
+                } catch(err) {
+                    console.error('[pem-penunjang] Upload gagal:', err);
+                    if (typeof showToast === 'function')
+                        showToast('❌ Upload gagal: ' + err.message, 'error');
+                }
+            }
+
+            _resetAddBtn();
+        });
+
+        input.click();
+    });
+
+    return addBtn;
+}
+
+/** Tambah thumbnail (URL Storage) ke area foto */
+function _tambahThumb(fotoArea, penunjangId, url) {
+    const wrap = document.createElement('div');
+    wrap.className = 'pnj-foto-thumb';
+    wrap.title     = 'Klik untuk buka foto ukuran penuh';
+    wrap.addEventListener('click', (e) => {
+        if (e.target.classList.contains('pnj-foto-del')) return;
+        window.open(url, '_blank', 'noopener');
+    });
+
+    const img   = document.createElement('img');
+    img.src     = url;
+    img.alt     = 'Foto hasil';
+    img.loading = 'lazy';
+    wrap.appendChild(img);
+
+    const del       = document.createElement('button');
+    del.type        = 'button';
+    del.className   = 'pnj-foto-del';
+    del.innerHTML   = '✕';
+    del.title       = 'Hapus foto';
+    del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Hapus dari state
+        if (window._reqLabFoto?.[penunjangId]) {
+            const idx = window._reqLabFoto[penunjangId].indexOf(url);
+            if (idx !== -1) window._reqLabFoto[penunjangId].splice(idx, 1);
+        }
+        // Hapus dari Storage (fire-and-forget)
+        _sbStorageDeleteFoto(url);
+        // Hapus thumbnail dari DOM
+        wrap.remove();
+        if (typeof showToast === 'function') showToast('🗑️ Foto dihapus', 'info');
+    });
+    wrap.appendChild(del);
+
+    // Sisipkan sebelum tombol tambah agar tombol selalu di akhir
+    const addBtn = fotoArea.querySelector('.pnj-foto-add');
+    if (addBtn) fotoArea.insertBefore(wrap, addBtn);
+    else        fotoArea.appendChild(wrap);
+}
+
+// ════════════════════════════════════════════════════════
+//  RESTORE STATE — dipanggil oleh pem-labor.js
+// ════════════════════════════════════════════════════════
 function _refreshPenunjangChipUI() {
+    // Update gaya chip
     _getPenunjangList().forEach(p => {
-        const btn  = document.getElementById('chip_' + p.id);
-        const wrap = document.getElementById('hasil_wrap_' + p.id);
-        const inp  = document.getElementById('hasil_' + p.id);
+        const btn = document.getElementById('chip_' + p.id);
         if (!btn) return;
         const active = !!window._reqLab[p.id];
         btn.style.background  = active ? 'var(--primary,#2563eb)' : '#fff';
         btn.style.borderColor = active ? 'var(--primary,#2563eb)' : '#e2e8f0';
         btn.style.color       = active ? '#fff' : 'var(--text,#334155)';
-        if (wrap) wrap.style.display = active ? 'block' : 'none';
-        if (inp && active && window._reqLabHasil?.[p.id]) {
-            inp.value = window._reqLabHasil[p.id];
-        }
     });
+    // Re-render semua panel (termasuk foto thumbnail dari URL)
+    _renderSemuaPanel();
 }
 
 // ════════════════════════════════════════════════════════
-//  AUTO-TAGIHAN — kontribusi penunjang ke tagihan
-//  Hook ke sb_autoTagihanFromKunjungan (supabase-biaya.js)
+//  getReqLabPayload — tambahkan URL foto ke JSON
+//  Wrap fungsi di pem-labor.js agar URL foto ikut tersimpan
+//  Format key: "foto_penunjang_ekg" → ['https://…', …]
 // ════════════════════════════════════════════════════════
+(function _wrapGetReqLabPayloadForFoto() {
+    function _doWrap() {
+        const _orig = window.getReqLabPayload;
+        if (typeof _orig !== 'function') { setTimeout(_doWrap, 400); return; }
 
+        window.getReqLabPayload = function() {
+            const json = _orig.apply(this, arguments);
+            let payload = {};
+            try { payload = json ? JSON.parse(json) : {}; } catch(e) {}
+
+            // Tambahkan URL foto per penunjang
+            Object.entries(window._reqLabFoto || {}).forEach(([id, urls]) => {
+                if (Array.isArray(urls) && urls.length > 0) {
+                    payload['foto_' + id] = urls;
+                }
+            });
+
+            return Object.keys(payload).length > 0 ? JSON.stringify(payload) : null;
+        };
+    }
+    _doWrap();
+})();
+
+// ════════════════════════════════════════════════════════
+//  loadReqLabFromKunjungan — restore URL foto dari DB
+//  Wrap fungsi di pem-labor.js
+// ════════════════════════════════════════════════════════
+(function _wrapLoadReqLabForFoto() {
+    function _doWrap() {
+        const _orig = window.loadReqLabFromKunjungan;
+        if (typeof _orig !== 'function') { setTimeout(_doWrap, 400); return; }
+
+        window.loadReqLabFromKunjungan = function(reqLabJson) {
+            // Reset foto
+            window._reqLabFoto = {};
+
+            // Ambil URL foto dari JSON sebelum memanggil fungsi asli
+            if (reqLabJson) {
+                let parsed = {};
+                try {
+                    parsed = typeof reqLabJson === 'string'
+                        ? JSON.parse(reqLabJson)
+                        : reqLabJson;
+                } catch(e) {}
+
+                Object.entries(parsed).forEach(([k, v]) => {
+                    // key: "foto_penunjang_ekg" → id: "penunjang_ekg"
+                    if (k.startsWith('foto_penunjang_') && Array.isArray(v) && v.length > 0) {
+                        const id = k.replace(/^foto_/, '');
+                        window._reqLabFoto[id] = v;
+                    }
+                });
+            }
+
+            // Panggil fungsi asli (akan memanggil _refreshPenunjangChipUI → _renderSemuaPanel)
+            _orig.apply(this, arguments);
+        };
+    }
+    _doWrap();
+})();
+
+// ════════════════════════════════════════════════════════
+//  AUTO-TAGIHAN — hook ke supabase-biaya.js (tidak berubah)
+// ════════════════════════════════════════════════════════
 (function _hookAutoTagihanPenunjang() {
     const _orig = window.sb_autoTagihanFromKunjungan;
     if (typeof _orig !== 'function') return;
@@ -248,7 +773,9 @@ function _refreshPenunjangChipUI() {
 
         _getPenunjangList().forEach(p => {
             if (!reqParsed[p.id]) return;
-            const t = tarifAktif.find(x => x.kategori === 'Penunjang' && x.nama === (p._tarifNama || p.label));
+            const t = tarifAktif.find(x =>
+                x.kategori === 'Penunjang' && x.nama === (p._tarifNama || p.label)
+            );
             items.push({
                 nama_item:    'Penunjang: ' + p.label,
                 kategori:     'Penunjang',
