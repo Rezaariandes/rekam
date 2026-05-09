@@ -157,35 +157,130 @@ function _renderInvoiceModal() {
 }
 
 function _buildInvoiceHtml(tagihan, pasienNama, tgl) {
+    const isLunas    = (tagihan.status || '').toLowerCase() === 'lunas';
+    const subtotal   = Number(tagihan.subtotal || 0);
+    const diskon     = Number(tagihan.diskon   || 0);
+    const total      = Number(tagihan.total    || subtotal - diskon);
+
+    // Kelompokkan item per kategori
+    const KAT_ICON = {'Pemeriksaan':'🩺','Laboratorium':'🔬','Penunjang':'🔭','Tindakan':'⚕️','Obat':'💊','Administrasi':'📋','Lainnya':'📌'};
+    const KAT_COLOR= {'Pemeriksaan':'#3b82f6','Laboratorium':'#7c3aed','Penunjang':'#0891b2','Tindakan':'#dc2626','Obat':'#059669','Administrasi':'#d97706','Lainnya':'#64748b'};
+    const grouped  = {};
+    (tagihan.tagihan_item || []).forEach(i => {
+        const k = i.kategori || 'Lainnya';
+        if (!grouped[k]) grouped[k] = [];
+        grouped[k].push(i);
+    });
+    const KAT_ORDER = ['Pemeriksaan','Laboratorium','Penunjang','Tindakan','Obat','Administrasi','Lainnya'];
+    const katUrut   = [...KAT_ORDER.filter(k => grouped[k]), ...Object.keys(grouped).filter(k => !KAT_ORDER.includes(k))];
+
+    // Render section per kategori
+    const sectionsHtml = katUrut.map(kat => {
+        const clr   = KAT_COLOR[kat] || '#64748b';
+        const icon  = KAT_ICON[kat]  || '📌';
+        const items = grouped[kat];
+        const rows  = items.map(i => {
+            const sub = Number(i.subtotal || (Number(i.jumlah) * Number(i.harga_satuan)));
+            return `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;
+                        padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;color:#1e293b;">${escHtml(i.nama_item)}</div>
+                    <div style="font-size:10.5px;color:#64748b;margin-top:1px;">
+                        Rp ${_fmtRp(i.harga_satuan)} × ${Number(i.jumlah)}
+                        ${i.keterangan ? ` · <em>${escHtml(i.keterangan)}</em>` : ''}
+                    </div>
+                </div>
+                <div style="font-weight:700;color:#1e293b;white-space:nowrap;padding-left:10px;">
+                    Rp ${_fmtRp(sub)}
+                </div>
+            </div>`;
+        }).join('');
+
+        return `
+        <!-- Section ${kat} -->
+        <div style="margin-bottom:10px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+            <!-- Section header -->
+            <div style="display:flex;align-items:center;gap:6px;
+                        padding:7px 10px;
+                        background:${clr}12;
+                        border-bottom:1.5px solid ${clr}30;">
+                <span style="font-size:13px;line-height:1;">${icon}</span>
+                <span style="font-size:10px;font-weight:800;text-transform:uppercase;
+                             letter-spacing:.7px;color:${clr};">${kat}</span>
+            </div>
+            <!-- Item rows -->
+            <div style="background:#fff;">${rows}</div>
+        </div>`;
+    }).join('');
+
     return `
-    <div style="padding:18px 20px 4px;">
-        <div style="font-size:15px;font-weight:800;color:var(--primary-dark);margin-bottom:2px;">🧾 Invoice Kunjungan</div>
-        <div style="font-size:11px;color:var(--text-muted);">${escHtml(pasienNama)} · ${tgl ? formatTglIndo(tgl) : '—'}</div>
-        <div style="display:inline-block;margin-top:6px;padding:2px 10px;border-radius:20px;font-size:10.5px;font-weight:800;
-             background:${tagihan.status === 'Lunas' ? '#dcfce7' : '#fef3c7'};
-             color:${tagihan.status === 'Lunas' ? '#166534' : '#92400e'};">
-             ${escHtml(tagihan.status || 'Lunas')}
+    <!-- ── Header modal ── -->
+    <div style="background:linear-gradient(135deg,#1e40af,#3b82f6);padding:16px 18px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+            <div>
+                <div style="font-size:15px;font-weight:800;color:#fff;margin-bottom:3px;">🧾 Invoice Kunjungan</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.8);">${escHtml(pasienNama)}</div>
+                ${tgl ? `<div style="font-size:10.5px;color:rgba(255,255,255,0.7);margin-top:1px;">📅 ${formatTglIndo(tgl)}</div>` : ''}
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+                <div style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.5px;
+                            background:${isLunas ? '#dcfce7' : '#fef3c7'};
+                            color:${isLunas ? '#166534' : '#92400e'};">
+                    ${isLunas ? '✓ LUNAS' : '⏳ BELUM LUNAS'}
+                </div>
+            </div>
         </div>
     </div>
-    <div style="padding:12px 18px;">
-        ${(tagihan.tagihan_item || []).map(i => `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
-            <div>
-                <span style="font-weight:600;">${escHtml(i.nama_item)}</span>
-                ${i.keterangan ? `<span style="font-size:10px;color:var(--text-muted);"> · ${escHtml(i.keterangan)}</span>` : ''}
-                <div style="font-size:10.5px;color:var(--text-muted);">Rp ${_fmtRp(i.harga_satuan)} × ${i.jumlah}</div>
+
+    <div style="padding:14px 16px;">
+
+        <!-- ── Section: Item Tagihan ── -->
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+            <div style="width:3px;height:14px;background:var(--primary,#3b82f6);border-radius:2px;flex-shrink:0;"></div>
+            <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted,#64748b);">Item Tagihan</span>
+        </div>
+
+        ${katUrut.length === 0
+            ? `<div style="text-align:center;color:#94a3b8;font-size:12px;padding:18px;">Tidak ada item tagihan.</div>`
+            : sectionsHtml}
+
+        <!-- ── Section: Ringkasan Pembayaran ── -->
+        <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-top:4px;">
+            <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#f8fafc;border-bottom:1.5px solid #e2e8f0;">
+                <div style="width:3px;height:14px;background:#059669;border-radius:2px;flex-shrink:0;"></div>
+                <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#059669;">Ringkasan Pembayaran</span>
             </div>
-            <div style="font-weight:700;white-space:nowrap;">Rp ${_fmtRp(i.subtotal)}</div>
-        </div>`).join('')}
-        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--text-muted);">
-            <span>Subtotal</span><span>Rp ${_fmtRp(tagihan.subtotal)}</span>
+            <div style="padding:10px 12px;background:#fff;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:5px;">
+                    <span>Subtotal</span>
+                    <span style="font-weight:600;color:#1e293b;">Rp ${_fmtRp(subtotal)}</span>
+                </div>
+                ${diskon > 0 ? `
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#dc2626;margin-bottom:5px;">
+                    <span>Diskon</span>
+                    <span style="font-weight:600;">– Rp ${_fmtRp(diskon)}</span>
+                </div>` : ''}
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                            border-top:2px solid #e2e8f0;padding-top:8px;margin-top:4px;">
+                    <span style="font-size:13px;font-weight:800;color:#0f172a;">TOTAL</span>
+                    <span style="font-size:17px;font-weight:900;color:var(--primary,#3b82f6);">Rp ${_fmtRp(total)}</span>
+                </div>
+            </div>
         </div>
-        ${tagihan.diskon > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:#dc2626;"><span>Diskon</span><span>- Rp ${_fmtRp(tagihan.diskon)}</span></div>` : ''}
-        <div style="display:flex;justify-content:space-between;border-top:2px solid #e2e8f0;padding-top:8px;margin-top:6px;">
-            <span style="font-size:14px;font-weight:800;">TOTAL</span>
-            <span style="font-size:16px;font-weight:900;color:var(--primary);">Rp ${_fmtRp(tagihan.total)}</span>
-        </div>
-        ${tagihan.catatan ? `<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">📝 ${escHtml(tagihan.catatan)}</div>` : ''}
+
+        <!-- ── Section: Catatan (jika ada) ── -->
+        ${tagihan.catatan ? `
+        <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-top:10px;">
+            <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#f8fafc;border-bottom:1.5px solid #e2e8f0;">
+                <div style="width:3px;height:14px;background:#d97706;border-radius:2px;flex-shrink:0;"></div>
+                <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#d97706;">Catatan</span>
+            </div>
+            <div style="padding:9px 12px;font-size:12px;color:#475569;background:#fff;">
+                📝 ${escHtml(tagihan.catatan)}
+            </div>
+        </div>` : ''}
+
     </div>`;
 }
 
