@@ -172,6 +172,55 @@
                 <!-- Kosong jika tidak ada penunjang aktif di tarif -->
             </div>
 
+            <!-- ── 3c. Catatan & Foto Pemeriksaan Penunjang ── -->
+            <div class="rm-subsection" id="sectionCatatanPenunjang"
+                 style="border-top:1px dashed var(--border);padding-top:14px;margin-top:4px;border-bottom:none;margin-bottom:0;padding-bottom:0;">
+
+                <div class="rm-subsection-label">
+                    <span class="rm-subsection-dot" style="background:#0891b2;"></span>
+                    Catatan &amp; Dokumentasi Penunjang
+                </div>
+
+                <!-- Textarea catatan — ukuran sama dengan keluhan pasien -->
+                <div class="form-group" style="position:relative;margin-bottom:12px;">
+                    <label class="form-label">Catatan Hasil Penunjang</label>
+                    <textarea id="catatan_penunjang" class="form-control" data-save="true"
+                              placeholder="Tuliskan catatan atau interpretasi hasil pemeriksaan penunjang (EKG, Rontgen, USG, dll)..."
+                              rows="4"
+                              style="min-height:96px;resize:vertical;"
+                              oninput="localStorage.setItem('rme_catatan_penunjang', this.value)"></textarea>
+                    <button class="stt-btn" onclick="startSTT('catatan_penunjang')">🎙️</button>
+                </div>
+
+                <!-- Upload Foto -->
+                <div id="penunjangFotoArea">
+                    <label class="form-label" style="display:flex;align-items:center;gap:6px;">
+                        📎 Foto Hasil Penunjang
+                        <span style="font-size:10px;font-weight:500;color:var(--text-muted);">
+                            (Rontgen, EKG, USG, dll — maks 5MB/foto)
+                        </span>
+                    </label>
+
+                    <!-- Tombol pilih foto -->
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <label id="labelUploadFoto" class="penunjang-upload-btn">
+                            📷 Pilih Foto
+                            <input type="file" id="inputFotoPenunjang" accept="image/*" multiple
+                                   style="display:none;" onchange="_onFotoPenunjangSelected(this)">
+                        </label>
+                        <span id="uploadFotoStatus" style="font-size:11px;color:var(--text-muted);"></span>
+                    </div>
+
+                    <!-- Preview foto yang akan di-upload (sebelum simpan) -->
+                    <div id="previewFotoPenunjang"
+                         style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
+
+                    <!-- Foto yang sudah tersimpan di DB -->
+                    <div id="savedFotoPenunjang"
+                         style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -272,12 +321,40 @@
             <!-- ── 6a. Surat Sakit ── -->
             <div class="rm-doc-item">
                 <div class="rm-doc-check">
-                    <input type="checkbox" id="suratSakit" style="width:16px;height:16px;accent-color:var(--danger);">
+                    <input type="checkbox" id="suratSakit"
+                        style="width:16px;height:16px;accent-color:var(--danger);"
+                        onchange="_onSuratSakitChange()">
                     <label for="suratSakit" class="rm-doc-label" style="color:var(--danger);">
                         Surat Keterangan Sakit
                     </label>
+                    <button id="linkBtnSuratSakit" class="rm-doc-link-btn"
+                        style="display:none;--link-btn-color:var(--danger);border-color:rgba(239,68,68,0.3);color:var(--danger);background:rgba(239,68,68,0.07);"
+                        onclick="openModalSuratSakit()"
+                        title="Buka Surat Keterangan Sakit">
+                        🔗 Lihat Surat
+                    </button>
                 </div>
                 <div class="rm-doc-desc">Centang jika pasien memerlukan surat keterangan sakit</div>
+            </div>
+
+            <!-- MODAL — Surat Keterangan Sakit -->
+            <div id="modal_surat_sakit" class="modal-surat-overlay" style="display:none;"
+                onclick="if(event.target===this)this.style.display='none'">
+                <div class="modal-surat-box">
+                    <div class="modal-surat-header">
+                        <span>📄 Surat Keterangan Sakit</span>
+                        <button class="modal-surat-close"
+                            onclick="document.getElementById('modal_surat_sakit').style.display='none'">✕</button>
+                    </div>
+                    <div class="modal-surat-body" id="body_modal_surat_sakit">
+                        <div class="modal-surat-loading">Memuat data surat...</div>
+                    </div>
+                    <div class="modal-surat-footer">
+                        <button onclick="window.print()" class="modal-surat-btn-print">🖨️ Cetak</button>
+                        <button onclick="document.getElementById('modal_surat_sakit').style.display='none'"
+                            class="modal-surat-btn-close">Tutup</button>
+                    </div>
+                </div>
             </div>
 
             <!-- ── 6b. Dokumen Administrasi Dinamis ──
@@ -429,6 +506,566 @@
             color:var(--text-muted);
             padding-left:24px;
         }
+    
+        /* ── Tombol Link Surat di samping checkbox dokumen ── */
+        .rm-doc-link-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: auto;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--primary, #2563eb);
+            background: rgba(37,99,235,0.08);
+            border: 1px solid rgba(37,99,235,0.25);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all .15s;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        .rm-doc-link-btn:hover {
+            background: rgba(37,99,235,0.16);
+            transform: translateY(-1px);
+        }
+
+        /* ── Overlay modal surat ── */
+        .modal-surat-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 9998;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .modal-surat-box {
+            background: var(--surface, #fff);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 560px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            overflow: hidden;
+        }
+        .modal-surat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--surface-2, #f8fafc);
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--primary-dark, #1e40af);
+            flex-shrink: 0;
+        }
+        .modal-surat-close {
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            color: var(--text-muted, #94a3b8);
+            padding: 2px 6px;
+            border-radius: 6px;
+            line-height: 1;
+            transition: background .15s;
+        }
+        .modal-surat-close:hover { background: rgba(0,0,0,0.07); }
+        .modal-surat-body {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .modal-surat-loading {
+            padding: 32px;
+            text-align: center;
+            color: var(--text-muted, #94a3b8);
+            font-size: 13px;
+        }
+        .modal-surat-footer {
+            padding: 10px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            background: var(--surface-2, #f8fafc);
+            flex-shrink: 0;
+        }
+        .modal-surat-btn-print {
+            background: var(--primary, #2563eb);
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: opacity .15s;
+        }
+        .modal-surat-btn-print:hover { opacity: .88; }
+        .modal-surat-btn-close {
+            background: var(--surface-2, #f1f5f9);
+            color: var(--text, #1e293b);
+            border: 1px solid var(--border, #e2e8f0);
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        @media print {
+            /* Saat print, sembunyikan semua kecuali konten modal yang aktif */
+            body > *:not(.modal-surat-overlay) { display: none !important; }
+            .modal-surat-overlay { position: static !important; background: none !important; padding: 0 !important; }
+            .modal-surat-box { box-shadow: none !important; max-height: none !important; }
+            .modal-surat-header, .modal-surat-footer { display: none !important; }
+        }
+
+        /* ── Upload Foto Penunjang ── */
+        .penunjang-upload-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            background: rgba(8,145,178,0.09);
+            border: 1.5px dashed rgba(8,145,178,0.45);
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #0891b2;
+            cursor: pointer;
+            transition: all .15s;
+            user-select: none;
+        }
+        .penunjang-upload-btn:hover {
+            background: rgba(8,145,178,0.16);
+            border-color: #0891b2;
+        }
+        .penunjang-upload-btn.uploading {
+            opacity: .65;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* Thumbnail preview foto */
+        .foto-thumb {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid rgba(8,145,178,0.25);
+            background: #f1f5f9;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+        .foto-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .foto-thumb-remove {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 18px;
+            height: 18px;
+            background: rgba(239,68,68,0.85);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            font-size: 10px;
+            line-height: 18px;
+            text-align: center;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            z-index: 2;
+        }
+        .foto-thumb-uploading::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.55);
+        }
+        .foto-thumb-uploading::before {
+            content: '⏳';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            z-index: 3;
+        }
+        /* Modal lihat foto besar */
+        #modalFotoOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.82);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        #modalFotoOverlay.open { display: flex; }
+        #modalFotoImg {
+            max-width: 100%;
+            max-height: 90vh;
+            border-radius: 12px;
+            object-fit: contain;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+        }
+        #modalFotoClose {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
+
+
+    <script>
+    /* ════════════════════════════════════════════
+       DOKUMEN KESEHATAN — Surat Keterangan Sakit
+       Toggle tombol link & modal surat sakit
+    ════════════════════════════════════════════ */
+
+    function _onSuratSakitChange() {
+        const cb  = document.getElementById('suratSakit');
+        const btn = document.getElementById('linkBtnSuratSakit');
+        if (btn) btn.style.display = (cb && cb.checked) ? 'inline-flex' : 'none';
+    }
+
+    // ════════════════════════════════════════════
+    //  UPLOAD FOTO PEMERIKSAAN PENUNJANG
+    // ════════════════════════════════════════════
+
+    // Antrian foto yang dipilih user tapi belum diupload (state lokal)
+    window._fotoPenunjangQueue = [];
+
+    /**
+     * Dipanggil saat user memilih file(s) lewat <input type="file">
+     * File langsung dipreview — upload ke Supabase Storage terjadi
+     * saat user klik "Simpan Rekam Medis".
+     */
+    function _onFotoPenunjangSelected(input) {
+        const files = Array.from(input.files || []);
+        if (!files.length) return;
+
+        const MAX = 5 * 1024 * 1024; // 5 MB
+        files.forEach(file => {
+            if (file.size > MAX) {
+                showToast('⚠️ ' + file.name + ' melebihi 5MB, dilewati.', 'error');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                const id = 'foto_q_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+                window._fotoPenunjangQueue.push({ id, file, dataUrl });
+                _renderFotoPreview();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Reset input agar file yang sama bisa dipilih lagi
+        input.value = '';
+    }
+
+    /** Render thumbnail antrian foto yang belum diupload */
+    function _renderFotoPreview() {
+        const el = document.getElementById('previewFotoPenunjang');
+        if (!el) return;
+        el.innerHTML = '';
+        window._fotoPenunjangQueue.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'foto-thumb';
+            div.title = item.file.name;
+            div.innerHTML = `
+                <img src="${item.dataUrl}" alt="${item.file.name}" onclick="_bukaFotoBesar('${item.dataUrl}')">
+                <button class="foto-thumb-remove" onclick="_hapusFotoQueue('${item.id}')" title="Hapus">✕</button>
+            `;
+            el.appendChild(div);
+        });
+        const status = document.getElementById('uploadFotoStatus');
+        if (status) {
+            const n = window._fotoPenunjangQueue.length;
+            status.textContent = n > 0 ? `${n} foto siap diupload saat simpan` : '';
+        }
+    }
+
+    /** Hapus foto dari antrian sebelum upload */
+    function _hapusFotoQueue(id) {
+        window._fotoPenunjangQueue = window._fotoPenunjangQueue.filter(f => f.id !== id);
+        _renderFotoPreview();
+    }
+
+    /**
+     * Upload semua foto di antrian ke Supabase Storage.
+     * Dipanggil oleh saveAll() sebelum menyimpan kunjungan.
+     * Return: array URL foto yang berhasil diupload.
+     */
+    async function _uploadFotoPenunjang(kunjunganId) {
+        if (!window._fotoPenunjangQueue || !window._fotoPenunjangQueue.length) return [];
+        if (!kunjunganId) { showToast('⚠️ Simpan data medis dahulu sebelum upload foto.', 'error'); return []; }
+
+        const label = document.getElementById('labelUploadFoto');
+        if (label) label.classList.add('uploading');
+        const statusEl = document.getElementById('uploadFotoStatus');
+        if (statusEl) statusEl.textContent = 'Mengupload foto...';
+
+        const urls = [];
+        for (const item of window._fotoPenunjangQueue) {
+            try {
+                const url = await sb_uploadFotoPenunjang(kunjunganId, item.file);
+                if (url) urls.push(url);
+            } catch(e) {
+                showToast('❌ Gagal upload: ' + item.file.name, 'error');
+                console.warn('[Penunjang] Upload gagal:', e.message);
+            }
+        }
+
+        window._fotoPenunjangQueue = [];
+        _renderFotoPreview();
+        if (label) label.classList.remove('uploading');
+        if (statusEl) statusEl.textContent = urls.length ? urls.length + ' foto berhasil diupload' : '';
+
+        return urls;
+    }
+
+    /**
+     * Muat daftar foto tersimpan dari Supabase untuk kunjungan aktif.
+     * Dipanggil saat membuka rekam medis yang sudah ada.
+     */
+    async function _loadSavedFotoPenunjang(kunjunganId) {
+        const el = document.getElementById('savedFotoPenunjang');
+        if (!el || !kunjunganId) return;
+        el.innerHTML = '';
+        try {
+            const urls = await sb_getFotoPenunjang(kunjunganId);
+            if (!urls || !urls.length) return;
+            urls.forEach((url, i) => {
+                const div = document.createElement('div');
+                div.className = 'foto-thumb';
+                div.title = 'Foto ' + (i + 1);
+                div.innerHTML = `
+                    <img src="${url}" alt="Foto ${i+1}" onclick="_bukaFotoBesar('${url}')">
+                    <button class="foto-thumb-remove"
+                        onclick="_hapusFotoSaved('${url}','${kunjunganId}')" title="Hapus">✕</button>
+                `;
+                el.appendChild(div);
+            });
+        } catch(e) {
+            console.warn('[Penunjang] Gagal load foto tersimpan:', e.message);
+        }
+    }
+
+    /** Hapus satu foto yang sudah tersimpan di Supabase */
+    async function _hapusFotoSaved(url, kunjunganId) {
+        if (!confirm('Hapus foto ini?')) return;
+        try {
+            await sb_deleteFotoPenunjang(url, kunjunganId);
+            await _loadSavedFotoPenunjang(kunjunganId);
+            showToast('🗑️ Foto dihapus', 'info');
+        } catch(e) {
+            showToast('❌ Gagal hapus foto', 'error');
+        }
+    }
+
+    /** Buka foto di modal fullscreen */
+    function _bukaFotoBesar(src) {
+        const overlay = document.getElementById('modalFotoOverlay');
+        const img     = document.getElementById('modalFotoImg');
+        if (!overlay || !img) return;
+        img.src = src;
+        overlay.classList.add('open');
+    }
+
+    function openModalSuratSakit() {
+        const modal  = document.getElementById('modal_surat_sakit');
+        const bodyEl = document.getElementById('body_modal_surat_sakit');
+        if (!modal || !bodyEl) return;
+
+        const namaEl = document.getElementById('infoPasienNama');
+        const nikEl  = document.getElementById('infoPasienNik');
+        const umurEl = document.getElementById('infoPasienUmur');
+        const nama   = (namaEl ? namaEl.innerText : localStorage.getItem('cP_nama') || '—').replace('—','').trim() || '—';
+        const nik    = (nikEl  ? nikEl.innerText  : 'NIK: —').replace(/NIK *:/,'').trim();
+        const umur   = (umurEl ? umurEl.innerText : 'Umur: —').replace(/Umur *:/,'').trim();
+        const tgl    = new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
+
+        bodyEl.innerHTML = `
+            <div style="font-family:Georgia,serif;padding:24px 28px;line-height:1.75;color:#1e293b;">
+                <div style="text-align:center;border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:20px;">
+                    <div style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">
+                        Surat Keterangan Sakit</div>
+                    <div style="font-size:11px;color:#64748b;margin-top:3px;">KlinikPro RME</div>
+                </div>
+                <p style="margin-bottom:10px;">Yang bertanda tangan di bawah ini, dokter pemeriksa, menerangkan bahwa:</p>
+                <table style="width:100%;font-size:13px;margin-bottom:16px;border-collapse:collapse;">
+                    <tr><td style="width:130px;padding:4px 0;">Nama</td>
+                        <td style="padding:4px 0;">: <strong>${nama}</strong></td></tr>
+                    <tr><td style="padding:4px 0;">NIK</td>
+                        <td style="padding:4px 0;">: ${nik}</td></tr>
+                    <tr><td style="padding:4px 0;">Umur</td>
+                        <td style="padding:4px 0;">: ${umur}</td></tr>
+                </table>
+                <p style="margin-bottom:10px;">
+                    Benar-benar dalam keadaan <strong>sakit</strong> dan tidak dapat melakukan
+                    aktivitas/bekerja selama <strong>............. hari</strong>,
+                    terhitung mulai tanggal <strong>${tgl}</strong>.
+                </p>
+                <p style="font-size:12px;color:#64748b;margin-bottom:0;">
+                    Surat ini dibuat untuk keperluan yang semestinya dan tidak dapat dipergunakan untuk
+                    hal-hal di luar kepentingan medis.
+                </p>
+                <div style="text-align:right;margin-top:36px;">
+                    <div style="font-size:12px;">Pekanbaru, ${tgl}</div>
+                    <div style="font-size:12px;margin-top:4px;">Dokter Pemeriksa,</div>
+                    <div style="margin-top:56px;font-size:13px;font-weight:700;
+                        border-top:1px solid #1e293b;display:inline-block;
+                        min-width:160px;text-align:center;">( ________________ )</div>
+                </div>
+            </div>`;
+
+        modal.style.display = 'flex';
+    }
+    </script>
+
+    <!-- Modal lihat foto besar -->
+    <div id="modalFotoOverlay" onclick="if(event.target===this)this.classList.remove('open')">
+        <button id="modalFotoClose" onclick="document.getElementById('modalFotoOverlay').classList.remove('open')">✕</button>
+        <img id="modalFotoImg" src="" alt="Foto Penunjang">
+    </div>
+
+    <script>
+    /* ─── Hook saveAll: upload foto & simpan catatan_penunjang ───────────── */
+    (function _hookSaveAllFoto() {
+        function _doHook() {
+            if (typeof window.saveAll !== 'function') return false;
+            if (window.saveAll._fotoPenunjangHooked) return true;
+
+            const _origSaveAll = window.saveAll;
+            window.saveAll = async function() {
+                // Simpan catatan_penunjang ke localStorage agar ikut autosave
+                const cEl = document.getElementById('catatan_penunjang');
+                if (cEl) localStorage.setItem('rme_catatan_penunjang', cEl.value);
+
+                // Panggil saveAll asli dulu (dapat kunjunganId)
+                await _origSaveAll.apply(this, arguments);
+
+                // Setelah simpan, upload foto jika ada antrian
+                const kId = window.currentKunjunganId || localStorage.getItem('cK_id');
+                if (kId && kId !== 'null' && window._fotoPenunjangQueue && window._fotoPenunjangQueue.length > 0) {
+                    await _uploadFotoPenunjang(kId);
+                    await _loadSavedFotoPenunjang(kId);
+                }
+            };
+            window.saveAll._fotoPenunjangHooked = true;
+            return true;
+        }
+
+        if (!_doHook()) {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (!_doHook()) {
+                    let tries = 0;
+                    const t = setInterval(() => {
+                        tries++;
+                        if (_doHook() || tries > 60) clearInterval(t);
+                    }, 100);
+                }
+            });
+        }
+    })();
+
+    /* ─── Hook _isiFormDariKunjungan: load foto & catatan saat buka RM ─────── */
+    (function _hookIsiformFoto() {
+        function _doHook() {
+            const _orig = window._isiFormDariKunjungan;
+            if (typeof _orig !== 'function') return false;
+            if (_orig._fotoPenunjangIsiHooked) return true;
+
+            window._isiFormDariKunjungan = function(kunjunganData) {
+                _orig.apply(this, arguments);
+                // Isi catatan_penunjang dari req_lab jika tersimpan di sana
+                try {
+                    let reqObj = {};
+                    if (kunjunganData && kunjunganData.req_lab) {
+                        reqObj = typeof kunjunganData.req_lab === 'string'
+                            ? JSON.parse(kunjunganData.req_lab)
+                            : kunjunganData.req_lab;
+                    }
+                    const el = document.getElementById('catatan_penunjang');
+                    if (el && reqObj.catatan_penunjang) el.value = reqObj.catatan_penunjang;
+                } catch(e) {}
+                // Load foto tersimpan
+                const kId = kunjunganData && kunjunganData.id;
+                if (kId) setTimeout(() => _loadSavedFotoPenunjang(kId), 300);
+            };
+            window._isiFormDariKunjungan._fotoPenunjangIsiHooked = true;
+            return true;
+        }
+
+        if (!_doHook()) {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (!_doHook()) {
+                    let tries = 0;
+                    const t = setInterval(() => {
+                        tries++;
+                        if (_doHook() || tries > 60) clearInterval(t);
+                    }, 100);
+                }
+            });
+        }
+    })();
+
+    /* ─── Hook getReqLabPayload: sertakan catatan_penunjang ────────────────── */
+    (function _hookReqLabCatatan() {
+        function _doHook() {
+            const _orig = window.getReqLabPayload;
+            if (typeof _orig !== 'function') return false;
+            if (_orig._catatanPenunjangHooked) return true;
+
+            window.getReqLabPayload = function() {
+                let base = _orig.apply(this, arguments) || {};
+                if (typeof base === 'string') { try { base = JSON.parse(base); } catch(e) { base = {}; } }
+                const el = document.getElementById('catatan_penunjang');
+                if (el && el.value.trim()) base.catatan_penunjang = el.value.trim();
+                return base;
+            };
+            window.getReqLabPayload._catatanPenunjangHooked = true;
+            return true;
+        }
+        if (!_doHook()) {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (!_doHook()) {
+                    let tries = 0;
+                    const t = setInterval(() => { tries++; if (_doHook() || tries > 60) clearInterval(t); }, 100);
+                }
+            });
+        }
+    })();
+    </script>
 
 </div>
