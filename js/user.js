@@ -131,17 +131,31 @@ function renderUserList() {
 async function simpanUserBaru() {
     const nama    = $('u_nama')    ? $('u_nama').value.trim()    : '';
     const jabatan = $('u_jabatan') ? $('u_jabatan').value.trim() : '';
-    const pin     = $('u_pin')     ? $('u_pin').value.trim()     : '';
+    // FIX: ambil PIN sebagai string murni, strip non-digit, hindari bug type=number
+    const pin     = $('u_pin')     ? String($('u_pin').value).replace(/\D/g, '') : '';
 
-    if (!nama || !jabatan || !pin) return showToast("⚠️ Semua kolom wajib diisi!", "warning");
-    if (pin.length < 4) return showToast("⚠️ PIN minimal 4 digit", "warning");
+    if (!nama || !jabatan || !pin) {
+        // FIX: fallback alert jika showToast gagal (misal container belum ready)
+        if (typeof showToast === 'function') showToast("⚠️ Semua kolom wajib diisi!", "warning");
+        else alert("⚠️ Semua kolom wajib diisi!");
+        return;
+    }
+    if (pin.length < 4) {
+        if (typeof showToast === 'function') showToast("⚠️ PIN minimal 4 digit", "warning");
+        else alert("⚠️ PIN minimal 4 digit");
+        return;
+    }
 
     const isDokter = jabatan.toLowerCase() === 'dokter';
 
     // Validasi data Satu Sehat jika jabatan Dokter
     if (isDokter) {
         const nik = $('u_nik') ? $('u_nik').value.trim() : '';
-        if (!nik) return showToast("⚠️ NIK wajib diisi untuk akun Dokter!", "warning");
+        if (!nik) {
+            if (typeof showToast === 'function') showToast("⚠️ NIK wajib diisi untuk akun Dokter!", "warning");
+            else alert("⚠️ NIK wajib diisi untuk akun Dokter!");
+            return;
+        }
     }
 
     const btn = $('btnSimpanUser');
