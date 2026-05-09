@@ -104,7 +104,7 @@ function _renderSectionPemeriksaanExtra() {
             <div class="rm-subsection-label">
                 <span class="rm-subsection-dot" style="background:${dotColor};"></span>
                 ${_escHtml(t.nama)}
-                ${t.harga > 0 ? `<span style="margin-left:auto;font-size:10px;font-weight:700;color:var(--primary);background:rgba(99,102,241,0.08);padding:2px 7px;border-radius:10px;">Rp ${_fmtRpMedis(t.harga)}</span>` : ''}
+
             </div>
             <div class="form-group" style="position:relative;">
                 <label class="form-label">${_escHtml(t.keterangan || t.nama)}</label>
@@ -159,8 +159,10 @@ function _renderSectionAdministrasiExtra() {
     container.style.display = '';
 
     const html = items.map(t => {
-        const slug = _slugMedis('adm', t.nama);
+        const slug    = _slugMedis('adm', t.nama);
         const checked = !!window._reqAdminExtra[slug];
+        const modalId = 'modal_surat_' + slug;
+        const ne      = _escHtml(t.nama);
         return `
         <div class="rm-doc-item" style="border-color:rgba(99,102,241,0.2);background:rgba(99,102,241,0.04);">
             <div class="rm-doc-check">
@@ -168,12 +170,31 @@ function _renderSectionAdministrasiExtra() {
                     style="width:16px;height:16px;accent-color:var(--primary);"
                     onchange="_onAdmChange('${slug}')"
                     ${checked ? 'checked' : ''}>
-                <label for="${slug}" class="rm-doc-label" style="color:var(--primary-dark);">
-                    ${_escHtml(t.nama)}
-                </label>
-                ${t.harga > 0 ? `<span style="margin-left:auto;font-size:10px;font-weight:700;color:var(--primary);background:rgba(99,102,241,0.1);padding:2px 7px;border-radius:10px;">Rp ${_fmtRpMedis(t.harga)}</span>` : ''}
+                <label for="${slug}" class="rm-doc-label" style="color:var(--primary-dark);">${ne}</label>
+                <button id="linkBtn_${slug}" class="rm-doc-link-btn"
+                    style="display:${checked ? 'inline-flex' : 'none'};"
+                    onclick="openModalSuratDinamis('${modalId}','${ne}')"
+                    title="Buka ${ne}">🔗 Lihat Surat</button>
             </div>
             <div class="rm-doc-desc">${_escHtml(t.keterangan || 'Centang jika pasien memerlukan ' + t.nama.toLowerCase())}</div>
+        </div>
+        <div id="${modalId}" class="modal-surat-overlay" style="display:none;"
+            onclick="if(event.target===this)this.style.display='none'">
+            <div class="modal-surat-box">
+                <div class="modal-surat-header">
+                    <span>📄 ${ne}</span>
+                    <button class="modal-surat-close"
+                        onclick="document.getElementById('${modalId}').style.display='none'">✕</button>
+                </div>
+                <div class="modal-surat-body" id="body_${modalId}">
+                    <div class="modal-surat-loading">Memuat data surat...</div>
+                </div>
+                <div class="modal-surat-footer">
+                    <button onclick="window.print()" class="modal-surat-btn-print">🖨️ Cetak</button>
+                    <button onclick="document.getElementById('${modalId}').style.display='none'"
+                        class="modal-surat-btn-close">Tutup</button>
+                </div>
+            </div>
         </div>`;
     }).join('');
 
@@ -181,9 +202,57 @@ function _renderSectionAdministrasiExtra() {
 }
 
 function _onAdmChange(slug) {
-    const el = document.getElementById(slug);
+    const el    = document.getElementById(slug);
+    const btnEl = document.getElementById('linkBtn_' + slug);
     if (!el) return;
     window._reqAdminExtra[slug] = el.checked;
+    if (btnEl) btnEl.style.display = el.checked ? 'inline-flex' : 'none';
+}
+
+/**
+ * Isi dan tampilkan modal surat dinamis berdasarkan data pasien aktif.
+ * Dipanggil saat tombol 🔗 Lihat Surat ditekan pada dokumen administrasi dinamis.
+ */
+function openModalSuratDinamis(modalId, namaSurat) {
+    const modal  = document.getElementById(modalId);
+    const bodyEl = document.getElementById('body_' + modalId);
+    if (!modal || !bodyEl) return;
+
+    const namaEl = document.getElementById('infoPasienNama');
+    const nikEl  = document.getElementById('infoPasienNik');
+    const umurEl = document.getElementById('infoPasienUmur');
+    const nama   = (namaEl ? namaEl.innerText : localStorage.getItem('cP_nama') || '—').replace('—','').trim() || '—';
+    const nik    = (nikEl  ? nikEl.innerText  : 'NIK: —').replace('NIK:','').replace(':','').trim();
+    const umur   = (umurEl ? umurEl.innerText : 'Umur: —').replace('Umur:','').replace(':','').trim();
+    const tgl    = new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
+
+    bodyEl.innerHTML = `
+        <div style="font-family:Georgia,serif;padding:20px 24px;line-height:1.7;color:#1e293b;">
+            <div style="text-align:center;border-bottom:2px solid #1e293b;padding-bottom:10px;margin-bottom:18px;">
+                <div style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">${namaSurat}</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px;">KlinikPro RME</div>
+            </div>
+            <p style="margin-bottom:8px;">Yang bertanda tangan di bawah ini, dokter pemeriksa, menerangkan bahwa:</p>
+            <table style="width:100%;font-size:13px;margin-bottom:14px;border-collapse:collapse;">
+                <tr><td style="width:130px;padding:3px 0;">Nama</td>
+                    <td style="padding:3px 0;">: <strong>${nama}</strong></td></tr>
+                <tr><td style="padding:3px 0;">NIK</td>
+                    <td style="padding:3px 0;">: ${nik}</td></tr>
+                <tr><td style="padding:3px 0;">Umur</td>
+                    <td style="padding:3px 0;">: ${umur}</td></tr>
+            </table>
+            <p style="margin-bottom:18px;">Surat ini diterbitkan untuk keperluan
+                <strong>${namaSurat.toLowerCase()}</strong>
+                pada tanggal <strong>${tgl}</strong>.</p>
+            <div style="text-align:right;margin-top:30px;">
+                <div style="font-size:12px;">Pekanbaru, ${tgl}</div>
+                <div style="font-size:12px;margin-top:4px;">Dokter Pemeriksa,</div>
+                <div style="margin-top:52px;font-size:13px;font-weight:700;border-top:1px solid #1e293b;
+                    display:inline-block;min-width:150px;text-align:center;">( ________________ )</div>
+            </div>
+        </div>`;
+
+    modal.style.display = 'flex';
 }
 
 // ════════════════════════════════════════
