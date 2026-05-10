@@ -61,6 +61,39 @@ const KAT_ICON = {
     'Lainnya': '📌'
 };
 
+// ── Sub-grup Laboratorium — untuk pengelompokan di Page Biaya ──
+// Nama `tarifNama` HARUS persis sama dengan kolom `nama` di tarif_layanan
+const LAB_SUB_GROUPS = [
+    {
+        id: 'lab_dasar', label: '🩸 Lab Dasar',
+        items: ['GDS', 'Kolesterol', 'Asam Urat']
+    },
+    {
+        id: 'lab_darah_rutin', label: '🔴 Darah Rutin',
+        items: ['Hemoglobin (HB)', 'Trombosit', 'Leukosit', 'Eritrosit', 'Hematokrit']
+    },
+    {
+        id: 'lab_triple', label: '🧬 Triple Eliminasi',
+        items: ['HIV', 'Sifilis', 'Hepatitis B']
+    },
+    {
+        id: 'lab_lemak', label: '💧 Profil Lemak',
+        items: ['HDL', 'LDL', 'Trigliserida']
+    },
+    {
+        id: 'lab_gula', label: '🍬 Gula Darah',
+        items: ['GDP', 'HbA1c']
+    },
+    {
+        id: 'lab_hati', label: '🫀 Fungsi Hati',
+        items: ['SGOT', 'SGPT']
+    },
+    {
+        id: 'lab_ginjal', label: '🫘 Fungsi Ginjal',
+        items: ['Ureum', 'Creatinin']
+    }
+];
+
 // ════════════════════════════════════════
 //  INIT HALAMAN TARIF
 // ════════════════════════════════════════
@@ -129,37 +162,155 @@ function renderDaftarTarif() {
         return;
     }
 
+    // Kelompokkan per kategori
     const grouped = {};
     list.forEach(t => {
         if (!grouped[t.kategori]) grouped[t.kategori] = [];
         grouped[t.kategori].push(t);
     });
 
-    container.innerHTML = Object.entries(grouped).map(([kat, items]) => `
+    container.innerHTML = Object.entries(grouped).map(([kat, items]) => {
+        if (kat === 'Laboratorium') {
+            return _renderLabKategori(items);
+        }
+        return `
         <div style="margin-bottom:16px;">
-            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:8px;padding:0 2px;">
+            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
+                        color:var(--text-muted);margin-bottom:8px;padding:0 2px;">
                 ${KAT_ICON[kat]||'📌'} ${kat}
             </div>
-            ${items.map(t => `
-            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;
-                        background:${t.aktif ? '#fff' : '#f8fafc'};
-                        border:1px solid ${t.aktif ? 'rgba(0,0,0,0.08)' : '#e2e8f0'};
-                        border-radius:10px;margin-bottom:6px;opacity:${t.aktif ? 1 : 0.6};">
-                <div style="flex:1;min-width:0;">
-                    <div style="font-weight:700;font-size:12.5px;color:var(--primary-dark);">${escHtml(t.nama)}</div>
-                    ${t.keterangan ? `<div style="font-size:10.5px;color:var(--text-muted);">${escHtml(t.keterangan)}</div>` : ''}
-                    ${!t.aktif ? '<div style="font-size:10px;color:#94a3b8;font-style:italic;">⏸️ Non-aktif</div>' : ''}
+            ${items.map(t => _htmlTarifRow(t)).join('')}
+        </div>`;
+    }).join('');
+}
+
+/** Render kategori Laboratorium dengan sub-grup */
+function _renderLabKategori(allLabItems) {
+    // Buat map: nama tarif → record
+    const byNama = {};
+    allLabItems.forEach(t => { byNama[t.nama] = t; });
+
+    // Item yang tidak masuk sub-grup mana pun (tambahan manual admin)
+    const knownNames = new Set(LAB_SUB_GROUPS.flatMap(g => g.items));
+    const extras = allLabItems.filter(t => !knownNames.has(t.nama));
+
+    const subGrupHtml = LAB_SUB_GROUPS.map(grp => {
+        const grpItems = grp.items.map(nm => byNama[nm]).filter(Boolean);
+        if (grpItems.length === 0) return ''; // sub-grup belum ada di DB sama sekali
+
+        const activeCount = grpItems.filter(t => t.aktif).length;
+        return `
+        <div style="margin-bottom:10px;border:1px solid rgba(var(--primary-rgb,37,99,235),0.1);border-radius:10px;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                        padding:9px 12px;background:rgba(var(--primary-rgb,37,99,235),0.04);
+                        cursor:pointer;" onclick="_toggleLabSubGrup('${grp.id}')">
+                <span style="font-size:12px;font-weight:700;color:var(--text-primary,#1e293b);">${grp.label}</span>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:10px;font-weight:600;color:var(--primary,#2563eb);
+                                 background:rgba(var(--primary-rgb,37,99,235),0.1);
+                                 padding:2px 8px;border-radius:20px;">${activeCount}/${grpItems.length} aktif</span>
+                    <span id="labgrp_arrow_biaya_${grp.id}" style="font-size:10px;color:var(--primary,#2563eb);">▶</span>
                 </div>
-                <div style="font-weight:800;font-size:14px;color:var(--primary);white-space:nowrap;">Rp ${_fmtRp(t.harga)}</div>
-                <div style="display:flex;gap:5px;flex-shrink:0;">
-                    <button onclick="openModalTarif('${escHtml(String(t.id))}')"
-                        style="padding:5px 8px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer;">✏️</button>
-                    <button onclick="hapusTarif('${escHtml(String(t.id))}')"
-                        style="padding:5px 8px;background:rgba(220,38,38,0.08);color:#dc2626;border:1px solid rgba(220,38,38,0.2);border-radius:7px;font-size:11px;cursor:pointer;">🗑️</button>
-                </div>
-            </div>`).join('')}
+            </div>
+            <div id="labgrp_body_biaya_${grp.id}" style="display:none;padding:8px 12px;">
+                ${grpItems.map(t => _htmlTarifRow(t)).join('')}
+            </div>
+        </div>`;
+    }).join('');
+
+    const extrasHtml = extras.length > 0
+        ? `<div style="margin-bottom:10px;">
+               <div style="font-size:10px;font-weight:700;color:var(--text-muted);
+                           text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding:0 2px;">
+                   📌 Lab Lainnya
+               </div>
+               ${extras.map(t => _htmlTarifRow(t)).join('')}
+           </div>`
+        : '';
+
+    return `
+    <div style="margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
+                    color:var(--text-muted);margin-bottom:8px;padding:0 2px;">
+            🔬 Laboratorium
         </div>
-    `).join('');
+        ${subGrupHtml}
+        ${extrasHtml}
+    </div>`;
+}
+
+function _toggleLabSubGrup(id) {
+    const body  = document.getElementById(`labgrp_body_biaya_${id}`);
+    const arrow = document.getElementById(`labgrp_arrow_biaya_${id}`);
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+}
+
+/** Satu baris item tarif: toggle ON/OFF inline + edit + hapus */
+function _htmlTarifRow(t) {
+    const aktif = t.aktif !== false;
+    return `
+    <div id="tarifrow_${escHtml(String(t.id))}"
+         style="display:flex;align-items:center;gap:10px;padding:10px 12px;
+                background:${aktif ? '#fff' : '#f8fafc'};
+                border:1px solid ${aktif ? 'rgba(0,0,0,0.08)' : '#e2e8f0'};
+                border-radius:10px;margin-bottom:6px;
+                transition:opacity .2s;opacity:${aktif ? 1 : 0.55};">
+        <!-- Toggle ON/OFF -->
+        <label style="display:flex;align-items:center;cursor:pointer;flex-shrink:0;" title="${aktif ? 'Nonaktifkan' : 'Aktifkan'}">
+            <input type="checkbox" ${aktif ? 'checked' : ''} style="display:none;"
+                onchange="toggleAktifTarif('${escHtml(String(t.id))}', this.checked)">
+            <div style="width:36px;height:20px;background:${aktif ? 'var(--primary,#2563eb)' : '#cbd5e1'};
+                        border-radius:20px;position:relative;transition:background .2s;">
+                <div style="position:absolute;top:2px;left:${aktif ? '18px' : '2px'};
+                            width:16px;height:16px;background:#fff;border-radius:50%;
+                            transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+            </div>
+        </label>
+        <!-- Info -->
+        <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:12.5px;color:var(--primary-dark);">${escHtml(t.nama)}</div>
+            ${t.keterangan ? `<div style="font-size:10.5px;color:var(--text-muted);">${escHtml(t.keterangan)}</div>` : ''}
+            ${!aktif ? '<div style="font-size:10px;color:#94a3b8;font-style:italic;margin-top:1px;">⏸️ Non-aktif — tidak muncul di form & tagihan</div>' : ''}
+        </div>
+        <!-- Harga -->
+        <div style="font-weight:800;font-size:13px;color:var(--primary);white-space:nowrap;margin-right:4px;">
+            Rp ${_fmtRp(t.harga)}
+        </div>
+        <!-- Aksi -->
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+            <button onclick="openModalTarif('${escHtml(String(t.id))}')"
+                style="padding:5px 8px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer;"
+                title="Edit">✏️</button>
+            <button onclick="hapusTarif('${escHtml(String(t.id))}')"
+                style="padding:5px 8px;background:rgba(220,38,38,0.08);color:#dc2626;border:1px solid rgba(220,38,38,0.2);border-radius:7px;font-size:11px;cursor:pointer;"
+                title="Hapus">🗑️</button>
+        </div>
+    </div>`;
+}
+
+/** Toggle aktif/nonaktif langsung dari baris tanpa buka modal */
+async function toggleAktifTarif(id, aktif) {
+    const t = window._tarifCache.find(x => String(x.id) === String(id));
+    if (!t) return;
+    // Update UI optimistis dulu
+    const row = document.getElementById(`tarifrow_${id}`);
+    if (row) row.style.opacity = '0.5';
+    try {
+        await sb_saveTarif({ ...t, aktif });
+        await _refreshTarifCache();
+        renderDaftarTarif();
+        // Refresh chip page medis jika sudah terbuka
+        if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
+        if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
+        if (typeof _renderSectionTindakan === 'function') _renderSectionTindakan();
+    } catch(e) {
+        showToast('❌ Gagal update status: ' + (e.message || ''), 'error');
+        await _refreshTarifCache();
+        renderDaftarTarif();
+    }
 }
 
 function _setBiayaTab(kat) {
