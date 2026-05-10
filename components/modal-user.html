@@ -12,16 +12,46 @@
         <div class="form-group">
             <label class="form-label">Jabatan</label>
             <!-- Diisi dinamis oleh openEditUserModal() dari user.js -->
-            <select id="edit_u_jabatan" class="form-control" onchange="
-                const ri = document.getElementById('editResignInfo');
-                if (ri) ri.style.display = this.value.toLowerCase() === 'sudah resign' ? 'block' : 'none';
-            "></select>
+            <select id="edit_u_jabatan" class="form-control" onchange="_onEditJabatanChange()"></select>
         </div>
 
         <!-- Info khusus jika status Sudah Resign -->
         <div id="editResignInfo" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(107,114,128,0.08);border:1px solid rgba(107,114,128,0.22);border-radius:10px;font-size:11px;color:#6b7280;line-height:1.6;">
             🚪 <strong>Status: Sudah Resign</strong><br>
             Akun ini tidak dapat digunakan untuk login. Semua data kunjungan &amp; rekam medis yang pernah dibuat tetap tersimpan dan dapat dilacak dari riwayat pasien.
+        </div>
+
+        <!-- PANEL DATA DOKTER — muncul otomatis saat jabatan = Dokter -->
+        <div id="editPanelDokter" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(5,150,105,0.05);border:1px solid rgba(5,150,105,0.2);border-radius:12px;">
+            <div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                🏥 Data Satu Sehat / FHIR
+                <span style="font-size:9px;font-weight:600;background:rgba(5,150,105,0.15);color:#059669;padding:2px 7px;border-radius:20px;">Sinkron ke Daftar Dokter</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <div>
+                    <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">
+                        NIK KTP <span style="color:#ef4444;">*</span>
+                    </label>
+                    <input type="tel" id="edit_u_nik" class="form-control" placeholder="16 digit NIK KTP" maxlength="16">
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <div style="flex:1;">
+                        <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Kode IHS</label>
+                        <input type="text" id="edit_u_ihs" class="form-control" placeholder="IHS Number">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">SIP / STR</label>
+                        <input type="text" id="edit_u_sip" class="form-control" placeholder="No. SIP/STR">
+                    </div>
+                </div>
+                <div>
+                    <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;">Spesialisasi</label>
+                    <input type="text" id="edit_u_spesialis" class="form-control" placeholder="Umum / Sp.PD / Sp.OG / dll">
+                </div>
+            </div>
+            <div style="font-size:10px;color:#059669;margin-top:8px;">
+                ✅ Perubahan akan otomatis tersinkron ke <strong>Settings → Data Dokter</strong>.
+            </div>
         </div>
 
         <div class="form-group">
@@ -37,6 +67,13 @@
         <!-- Zona Bahaya: Hapus User -->
         <div style="margin-top:18px;padding-top:14px;border-top:1px dashed rgba(239,68,68,0.3);">
             <div style="font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">⚠️ Zona Bahaya</div>
+
+            <!-- Warning cascade dokter — hanya tampil jika user ini adalah Dokter -->
+            <div id="editHapusDokterWarning" style="display:none;margin-bottom:8px;padding:8px 10px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;font-size:10px;color:#dc2626;line-height:1.6;">
+                🔗 <strong>User ini terdaftar sebagai Dokter.</strong><br>
+                Menghapus akun akan <strong>ikut menghapus data dokter</strong> (NIK, IHS, SIP, Spesialisasi) dari Daftar Dokter secara permanen.
+            </div>
+
             <button id="btnHapusUser" onclick="hapusUser()" class="btn-custom w-100" style="background:rgba(239,68,68,0.08);color:#dc2626;border:1px solid rgba(239,68,68,0.25);font-size:12px;">
                 🗑️ Hapus Akun User Permanen
             </button>
