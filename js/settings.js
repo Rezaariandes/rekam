@@ -154,6 +154,27 @@ function initSettings() {
     memuatSettings();
 }
 
+// ════════════════════════════════════════
+//  HTML SEKSI: DATA DOKTER
+//  Scaffold container — diisi oleh _renderDokterList() setelah data dimuat
+// ════════════════════════════════════════
+function _htmlDokterSection() {
+    return `
+    <div style="margin-bottom:10px;">
+        <div id="daftarDokterSettings">
+            <div style="text-align:center;color:var(--text-muted);font-size:12px;padding:12px;">
+                ⏳ Memuat data dokter...
+            </div>
+        </div>
+        <button onclick="tambahBarisDokter()"
+            style="margin-top:10px;width:100%;padding:9px;background:rgba(37,99,235,0.07);
+                   color:var(--primary);border:1.5px dashed var(--primary);border-radius:10px;
+                   font-size:12px;font-weight:700;cursor:pointer;">
+            ➕ Tambah Dokter / Tenaga Medis
+        </button>
+    </div>`;
+}
+
 // ────────────────────────────────────────
 //  RENDER HALAMAN SETTINGS (ACCORDION)
 // ────────────────────────────────────────
