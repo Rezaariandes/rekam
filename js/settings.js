@@ -155,6 +155,107 @@ function initSettings() {
 }
 
 // ════════════════════════════════════════
+//  HTML SEKSI: AI / API KEY
+//  Container per provider — diisi oleh _renderAiKeys() setelah data dimuat.
+//  Setiap provider punya: header toggle, status dot, input key rows, tombol tambah.
+// ════════════════════════════════════════
+function _htmlAiSection() {
+    const providers = [
+        { id: 'gemini',      label: 'Google Gemini',  icon: '🌟', note: 'Diperlukan untuk fitur AI Rekomendasi & Transkripsi' },
+        { id: 'groq',        label: 'Groq',           icon: '⚡', note: 'LLM cepat berbasis Llama & Mixtral' },
+        { id: 'openrouter',  label: 'OpenRouter',     icon: '🔀', note: 'Akses ke banyak model sekaligus' },
+        { id: 'openai',      label: 'OpenAI',         icon: '🤖', note: 'GPT-4o dan model OpenAI lainnya' },
+        { id: 'mistral',     label: 'Mistral',        icon: '💨', note: 'Model Mistral yang efisien' },
+    ];
+
+    return providers.map(p => `
+    <div class="ai-provider-card">
+        <div class="ai-provider-header" onclick="toggleAiSection('${p.id}')">
+            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+                <span style="font-size:18px;">${p.icon}</span>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:12.5px;font-weight:700;color:var(--text-primary,#1e293b);">${p.label}</div>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:1px;">${p.note}</div>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                <div id="${p.id}_status" class="ai-status-dot"></div>
+                <span style="font-size:10px;color:var(--primary);">▶</span>
+            </div>
+        </div>
+        <div id="section_${p.id}" style="display:none;padding:10px 14px 14px;border-top:1px solid rgba(var(--primary-rgb,37,99,235),0.08);">
+            <div id="${p.id}_keys_container"></div>
+            <button onclick="tambahAiKey('${p.id}')" class="btn-add-row">
+                ➕ Tambah API Key
+            </button>
+        </div>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════
+//  HTML SEKSI: INTEGRASI EKSTERNAL
+//  OCR KTP (OCR.space) + Satu Sehat FHIR
+// ════════════════════════════════════════
+function _htmlIntegrasiSection() {
+    return `
+    <div class="row g-2">
+
+      <!-- ── OCR KTP ── -->
+      <div class="col-12">
+        <div class="sub-section-label">📷 OCR KTP (OCR.space)</div>
+        <label class="cfg-label">API Key OCR.space</label>
+        <div style="display:flex;gap:6px;">
+          <input type="password" class="form-control" id="cfg_ocr_api_key"
+            placeholder="K8xxxxx... (dari ocr.space)"
+            style="font-size:12px;font-family:monospace;flex:1;">
+          <button class="btn-eye" onclick="togglePasswordVis('cfg_ocr_api_key',this)" title="Tampilkan/sembunyikan">👁️</button>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">
+          Daftarkan gratis di <a href="https://ocr.space/ocrapi" target="_blank" rel="noopener" style="color:var(--primary);">ocr.space/ocrapi</a>.
+          Digunakan untuk scan KTP pasien baru secara otomatis.
+        </div>
+      </div>
+
+      <!-- ── Satu Sehat ── -->
+      <div class="col-12" style="margin-top:8px;">
+        <div class="sub-section-label">🏥 Satu Sehat FHIR (Kemenkes)</div>
+      </div>
+      <div class="col-12">
+        <label class="cfg-label">Environment</label>
+        <select class="form-control" id="cfg_ss_env" style="font-size:12px;">
+          <option value="development">Development (Sandbox)</option>
+          <option value="production">Production</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="cfg-label">Organization ID</label>
+        <input type="text" class="form-control" id="cfg_ss_org_id"
+          placeholder="ID organisasi dari dashboard Satu Sehat" style="font-size:12px;">
+      </div>
+      <div class="col-12">
+        <label class="cfg-label">Client ID</label>
+        <input type="text" class="form-control" id="cfg_ss_client_id"
+          placeholder="Client ID dari console Satu Sehat" style="font-size:12px;font-family:monospace;">
+      </div>
+      <div class="col-12">
+        <label class="cfg-label">Client Secret <span style="color:#dc2626;font-weight:400">(tidak ditampilkan ulang setelah simpan)</span></label>
+        <div style="display:flex;gap:6px;">
+          <input type="password" class="form-control" id="cfg_ss_client_secret"
+            placeholder="Kosongkan jika tidak ingin mengganti" style="font-size:12px;font-family:monospace;flex:1;">
+          <button class="btn-eye" onclick="togglePasswordVis('cfg_ss_client_secret',this)" title="Tampilkan/sembunyikan">👁️</button>
+        </div>
+      </div>
+      <div class="col-12" style="margin-top:4px;">
+        <button class="btn-test" id="btnTestSS" onclick="testKoneksiSatuSehat()">
+          🔗 Test Koneksi Satu Sehat
+        </button>
+        <div id="ssStatusBadge" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:600;"></div>
+      </div>
+
+    </div>`;
+}
+
+// ════════════════════════════════════════
 //  HTML SEKSI: DATA DOKTER
 //  Scaffold container — diisi oleh _renderDokterList() setelah data dimuat
 // ════════════════════════════════════════
