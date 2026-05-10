@@ -460,6 +460,11 @@ function _htmlIdentitasKlinik() {
         <input type="text" class="form-control" id="cfg_klinik_alamat" placeholder="Jl. …">
       </div>
       <div class="col-6">
+        <label class="cfg-label">Kota</label>
+        <input type="text" class="form-control" id="cfg_klinik_kota" placeholder="Pekanbaru">
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">Tampil di TTD surat keterangan</div>
+      </div>
+      <div class="col-6">
         <label class="cfg-label">Telepon</label>
         <input type="tel" class="form-control" id="cfg_klinik_telp" placeholder="08xx…">
       </div>
@@ -573,6 +578,7 @@ function _isiFormDariSettings(s) {
     _setVal('cfg_klinik_nama',      s.klinik_nama       || '');
     _setVal('cfg_klinik_title',     s.klinik_title      || '');
     _setVal('cfg_klinik_alamat',    s.klinik_alamat     || '');
+    _setVal('cfg_klinik_kota',      s.klinik_kota       || '');
     _setVal('cfg_klinik_telp',      s.klinik_telp       || '');
     _setVal('cfg_klinik_email',     s.klinik_email      || '');
     _setVal('cfg_jabatan_medis',    s.jabatan_medis     || 'Dokter, Admin, Paramedis, Apoteker, Kasir, ATLM');
@@ -620,19 +626,8 @@ function _initModuleAccess() {
     _jabatanList.forEach(jab => {
         _moduleAccess[jab] = savedAccess[jab] ||
                              DEFAULT_ACCESS[jab] ||
-                             ['mod_nav_daftar','mod_nav_kunjungan'];
+                             ['mod_daftar','mod_kunjungan','mod_pemeriksaan_ttv'];
     });
-
-    // FIX: Simpan ke localStorage agar applyModuleAccess bisa membacanya
-    // bahkan sebelum settings page pernah dibuka
-    try { localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess)); } catch(e) {}
-
-    // FIX: Terapkan langsung ke UI berdasarkan jabatan yang sedang login.
-    // Sebelumnya _initModuleAccess hanya mengisi _moduleAccess tanpa memperbarui UI,
-    // sehingga tampilan nav/section tidak berubah walaupun data dari server sudah ada.
-    if (typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
-        applyModuleAccess(loggedInUser.jabatan);
-    }
 
     _renderModuleAccess();
 }
@@ -1054,6 +1049,7 @@ async function simpanSeksi(seksi) {
                 klinik_nama:   _getVal('cfg_klinik_nama'),
                 klinik_title:  _getVal('cfg_klinik_title'),
                 klinik_alamat: _getVal('cfg_klinik_alamat'),
+                klinik_kota:   _getVal('cfg_klinik_kota'),
                 klinik_telp:   _getVal('cfg_klinik_telp'),
                 klinik_email:  _getVal('cfg_klinik_email'),
                 jabatan_medis: _getVal('cfg_jabatan_medis'),
@@ -1083,11 +1079,7 @@ async function simpanSeksi(seksi) {
             await sb_saveSettings({ module_access: JSON.stringify(_moduleAccess) });
             // Simpan juga ke localStorage agar bisa dipakai tanpa reload settings
             localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess));
-            // FIX: Terapkan langsung ke UI agar perubahan terlihat segera
-            if (typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
-                applyModuleAccess(loggedInUser.jabatan);
-            }
-            showToast("✅ Hak akses per jabatan disimpan & diterapkan", "success");
+            showToast("✅ Hak akses per jabatan disimpan", "success");
 
         } else if (seksi === 'dokter') {
             const dokterPayload = _kumpulkanDokter();
@@ -1176,6 +1168,7 @@ async function simpanSemuaSettings() {
         klinik_nama:      _getVal('cfg_klinik_nama'),
         klinik_title:     _getVal('cfg_klinik_title'),
         klinik_alamat:    _getVal('cfg_klinik_alamat'),
+        klinik_kota:      _getVal('cfg_klinik_kota'),
         klinik_telp:      _getVal('cfg_klinik_telp'),
         klinik_email:     _getVal('cfg_klinik_email'),
         jabatan_medis:    _getVal('cfg_jabatan_medis'),
@@ -1188,6 +1181,10 @@ async function simpanSemuaSettings() {
         stok_aktif:       document.getElementById('cfg_stok_aktif')?.checked ? '1' : '0',
         biaya_aktif:      document.getElementById('cfg_biaya_aktif')?.checked ? '1' : '0',
         dokter:           JSON.stringify(dokterPayload),
+        // Surat templates — simpan jika ada, biarkan yang di DB jika belum pernah diset
+        ...(Object.keys(window._suratTemplates || {}).length > 0
+            ? { surat_templates: JSON.stringify(window._suratTemplates) }
+            : {}),
         ...aiKeysPayload
     };
 
@@ -1196,10 +1193,6 @@ async function simpanSemuaSettings() {
         localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess));
         window._labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
         _terapkanSettingsRuntime(payload, dokterPayload);
-        // FIX: Terapkan hak akses baru ke UI segera tanpa perlu reload
-        if (typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
-            applyModuleAccess(loggedInUser.jabatan);
-        }
         _setVal('cfg_ss_client_secret', '');
         showSettingsBanner("✅ Semua pengaturan berhasil disimpan!", "success");
         showToast("✅ Semua pengaturan disimpan", "success");

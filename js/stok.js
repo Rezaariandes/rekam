@@ -503,11 +503,14 @@ function _syncTerapiField() {
     if (!terapiEl) return;
     if (_resepItems.length === 0) {
         terapiEl.value = '';
+        terapiEl.dataset.fromResep = '';
         return;
     }
     terapiEl.value = _resepItems.map(item =>
         `${item.nama_obat} ${item.frekuensi}${item.catatan ? ' (' + item.catatan + ')' : ''}`
     ).join('\n');
+    // Tandai agar clearSession tahu isi ini berasal dari resep (bukan ketikan manual)
+    terapiEl.dataset.fromResep = 'true';
 }
 
 // ════════════════════════════════════════
@@ -1003,3 +1006,43 @@ function _getExpiredCount() {
     const today = new Date(); today.setHours(0,0,0,0);
     return _obatCache.filter(o => o.exp_date && new Date(o.exp_date) < today).length;
 }
+
+// ════════════════════════════════════════════════════════
+//  CLEAR SESSION — reset _resepItems saat pasien berganti
+//  BUG FIX: stok.js tidak pernah hook clearSession(), sehingga
+//  _resepItems dari pasien sebelumnya tetap terisi saat pasien
+//  baru didaftarkan. Akibatnya obat milik pasien lain muncul
+//  di field terapi pasien baru tanpa ada input apapun.
+// ════════════════════════════════════════════════════════
+
+(function _wrapClearSessionForResep() {
+    function _doWrap() {
+        if (typeof window.clearSession !== 'function') return false;
+        if (window._clearSessionResepWrapped) return true;
+        window._clearSessionResepWrapped = true;
+
+        const _origClear = window.clearSession;
+        window.clearSession = function() {
+            _origClear.apply(this, arguments);
+            // Reset state resep agar tidak bocor ke pasien berikutnya
+            _resepItems = [];
+            const resepList = document.getElementById('resepItemList');
+            if (resepList) resepList.innerHTML = '';
+            // Kosongkan field terapi jika diisi otomatis dari resep
+            const terapiEl = document.getElementById('terapi');
+            if (terapiEl && terapiEl.dataset.fromResep === 'true') {
+                terapiEl.value = '';
+                terapiEl.dataset.fromResep = '';
+            }
+        };
+        return true;
+    }
+
+    if (!_doWrap()) {
+        let tries = 0;
+        const t = setInterval(() => {
+            tries++;
+            if (_doWrap() || tries > 60) clearInterval(t);
+        }, 150);
+    }
+})();
