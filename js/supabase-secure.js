@@ -100,7 +100,39 @@ async function sb_saveUser(payload) {
 }
 
 async function sb_deleteUser(userId) {
+    // Cascade: hapus data dokter yang terhubung dengan user ini (jika ada)
+    try {
+        await _sbFetch(`dokter?user_id=eq.${userId}`, { method: 'DELETE', prefer: 'return=minimal' });
+    } catch(e) {
+        console.warn('[Klikpro] Gagal hapus dokter terkait user:', e.message);
+    }
     await _sbFetch(`users?id=eq.${userId}`, { method: 'DELETE', prefer: 'return=minimal' });
+    return { status: 'success' };
+}
+
+/** Ambil data dokter berdasarkan user_id (untuk panel edit modal) */
+async function sb_getDokterByUserId(userId) {
+    if (!userId) return null;
+    const rows = await _sbFetch(`dokter?user_id=eq.${userId}&select=*&limit=1`);
+    return rows.length > 0 ? rows[0] : null;
+}
+
+/** Update atau buat data dokter dari modal edit user */
+async function sb_upsertDokterFromUser({ userId, nama, nik, ihs, sip, spesialis }) {
+    const existing = await _sbFetch(`dokter?user_id=eq.${userId}&select=id`);
+    const body = { nama, nik: nik||'', ihs: ihs||'', sip: sip||'', spesialis: spesialis||'', user_id: userId, jabatan: 'Dokter' };
+    if (existing && existing.length > 0) {
+        await _sbFetch(`dokter?id=eq.${existing[0].id}`, { method: 'PATCH', body, prefer: 'return=minimal' });
+        return { status: 'updated', id: existing[0].id };
+    } else {
+        await _sbFetch('dokter', { method: 'POST', body, prefer: 'return=minimal' });
+        return { status: 'created' };
+    }
+}
+
+/** Hapus data dokter saja (tanpa hapus user), dipakai saat jabatan berubah dari Dokter */
+async function sb_deleteDokterByUserId(userId) {
+    await _sbFetch(`dokter?user_id=eq.${userId}`, { method: 'DELETE', prefer: 'return=minimal' });
     return { status: 'success' };
 }
 

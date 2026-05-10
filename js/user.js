@@ -213,13 +213,30 @@ async function simpanUserBaru() {
     }
 }
 
+// ── TOGGLE PANEL DOKTER / RESIGN / WARNING HAPUS DI MODAL EDIT ──
+function _onEditJabatanChange() {
+    const jabSel = $('edit_u_jabatan');
+    if (!jabSel) return;
+    const jabatan  = jabSel.value.toLowerCase();
+    const isDokter = jabatan === 'dokter';
+    const isResign = jabatan === 'sudah resign';
+    if ($('editPanelDokter'))       $('editPanelDokter').style.display       = isDokter ? 'block' : 'none';
+    if ($('editResignInfo'))         $('editResignInfo').style.display         = isResign ? 'block' : 'none';
+    if ($('editHapusDokterWarning')) $('editHapusDokterWarning').style.display = isDokter ? 'block' : 'none';
+}
+
 // ── BUKA MODAL EDIT USER ──
-function openEditUserModal(id) {
+async function openEditUserModal(id) {
     const u = userListCache.find(x => x.id === id);
     if (!u) return;
     if ($('edit_u_id'))   $('edit_u_id').value   = u.id;
     if ($('edit_u_nama')) $('edit_u_nama').value = u.nama;
     if ($('edit_u_pin'))  $('edit_u_pin').value  = '';
+
+    // Reset field dokter dulu sebelum diisi dari DB
+    ['edit_u_nik','edit_u_ihs','edit_u_sip','edit_u_spesialis'].forEach(fid => {
+        if ($(fid)) $(fid).value = '';
+    });
 
     // Populate dropdown jabatan di modal edit (termasuk Sudah Resign)
     const jabSel = $('edit_u_jabatan');
@@ -237,17 +254,29 @@ function openEditUserModal(id) {
         ).join('');
     }
 
-    // Tampilkan info resign jika user sudah resign
-    const resignInfo = $('editResignInfo');
-    if (resignInfo) {
-        resignInfo.style.display = (u.jabatan || '').toLowerCase() === 'sudah resign' ? 'block' : 'none';
-    }
+    // Terapkan tampilan panel sesuai jabatan saat ini
+    _onEditJabatanChange();
 
     const modal = $('modalUser');
     if (modal) modal.classList.add('show');
+
+    // Jika jabatan Dokter → fetch data dokter dan isi panel secara async
+    if ((u.jabatan || '').toLowerCase() === 'dokter') {
+        try {
+            const dokter = await sb_getDokterByUserId(u.id);
+            if (dokter) {
+                if ($('edit_u_nik'))       $('edit_u_nik').value       = dokter.nik       || '';
+                if ($('edit_u_ihs'))       $('edit_u_ihs').value       = dokter.ihs       || '';
+                if ($('edit_u_sip'))       $('edit_u_sip').value       = dokter.sip       || '';
+                if ($('edit_u_spesialis')) $('edit_u_spesialis').value = dokter.spesialis || '';
+            }
+        } catch(e) {
+            console.warn('[Klikpro] Gagal fetch data dokter:', e.message);
+        }
+    }
 }
 
-// ── UPDATE USER (PIN + JABATAN) ──
+// ── UPDATE USER (PIN + JABATAN + DATA DOKTER) ──
 async function updatePinUser() {
     const id      = $('edit_u_id')      ? $('edit_u_id').value             : '';
     const newPin  = $('edit_u_pin')     ? $('edit_u_pin').value.trim()     : '';
@@ -257,9 +286,21 @@ async function updatePinUser() {
     if (newPin && newPin.length < 4) return showToast("⚠️ PIN minimal 4 digit", "warning");
 
     // FIX: cek apakah jabatan benar-benar berubah dari nilai sebelumnya
-    const userSekarang = userListCache.find(x => x.id === id);
-    const jabatanBerubah = jabatan && userSekarang && jabatan !== userSekarang.jabatan;
-    if (!newPin && !jabatanBerubah) return showToast("⚠️ Tidak ada perubahan untuk disimpan", "warning");
+    const userSekarang    = userListCache.find(x => x.id === id);
+    const jabatanLama     = (userSekarang?.jabatan || '').toLowerCase();
+    const jabatanBaru     = jabatan.toLowerCase();
+    const jabatanBerubah  = jabatan && userSekarang && jabatan !== userSekarang.jabatan;
+    const isDokterBaru    = jabatanBaru === 'dokter';
+    const wasDokter       = jabatanLama === 'dokter';
+
+    // Data dokter dari panel (jika ditampilkan)
+    const nik       = $('edit_u_nik')       ? $('edit_u_nik').value.trim()       : '';
+    const ihs       = $('edit_u_ihs')       ? $('edit_u_ihs').value.trim()       : '';
+    const sip       = $('edit_u_sip')       ? $('edit_u_sip').value.trim()       : '';
+    const spesialis = $('edit_u_spesialis') ? $('edit_u_spesialis').value.trim() : '';
+
+    if (!newPin && !jabatanBerubah && !isDokterBaru)
+        return showToast("⚠️ Tidak ada perubahan untuk disimpan", "warning");
 
     const btn = $('btnUpdateUser');
     if (btn) { btn.disabled = true; btn.innerText = "Mengupdate..."; }
@@ -270,6 +311,28 @@ async function updatePinUser() {
         if (jabatan) payload.jabatan = jabatan;
 
         await sb_saveUser(payload);
+
+        // ── SINKRONISASI TABEL DOKTER ──
+        if (isDokterBaru) {
+            // Jabatan = Dokter → upsert data dokter (update atau buat baru)
+            await sb_upsertDokterFromUser({
+                userId: id,
+                nama:   userSekarang?.nama || '',
+                nik, ihs, sip, spesialis
+            });
+        } else if (wasDokter && jabatanBerubah) {
+            // Jabatan berubah dari Dokter ke jabatan lain → hapus data dokter
+            await sb_deleteDokterByUserId(id);
+            showToast("ℹ️ Data dokter dihapus karena jabatan berubah dari Dokter", "info");
+        }
+
+        // Refresh cache _dokterAktif agar panel Settings juga sinkron
+        try {
+            const data = await sb_getSettings();
+            if (data.dokter) window._dokterAktif = data.dokter;
+            if (typeof _renderDokterList === 'function') _renderDokterList();
+        } catch(e) {}
+
         showToast("✅ Data user berhasil diupdate", "success");
 
         // Update cache lokal agar render langsung
@@ -313,7 +376,17 @@ async function hapusUser() {
 
     try {
         await sb_deleteUser(id);
-        showToast(`🗑️ Akun "${nama}" berhasil dihapus`, "success");
+
+        // Cek apakah user ini adalah Dokter agar toast lebih informatif
+        const userHapus   = userListCache.find(x => x.id === id);
+        const isDokterHapus = userHapus && (userHapus.jabatan || '').toLowerCase() === 'dokter';
+
+        showToast(
+            isDokterHapus
+                ? `🗑️ Akun Dokter "${nama}" & data dokter terkait berhasil dihapus`
+                : `🗑️ Akun "${nama}" berhasil dihapus`,
+            "success"
+        );
 
         // Hapus dari cache lokal
         userListCache = userListCache.filter(x => x.id !== id);
