@@ -1099,6 +1099,13 @@ async function simpanSeksi(seksi) {
             _applyStokAktif(aktif);
             showToast('✅ Pengaturan stok obat disimpan', 'success');
 
+        } else if (seksi === 'biaya') {
+            const aktif = !!document.getElementById('cfg_biaya_aktif')?.checked;
+            await sb_saveSettings({ biaya_aktif: aktif ? '1' : '0' });
+            window._biayaAktif = aktif;
+            _applyBiayaAktif(aktif);
+            showToast('✅ Pengaturan pembiayaan disimpan', 'success');
+
         } else if (seksi === 'integrasi') {
             const payload = {
                 ocr_api_key:      _getVal('cfg_ocr_api_key'),
