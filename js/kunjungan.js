@@ -346,35 +346,17 @@ async function _quickResep(kId, namaPasien) {
 
 // ── BUKA REKAM MEDIS DARI KUNJUNGAN HARI INI ──
 async function bukaRekamMedisHariIni(kId) {
-    // Gate akses ke pageMedis berdasarkan _currentAccess (sistem baru).
-    // Jabatan yang tidak punya mod_medis_ttv DAN mod_medis_diagnosa
-    // dianggap tidak berhak membuka form pemeriksaan penuh.
-    //
-    // Kasir: redirect ke invoice; semua lainnya yang tidak punya akses medis: tolak.
+    // Kasir dan ATLM tidak bisa buka pageMedis penuh, redirect ke invoice/info saja
     const jabatan = ((typeof loggedInUser !== 'undefined' && loggedInUser) ? (loggedInUser.jabatan || '') : '').toLowerCase();
-    const access  = window._currentAccess || [];
-
-    // Cek apakah jabatan ini punya akses ke minimal satu section medis
-    const medisModules = [
-        'mod_medis_ttv','mod_medis_anamnesa','mod_medis_fisik',
-        'mod_medis_lab','mod_medis_diagnosa','mod_medis_riwayat',
-        'mod_medis_identitas','mod_medis_penunjang','mod_medis_tindakan'
-    ];
-    const punya_akses_medis = access.length === 0
-        ? true  // fallback: jika access belum dimuat, izinkan (canAccessMedis() akan cek lebih lanjut)
-        : medisModules.some(m => access.includes(m));
-
-    if (jabatan === 'kasir' || (!punya_akses_medis && access.length > 0)) {
-        if (jabatan === 'kasir' || !punya_akses_medis) {
-            if (jabatan === 'kasir') {
-                const h = kunjunganHariIni.find(x => x.id === kId);
-                const nama = h ? (h.nama || '') : '';
-                _quickInvoice(kId, nama);
-                return;
-            }
-            showToast("⛔ Jabatan Anda tidak memiliki akses ke halaman pemeriksaan", "info");
-            return;
-        }
+    if (jabatan === 'kasir') {
+        const h = kunjunganHariIni.find(x => x.id === kId);
+        const nama = h ? (h.nama || '') : '';
+        _quickInvoice(kId, nama);
+        return;
+    }
+    if (jabatan === 'atlm') {
+        showToast("ℹ️ ATLM hanya dapat melihat data lab dari daftar kunjungan", "info");
+        return;
     }
 
     if (!canAccessMedis()) return;
@@ -959,7 +941,7 @@ function _cetakResepIsolated() {
 //  Dipanggil dari tombol "✓ Simpan Rekam Medis" di page-medis.html
 //  Mengumpulkan semua nilai form dan mengirim ke sb_saveKunjungan()
 // ════════════════════════════════════════════════════════
-async function saveAll() {
+async function saveAll(showInvoice = true) {
     const btn = $('btnSave');
     if (btn) { btn.disabled = true; btn.innerText = '⏳ Menyimpan...'; }
 
@@ -1123,7 +1105,7 @@ async function saveAll() {
         showToast('✅ Rekam medis berhasil disimpan!', 'success');
 
         // Buka modal tagihan otomatis jika modul biaya aktif
-        if (window._biayaAktif && currentKunjunganId && typeof openModalTagihan === 'function') {
+        if (showInvoice && window._biayaAktif && currentKunjunganId && typeof openModalTagihan === 'function') {
             try {
                 const namaPasienDisplay = $('infoPasienNama') ? $('infoPasienNama').innerText : namaPasien;
                 await openModalTagihan(currentKunjunganId, currentPasienId, namaPasienDisplay, localDate, payload);
