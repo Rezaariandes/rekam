@@ -57,18 +57,13 @@ function switchPage(id, navEl) {
     // BUG FIX: Selalu reset checkbox surat sakit ke unchecked saat masuk pageMedis
     if (id === 'pageMedis') { const ss = document.getElementById('suratSakit'); if (ss) ss.checked = false; }
     if (id === 'pageLaporan') {
-        // Cek akses via _currentAccess (sistem baru) atau fallback ke jabatan
-        const _hasLaporanAccess = window._currentAccess
-            ? window._currentAccess.includes('mod_nav_laporan')
-            : (() => {
-                if (typeof loggedInUser === 'undefined' || !loggedInUser) return false;
-                const jL = (loggedInUser.jabatan || '').toLowerCase();
-                return ['dokter','admin'].includes(jL);
-            })();
-        if (!_hasLaporanAccess) {
-            showToast("⛔ Akses Laporan tidak diizinkan untuk jabatan ini", "error");
-            switchPage('pageDaftar', document.getElementById('navDaftar'));
-            return;
+        if (typeof loggedInUser !== 'undefined' && loggedInUser) {
+            const jabatan = (loggedInUser.jabatan || '').toLowerCase();
+            if (jabatan === 'paramedis') {
+                showToast("⛔ Akses Laporan hanya untuk Admin & Dokter", "error");
+                switchPage('pageDaftar', document.getElementById('navDaftar'));
+                return;
+            }
         }
         if (typeof initLaporan === 'function') initLaporan();
     }
@@ -79,18 +74,13 @@ function switchPage(id, navEl) {
         if (typeof initPageStok === 'function') initPageStok();
     }
     if (id === 'pageSettings') {
-        // Cek akses via _currentAccess (sistem baru) atau fallback ke jabatan
-        const _hasSettingsAccess = window._currentAccess
-            ? window._currentAccess.includes('mod_nav_settings')
-            : (() => {
-                if (typeof loggedInUser === 'undefined' || !loggedInUser) return false;
-                const jL = (loggedInUser.jabatan || '').toLowerCase();
-                return ['dokter','admin'].includes(jL);
-            })();
-        if (!_hasSettingsAccess) {
-            showToast("⛔ Akses Settings tidak diizinkan untuk jabatan ini", "error");
-            switchPage('pageDaftar', document.querySelector('.nav-item'));
-            return;
+        if (typeof loggedInUser !== 'undefined' && loggedInUser) {
+            const jabatan = (loggedInUser.jabatan || '').toLowerCase();
+            if (jabatan === 'paramedis') {
+                showToast("⛔ Akses Settings hanya untuk Admin & Dokter", "error");
+                switchPage('pageDaftar', document.querySelector('.nav-item'));
+                return;
+            }
         }
         if (typeof initSettings === 'function') initSettings();
     }
@@ -175,27 +165,7 @@ async function loadRuntimeSettings() {
 
         // BUG F FIX: Terapkan hak akses modul setelah settings dimuat
         // applyModuleAccess dipanggil di sini (bukan hanya di auth.js) agar
-        // window._isParamedis tersedia sebelum renderKunjunganHariIni dijalankan.
-        //
-        // FIX KRITIS: Parse module_access dari server SEBELUM memanggil applyModuleAccess.
-        // Sebelumnya _moduleAccess masih kosong saat dipanggil di sini sehingga selalu
-        // jatuh ke DEFAULT_ACCESS, mengabaikan pengaturan yang sudah disimpan di Settings.
-        if (s.module_access) {
-            try {
-                const savedAccess = JSON.parse(s.module_access);
-                // Isi window._moduleAccess agar applyModuleAccess bisa membacanya
-                // (settings.js mendefinisikan _moduleAccess sebagai let, jadi kita pakai
-                // localStorage sebagai jembatan yang sudah dibaca oleh applyModuleAccess)
-                localStorage.setItem('kp_module_access', JSON.stringify(savedAccess));
-                // Jika settings.js sudah dimuat, isi juga langsung ke _moduleAccess
-                if (typeof _moduleAccess !== 'undefined') {
-                    Object.assign(_moduleAccess, savedAccess);
-                }
-            } catch(e) {
-                console.warn('[Klikpro] Gagal parse module_access:', e.message);
-            }
-        }
-
+        // window._isParamedis tersedia sebelum renderKunjunganHariIni dijalankan
         if (typeof applyModuleAccess === 'function' &&
             typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
             applyModuleAccess(loggedInUser.jabatan);
@@ -263,8 +233,13 @@ async function initApp() {
             $('infoTglPemeriksaan').style.display = 'block';
         }
 
+        // BUG FIX (chip invoice/resep di riwayat hilang saat refresh):
+        // Riwayat dirender SEMENTARA dari localStorage dulu agar UI tidak kosong,
+        // tapi akan di-render ulang setelah loadRuntimeSettings selesai
+        // (saat _biayaAktif & _stokAktif sudah terisi) — lihat blok di bawah.
         try {
             currentRiwayat = JSON.parse(localStorage.getItem('cP_riwayat') || '[]');
+            // Render awal tanpa chip invoice/resep (flag belum diset) — akan diulang setelah settings dimuat
             if (typeof renderRiwayatList === 'function')
                 renderRiwayatList(currentRiwayat, 'historyListMedis');
         } catch (e) {
@@ -343,6 +318,26 @@ async function initApp() {
 
         // Render dynamic lab section setelah lab_aktif & _tarifCache tersedia
         if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
+
+        // BUG FIX (resep hilang & chip invoice/resep di riwayat hilang saat refresh):
+        // _stokAktif & _biayaAktif baru terisi setelah loadRuntimeSettings selesai.
+        // Render ulang riwayat dan load resep di sini agar chip tampil dengan benar.
+        if (localStorage.getItem('activePage') === 'pageMedis') {
+            // Re-render riwayat agar chip Invoice & Resep muncul (flag sudah terisi)
+            if (typeof renderRiwayatList === 'function' && currentRiwayat && currentRiwayat.length > 0) {
+                renderRiwayatList(currentRiwayat, 'historyListMedis');
+            }
+            // Load resep lama dari DB (hanya jika modul stok aktif & ada kunjungan)
+            if (window._stokAktif && currentKunjunganId && typeof loadResepByKunjungan === 'function') {
+                loadResepByKunjungan(currentKunjunganId).catch(e =>
+                    console.warn('[Klikpro] Gagal load resep saat refresh:', e.message)
+                );
+            }
+            // Re-render section resep jika stok aktif (karena saat render pertama flag masih false)
+            if (window._stokAktif && typeof renderSectionResep === 'function') {
+                renderSectionResep(currentKunjunganId || null);
+            }
+        }
     } catch(e) {
         console.warn('[Klikpro] Settings gagal, lanjut dengan default');
     }
