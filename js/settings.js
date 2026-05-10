@@ -620,8 +620,19 @@ function _initModuleAccess() {
     _jabatanList.forEach(jab => {
         _moduleAccess[jab] = savedAccess[jab] ||
                              DEFAULT_ACCESS[jab] ||
-                             ['mod_daftar','mod_kunjungan','mod_pemeriksaan_ttv'];
+                             ['mod_nav_daftar','mod_nav_kunjungan'];
     });
+
+    // FIX: Simpan ke localStorage agar applyModuleAccess bisa membacanya
+    // bahkan sebelum settings page pernah dibuka
+    try { localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess)); } catch(e) {}
+
+    // FIX: Terapkan langsung ke UI berdasarkan jabatan yang sedang login.
+    // Sebelumnya _initModuleAccess hanya mengisi _moduleAccess tanpa memperbarui UI,
+    // sehingga tampilan nav/section tidak berubah walaupun data dari server sudah ada.
+    if (typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
+        applyModuleAccess(loggedInUser.jabatan);
+    }
 
     _renderModuleAccess();
 }
@@ -813,31 +824,17 @@ function applyModuleAccess(jabatan) {
     const btnNext = $('btnNext');
     if (btnNext) btnNext.style.display = has('mod_medis_identitas') ? '' : 'none';
 
-    // ══ BANNER IDENTITAS PASIEN di pageMedis ══
-    // Bug 1 Fix: mod_medis_identitas harus menyembunyikan seluruh banner identitas,
-    // bukan hanya tombol btnNext.
-    const identitasMedisIds = ['infoPasienNama', 'infoPasienNik', 'infoPasienUmur', 'infoTglPemeriksaan'];
-    identitasMedisIds.forEach(elId => {
-        const el = $(elId);
-        if (el) el.style.display = has('mod_medis_identitas') ? '' : 'none';
-    });
-    // Sembunyikan seluruh wrapper banner jika ada
-    const bannerIdentitas = document.getElementById('bannerIdentitasPasien');
-    if (bannerIdentitas) bannerIdentitas.style.display = has('mod_medis_identitas') ? '' : 'none';
-
     // ══ SETTINGS PAGE: sembunyikan seksi yang tidak diizinkan ══
     // (diterapkan saat initSettings dipanggil — lihat _applySettingsSeksiAccess)
     window._settingsAccess = {
         klinik:        has('mod_settings_klinik'),
         akses:         has('mod_settings_akses'),
         dokter:        has('mod_settings_dokter'),
-        layanan_medis: has('mod_settings_layanan'),  // Bug 2 Fix: baca dari access, bukan hardcode true
+        layanan_medis: true,
         stok:          has('mod_settings_stok'),
         biaya:         has('mod_settings_biaya'),
         ai:            has('mod_settings_ai'),
         integrasi:     has('mod_settings_integrasi'),
-        user:          has('mod_settings_user'),      // Bug 3 Fix: tambahkan user & laporan
-        laporan:       has('mod_settings_laporan'),
     };
 
     if (typeof window._fitNav === 'function') setTimeout(window._fitNav, 200);
@@ -857,16 +854,14 @@ function _setElVis(id, visible) {
 function _applySettingsSeksiAccess() {
     const sa = window._settingsAccess || {};
     const secMap = {
-        sec_klinik:        sa.klinik    !== false,
-        sec_akses:         sa.akses     !== false,
-        sec_dokter:        sa.dokter    !== false,
-        sec_layanan_medis: sa.layanan_medis !== false,  // Bug 2 Fix: tidak lagi hardcode true
-        sec_stok:          sa.stok      !== false,
-        sec_biaya:         sa.biaya     !== false,
-        sec_ai:            sa.ai        !== false,
-        sec_integrasi:     sa.integrasi !== false,
-        sec_user:          sa.user      !== false,      // Bug 3 Fix: tambahkan key user
-        sec_laporan:       sa.laporan   !== false,      // Bug 3 Fix: tambahkan key laporan
+        sec_klinik:    sa.klinik    !== false,
+        sec_akses:     sa.akses     !== false,
+        sec_dokter:    sa.dokter    !== false,
+        sec_layanan_medis: true,
+        sec_stok:      sa.stok      !== false,
+        sec_biaya:     sa.biaya     !== false,
+        sec_ai:        sa.ai        !== false,
+        sec_integrasi: sa.integrasi !== false,
     };
     Object.entries(secMap).forEach(([secId, visible]) => {
         const wrap = document.getElementById(`${secId}_wrap`);
@@ -1088,7 +1083,11 @@ async function simpanSeksi(seksi) {
             await sb_saveSettings({ module_access: JSON.stringify(_moduleAccess) });
             // Simpan juga ke localStorage agar bisa dipakai tanpa reload settings
             localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess));
-            showToast("✅ Hak akses per jabatan disimpan", "success");
+            // FIX: Terapkan langsung ke UI agar perubahan terlihat segera
+            if (typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
+                applyModuleAccess(loggedInUser.jabatan);
+            }
+            showToast("✅ Hak akses per jabatan disimpan & diterapkan", "success");
 
         } else if (seksi === 'dokter') {
             const dokterPayload = _kumpulkanDokter();
@@ -1197,6 +1196,10 @@ async function simpanSemuaSettings() {
         localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess));
         window._labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
         _terapkanSettingsRuntime(payload, dokterPayload);
+        // FIX: Terapkan hak akses baru ke UI segera tanpa perlu reload
+        if (typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
+            applyModuleAccess(loggedInUser.jabatan);
+        }
         _setVal('cfg_ss_client_secret', '');
         showSettingsBanner("✅ Semua pengaturan berhasil disimpan!", "success");
         showToast("✅ Semua pengaturan disimpan", "success");
