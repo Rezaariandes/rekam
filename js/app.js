@@ -272,7 +272,20 @@ async function initApp() {
     // applyModuleAccess & _isParamedis sudah tersedia saat render pertama.
     try {
         await loadRuntimeSettings();
-        // Render dynamic lab section setelah lab_aktif tersedia
+
+        // BUG FIX (refresh pageMedis): Pastikan _tarifCache terisi SEBELUM
+        // _renderSectionLabDinamic dipanggil, agar chip Penunjang & Tindakan
+        // dapat dirender dengan benar saat restore dari kunjungan lama.
+        if (window._biayaAktif && typeof sb_getTarif === 'function'
+            && (!window._tarifCache || window._tarifCache.length === 0)) {
+            try {
+                window._tarifCache = await sb_getTarif();
+            } catch(e) {
+                console.warn('[Klikpro] Gagal pre-fetch tarif:', e.message);
+            }
+        }
+
+        // Render dynamic lab section setelah lab_aktif & _tarifCache tersedia
         if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
     } catch(e) {
         console.warn('[Klikpro] Settings gagal, lanjut dengan default');
