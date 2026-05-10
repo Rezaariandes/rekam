@@ -220,6 +220,24 @@ async function initApp() {
         if (el) el.addEventListener('input', checkLabAlert);
     });
 
+    // ════════════════════════════════════════════════════
+    //  LOAD SETTINGS & TARIF CACHE DULU — selalu, tanpa pengecualian.
+    //  Ini memastikan _labAktif, _biayaAktif, _tarifCache, applyModuleAccess
+    //  semua sudah siap SEBELUM form diisi atau section dinamis dirender.
+    // ════════════════════════════════════════════════════
+    try {
+        await loadRuntimeSettings();
+    } catch(e) {
+        console.warn('[Klikpro] Settings gagal, lanjut dengan default');
+    }
+
+    // Pastikan _tarifCache terisi (dibutuhkan chip penunjang & tindakan)
+    if (window._biayaAktif && typeof sb_getTarif === 'function'
+        && (!window._tarifCache || window._tarifCache.length === 0)) {
+        try { window._tarifCache = await sb_getTarif(); }
+        catch(e) { console.warn('[Klikpro] Gagal pre-fetch tarif:', e.message); }
+    }
+
     if (localStorage.getItem('activePage') === 'pageMedis') {
         currentPasienId    = localStorage.getItem('cP_id');
         currentKunjunganId = localStorage.getItem('cK_id');
@@ -241,10 +259,10 @@ async function initApp() {
             currentRiwayat = [];
         }
 
-        // FIX Bug 3: Saat reload, fetch data kunjungan langsung dari Supabase
-        // agar form selalu menampilkan data aktual dari database — bukan hanya
-        // dari localStorage yang bisa stale atau kosong.
         if (currentKunjunganId) {
+            // Render section dinamis DULU agar field sudah ada di DOM sebelum diisi
+            if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
+
             try {
                 const kunjunganData = await sb_getKunjunganById(currentKunjunganId);
                 if (kunjunganData && typeof _isiFormDariKunjungan === 'function') {
@@ -252,20 +270,18 @@ async function initApp() {
                     document.querySelectorAll('[data-save="true"]').forEach(el =>
                         localStorage.setItem('rme_' + el.id, el.value)
                     );
-                    // Safety net: pastikan section dinamis (dokumen/admin)
-                    // ikut dirender setelah _tarifCache tersedia
                     if (typeof renderMedisDinamis === 'function') {
                         window._ensureTarifCacheThen(() => renderMedisDinamis());
                     }
                 } else {
-                    // Fallback ke autosave localStorage jika fetch gagal
                     if (typeof loadAutosave === 'function') loadAutosave();
                 }
             } catch (e) {
                 console.warn('[Klikpro] Gagal fetch kunjungan saat reload, fallback autosave:', e.message);
                 if (typeof loadAutosave === 'function') loadAutosave();
             }
-            // Fetch alergi dari tabel pasien (data permanen) — tidak ikut di kunjungan
+
+            // Fetch alergi dari tabel pasien (data permanen)
             if (currentPasienId && currentPasienId !== 'null') {
                 try {
                     const pasienRows = await _sbFetch(`pasien?id=eq.${currentPasienId}&select=alergi&limit=1`);
@@ -275,7 +291,6 @@ async function initApp() {
                         localStorage.setItem('rme_alergi', alergiVal);
                     }
                 } catch(e) {
-                    // Fallback ke localStorage jika fetch pasien gagal
                     const saved = localStorage.getItem('rme_alergi');
                     if ($('alergi') && saved) $('alergi').value = saved;
                 }
@@ -290,33 +305,11 @@ async function initApp() {
         checkLabAlert();
 
         switchPage('pageMedis', null);
-        // Terapkan lock UI setelah restore — setTimeout agar DOM & kunjungan.js siap
         setTimeout(function(){ if (typeof _applyLockUI === 'function') _applyLockUI(); }, 100);
     } else {
         if (typeof clearSession === 'function') clearSession();
-    }
-
-    // FIX F: loadRuntimeSettings dipanggil SEBELUM sb_initData agar
-    // applyModuleAccess & _isParamedis sudah tersedia saat render pertama.
-    try {
-        await loadRuntimeSettings();
-
-        // BUG FIX (refresh pageMedis): Pastikan _tarifCache terisi SEBELUM
-        // _renderSectionLabDinamic dipanggil, agar chip Penunjang & Tindakan
-        // dapat dirender dengan benar saat restore dari kunjungan lama.
-        if (window._biayaAktif && typeof sb_getTarif === 'function'
-            && (!window._tarifCache || window._tarifCache.length === 0)) {
-            try {
-                window._tarifCache = await sb_getTarif();
-            } catch(e) {
-                console.warn('[Klikpro] Gagal pre-fetch tarif:', e.message);
-            }
-        }
-
-        // Render dynamic lab section setelah lab_aktif & _tarifCache tersedia
+        // Render dynamic lab section untuk halaman non-pageMedis (normal flow)
         if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
-    } catch(e) {
-        console.warn('[Klikpro] Settings gagal, lanjut dengan default');
     }
 
     // FIX: Ambil data awal via sb_initData (Supabase) — bukan fetch(APP_URL)
