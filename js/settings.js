@@ -561,6 +561,8 @@ function _fallbackDariKonstanta() {
     _renderAiKeys({});
     _initModuleAccess();
     _loadLabAktif({});
+    _loadStokAktif(_settingsCache || {});
+    _loadBiayaAktif(_settingsCache || {});
     // Lab & penunjang & tindakan dikelola di Page Biaya — tidak perlu fallback
 }
 
@@ -583,17 +585,18 @@ function _isiFormDariSettings(s) {
 
 // ── Helper muat lab aktif dari settings ──
 function _loadLabAktif(s) {
-    _labAktif = {};
+    // _labAktif hanya dipakai sebagai fallback di kunjungan.js
+    // Lab kini dikelola di Page Biaya (tarif_layanan) — tidak ada toggle di Settings lagi
+    let parsed = {};
     if (s.lab_aktif) {
-        try { _labAktif = JSON.parse(s.lab_aktif); } catch(e) {}
+        try { parsed = JSON.parse(s.lab_aktif); } catch(e) {}
     }
-    // Default: 3 lab dasar aktif jika belum ada konfigurasi
-    if (Object.keys(_labAktif).length === 0) {
-        _labAktif = { lab_gds: true, lab_chol: true, lab_ua: true };
+    if (Object.keys(parsed).length === 0) {
+        parsed = { lab_gds: true, lab_chol: true, lab_ua: true };
     }
-    _renderLabToggles();
-    // Simpan ke window global agar page-medis bisa pakai
-    window._labAktif = _labAktif;
+    window._labAktif = parsed;
+    // _renderLabToggles() DIHAPUS — fungsi ini sudah tidak ada karena lab
+    // dikelola di halaman Tarif & Biaya sebagai single source of truth.
 }
 
 // ════════════════════════════════════════
@@ -1176,7 +1179,7 @@ async function simpanSemuaSettings() {
     try {
         await sb_saveSettings(payload);
         localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess));
-        window._labAktif = _labAktif;
+        window._labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
         _terapkanSettingsRuntime(payload, dokterPayload);
         _setVal('cfg_ss_client_secret', '');
         showSettingsBanner("✅ Semua pengaturan berhasil disimpan!", "success");
