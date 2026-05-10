@@ -173,11 +173,32 @@ function renderDaftarTarif() {
         if (kat === 'Laboratorium') {
             return _renderLabKategori(items);
         }
+        const activeCount = items.filter(t => t.aktif).length;
         return `
         <div style="margin-bottom:16px;">
-            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
-                        color:var(--text-muted);margin-bottom:8px;padding:0 2px;">
-                ${KAT_ICON[kat]||'📌'} ${kat}
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                        margin-bottom:8px;padding:0 2px;flex-wrap:wrap;gap:6px;">
+                <div style="font-size:11px;font-weight:800;text-transform:uppercase;
+                             letter-spacing:.6px;color:var(--text-muted);">
+                    ${KAT_ICON[kat]||'📌'} ${kat}
+                    <span style="font-size:9.5px;background:rgba(var(--primary-rgb,37,99,235),0.08);
+                                 color:var(--primary);border-radius:20px;padding:1px 7px;
+                                 font-weight:700;margin-left:4px;">${activeCount}/${items.length} aktif</span>
+                </div>
+                <div style="display:flex;gap:5px;">
+                    <button onclick="toggleSemuaTarifKategori('${kat}', true)"
+                        style="padding:3px 8px;background:rgba(5,150,105,0.08);color:#059669;
+                               border:1px solid rgba(5,150,105,0.25);border-radius:7px;
+                               font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                        ✅ Aktifkan Semua
+                    </button>
+                    <button onclick="toggleSemuaTarifKategori('${kat}', false)"
+                        style="padding:3px 8px;background:rgba(100,116,139,0.08);color:#64748b;
+                               border:1px solid rgba(100,116,139,0.2);border-radius:7px;
+                               font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                        ⏸️ Nonaktifkan Semua
+                    </button>
+                </div>
             </div>
             ${items.map(t => _htmlTarifRow(t)).join('')}
         </div>`;
@@ -230,9 +251,26 @@ function _renderLabKategori(allLabItems) {
 
     return `
     <div style="margin-bottom:16px;">
-        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
-                    color:var(--text-muted);margin-bottom:8px;padding:0 2px;">
-            🔬 Laboratorium
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    margin-bottom:8px;padding:0 2px;flex-wrap:wrap;gap:6px;">
+            <div style="font-size:11px;font-weight:800;text-transform:uppercase;
+                         letter-spacing:.6px;color:var(--text-muted);">
+                🔬 Laboratorium
+            </div>
+            <div style="display:flex;gap:5px;">
+                <button onclick="toggleSemuaTarifKategori('Laboratorium', true)"
+                    style="padding:3px 8px;background:rgba(5,150,105,0.08);color:#059669;
+                           border:1px solid rgba(5,150,105,0.25);border-radius:7px;
+                           font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                    ✅ Aktifkan Semua
+                </button>
+                <button onclick="toggleSemuaTarifKategori('Laboratorium', false)"
+                    style="padding:3px 8px;background:rgba(100,116,139,0.08);color:#64748b;
+                           border:1px solid rgba(100,116,139,0.2);border-radius:7px;
+                           font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                    ⏸️ Nonaktifkan Semua
+                </button>
+            </div>
         </div>
         ${subGrupHtml}
         ${extrasHtml}
@@ -291,10 +329,32 @@ function _htmlTarifRow(t) {
     </div>`;
 }
 
+/** Kumpulkan state accordion lab yang sedang terbuka sebelum re-render */
+function _getOpenLabGroups() {
+    const open = new Set();
+    LAB_SUB_GROUPS.forEach(grp => {
+        const el = document.getElementById(`labgrp_body_biaya_${grp.id}`);
+        if (el && el.style.display !== 'none') open.add(grp.id);
+    });
+    return open;
+}
+
+/** Restore state accordion lab setelah re-render */
+function _restoreOpenLabGroups(openSet) {
+    openSet.forEach(id => {
+        const body  = document.getElementById(`labgrp_body_biaya_${id}`);
+        const arrow = document.getElementById(`labgrp_arrow_biaya_${id}`);
+        if (body)  body.style.display  = 'block';
+        if (arrow) arrow.textContent   = '▼';
+    });
+}
+
 /** Toggle aktif/nonaktif langsung dari baris tanpa buka modal */
 async function toggleAktifTarif(id, aktif) {
     const t = window._tarifCache.find(x => String(x.id) === String(id));
     if (!t) return;
+    // Catat accordion lab yang sedang terbuka sebelum re-render
+    const openGroups = _getOpenLabGroups();
     // Update UI optimistis dulu
     const row = document.getElementById(`tarifrow_${id}`);
     if (row) row.style.opacity = '0.5';
@@ -302,6 +362,8 @@ async function toggleAktifTarif(id, aktif) {
         await sb_saveTarif({ ...t, aktif });
         await _refreshTarifCache();
         renderDaftarTarif();
+        // Kembalikan accordion yang tadinya terbuka
+        _restoreOpenLabGroups(openGroups);
         // Refresh chip page medis jika sudah terbuka
         if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
         if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
@@ -310,6 +372,32 @@ async function toggleAktifTarif(id, aktif) {
         showToast('❌ Gagal update status: ' + (e.message || ''), 'error');
         await _refreshTarifCache();
         renderDaftarTarif();
+        _restoreOpenLabGroups(openGroups);
+    }
+}
+
+/** Toggle semua tarif di satu kategori sekaligus */
+async function toggleSemuaTarifKategori(kategori, aktif) {
+    const items = window._tarifCache.filter(t => t.kategori === kategori);
+    if (!items.length) return;
+    const openGroups = _getOpenLabGroups();
+    try {
+        await Promise.all(items.map(t => sb_saveTarif({ ...t, aktif })));
+        await _refreshTarifCache();
+        renderDaftarTarif();
+        _restoreOpenLabGroups(openGroups);
+        showToast(
+            `${aktif ? '✅' : '⏸️'} Semua ${items.length} item "${kategori}" ${aktif ? 'diaktifkan' : 'dinonaktifkan'}`,
+            aktif ? 'success' : 'info'
+        );
+        if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
+        if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
+        if (typeof _renderSectionTindakan === 'function') _renderSectionTindakan();
+    } catch(e) {
+        showToast('❌ Gagal update: ' + (e.message || ''), 'error');
+        await _refreshTarifCache();
+        renderDaftarTarif();
+        _restoreOpenLabGroups(openGroups);
     }
 }
 
@@ -389,6 +477,10 @@ async function simpanTarif() {
         await _refreshTarifCache();
         renderDaftarTarif();
         showToast('✅ Tarif berhasil disimpan', 'success');
+        // BUG-3 FIX: Refresh chip di page medis agar item baru langsung muncul
+        if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
+        if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
+        if (typeof _renderSectionTindakan === 'function') _renderSectionTindakan();
     } catch(e) {
         showToast('❌ Gagal menyimpan: ' + (e.message || ''), 'error');
     } finally {
