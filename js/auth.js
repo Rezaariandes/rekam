@@ -294,7 +294,8 @@ function canAccessMedis() {
     }
     // Cek lewat currentAccess jika sudah load dari settings.js
     if (window._currentAccess) {
-        if (!window._currentAccess.includes('mod_pemeriksaan_ttv') &&
+        // Bug 4 Fix: ID yang benar adalah mod_medis_ttv, bukan mod_pemeriksaan_ttv
+        if (!window._currentAccess.includes('mod_medis_ttv') &&
             !window._currentAccess.includes('mod_diagnosa')) {
             if (typeof showToast === 'function')
                 showToast("⛔ Akses ditolak untuk jabatan " + loggedInUser.jabatan, "error");
