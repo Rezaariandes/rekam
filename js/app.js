@@ -233,13 +233,8 @@ async function initApp() {
             $('infoTglPemeriksaan').style.display = 'block';
         }
 
-        // BUG FIX (chip invoice/resep di riwayat hilang saat refresh):
-        // Riwayat dirender SEMENTARA dari localStorage dulu agar UI tidak kosong,
-        // tapi akan di-render ulang setelah loadRuntimeSettings selesai
-        // (saat _biayaAktif & _stokAktif sudah terisi) — lihat blok di bawah.
         try {
             currentRiwayat = JSON.parse(localStorage.getItem('cP_riwayat') || '[]');
-            // Render awal tanpa chip invoice/resep (flag belum diset) — akan diulang setelah settings dimuat
             if (typeof renderRiwayatList === 'function')
                 renderRiwayatList(currentRiwayat, 'historyListMedis');
         } catch (e) {
@@ -295,6 +290,8 @@ async function initApp() {
         checkLabAlert();
 
         switchPage('pageMedis', null);
+        // Terapkan lock UI setelah restore — setTimeout agar DOM & kunjungan.js siap
+        setTimeout(function(){ if (typeof _applyLockUI === 'function') _applyLockUI(); }, 100);
     } else {
         if (typeof clearSession === 'function') clearSession();
     }
@@ -318,26 +315,6 @@ async function initApp() {
 
         // Render dynamic lab section setelah lab_aktif & _tarifCache tersedia
         if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
-
-        // BUG FIX (resep hilang & chip invoice/resep di riwayat hilang saat refresh):
-        // _stokAktif & _biayaAktif baru terisi setelah loadRuntimeSettings selesai.
-        // Render ulang riwayat dan load resep di sini agar chip tampil dengan benar.
-        if (localStorage.getItem('activePage') === 'pageMedis') {
-            // Re-render riwayat agar chip Invoice & Resep muncul (flag sudah terisi)
-            if (typeof renderRiwayatList === 'function' && currentRiwayat && currentRiwayat.length > 0) {
-                renderRiwayatList(currentRiwayat, 'historyListMedis');
-            }
-            // Load resep lama dari DB (hanya jika modul stok aktif & ada kunjungan)
-            if (window._stokAktif && currentKunjunganId && typeof loadResepByKunjungan === 'function') {
-                loadResepByKunjungan(currentKunjunganId).catch(e =>
-                    console.warn('[Klikpro] Gagal load resep saat refresh:', e.message)
-                );
-            }
-            // Re-render section resep jika stok aktif (karena saat render pertama flag masih false)
-            if (window._stokAktif && typeof renderSectionResep === 'function') {
-                renderSectionResep(currentKunjunganId || null);
-            }
-        }
     } catch(e) {
         console.warn('[Klikpro] Settings gagal, lanjut dengan default');
     }

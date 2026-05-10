@@ -483,6 +483,8 @@ async function bukaRekamMedisHariIni(kId) {
     checkLabAlert();
 
     switchPage('pageMedis', null);
+    // Terapkan lock UI setelah halaman aktif — setTimeout agar DOM render dulu
+    setTimeout(_applyLockUI, 50);
 }
 
 // ── ESCAPE HTML ──
@@ -937,6 +939,89 @@ function _cetakResepIsolated() {
 }
 
 // ════════════════════════════════════════════════════════
+//  EDIT LOCK — kunjungan > 2 hari tidak bisa disimpan
+// ════════════════════════════════════════════════════════
+
+/**
+ * Kembalikan true jika kunjungan yang sedang dibuka sudah lewat 2 hari
+ * (tanggal kunjungan < hari ini - 2 hari), sehingga tidak boleh diedit.
+ * Kunjungan BARU (currentKunjunganId null) selalu false (tidak terkunci).
+ */
+function _isKunjunganTerkunci() {
+    if (!currentKunjunganId || currentKunjunganId === 'null') return false;
+
+    let tglStr = null;
+    const kCache = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : [])
+        .find(x => x.id === currentKunjunganId);
+    if (kCache && kCache.tgl) {
+        tglStr = kCache.tgl; // format YYYY-MM-DD
+    } else {
+        // Fallback: baca cTglEdit "Tgl: DD/MM/YYYY" dari localStorage
+        const raw = localStorage.getItem('cTglEdit') || '';
+        const m = raw.replace('Tgl: ', '').trim();
+        if (m && m.includes('/')) {
+            const p = m.split('/');
+            if (p.length === 3) tglStr = `${p[2]}-${p[1]}-${p[0]}`;
+        }
+    }
+
+    if (!tglStr) return false;
+    const tglKunjungan = new Date(tglStr);
+    if (isNaN(tglKunjungan)) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    tglKunjungan.setHours(0, 0, 0, 0);
+
+    return Math.floor((today - tglKunjungan) / 86400000) > 2;
+}
+
+/**
+ * Terapkan visual lock ke semua tombol simpan di pageMedis.
+ * Dipanggil setelah switchPage('pageMedis') dan saat initApp restore pageMedis.
+ */
+function _applyLockUI() {
+    const terkunci = _isKunjunganTerkunci();
+
+    // ── Tombol utama Simpan Rekam Medis ──
+    const btnSave = $('btnSave');
+    if (btnSave) {
+        btnSave.disabled = terkunci;
+        if (terkunci) {
+            btnSave.innerText = '🔒 Rekam Medis Terkunci (> 2 Hari)';
+            btnSave.style.cssText = 'width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:800;background:#e2e8f0;color:#94a3b8;border:none;cursor:not-allowed;';
+        } else {
+            btnSave.innerText = '✓ Simpan Rekam Medis';
+            btnSave.style.cssText = '';
+        }
+    }
+
+    // ── Tombol mini save di tiap section ──
+    document.querySelectorAll('._mini-save-btn').forEach(b => {
+        b.disabled = terkunci;
+        b.style.opacity     = terkunci ? '0.38' : '';
+        b.style.cursor      = terkunci ? 'not-allowed' : '';
+        b.style.borderStyle = terkunci ? 'dashed' : '';
+    });
+
+    // ── Banner notifikasi di atas pageMedis ──
+    const LOCK_ID = 'pageMedisLockBanner';
+    let banner = $(LOCK_ID);
+    if (terkunci) {
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = LOCK_ID;
+            banner.style.cssText = 'position:sticky;top:0;z-index:200;padding:9px 16px;background:rgba(239,68,68,0.1);border-bottom:1.5px solid rgba(239,68,68,0.3);color:#dc2626;font-size:12px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:8px;border-radius:0 0 10px 10px;';
+            banner.innerHTML = '🔒 Rekam medis ini sudah lebih dari 2 hari dan tidak dapat diubah.';
+            const page = $('pageMedis');
+            if (page) page.insertBefore(banner, page.firstChild);
+        }
+    } else {
+        if (banner) banner.remove();
+    }
+}
+
+// ════════════════════════════════════════════════════════
 //  SIMPAN REKAM MEDIS — saveAll()
 //  Dipanggil dari tombol "✓ Simpan Rekam Medis" di page-medis.html
 //  Mengumpulkan semua nilai form dan mengirim ke sb_saveKunjungan()
@@ -946,6 +1031,12 @@ async function saveAll(showInvoice = true) {
     if (btn) { btn.disabled = true; btn.innerText = '⏳ Menyimpan...'; }
 
     try {
+        // ── Cek edit lock (kunjungan > 2 hari) ──
+        if (_isKunjunganTerkunci()) {
+            showToast('🔒 Rekam medis ini sudah lebih dari 2 hari dan tidak dapat diubah.', 'warning');
+            return;
+        }
+
         // ── Validasi minimal ──
         if (!currentPasienId || currentPasienId === 'null') {
             showToast('⚠️ Data pasien tidak ditemukan. Daftar ulang dari halaman Daftar.', 'warning');
