@@ -261,6 +261,17 @@ function openModalSuratDinamis(modalId, namaSurat) {
 // ════════════════════════════════════════
 
 function renderMedisDinamis() {
+    // BUG FIX (refresh): Jika _tarifCache kosong, fetch dulu sebelum render
+    // agar elemen DOM benar-benar terbentuk.
+    if ((!window._tarifCache || window._tarifCache.length === 0)
+        && window._biayaAktif && typeof sb_getTarif === 'function') {
+        sb_getTarif().then(tarif => {
+            window._tarifCache = tarif || [];
+            try { _renderSectionPemeriksaanExtra(); } catch(e) {}
+            try { _renderSectionAdministrasiExtra(); } catch(e) {}
+        }).catch(() => {});
+        return;
+    }
     try { _renderSectionPemeriksaanExtra(); } catch(e) {
         console.warn('[medis-dinamis] Gagal render pemeriksaan extra:', e.message);
     }
@@ -499,9 +510,18 @@ function loadMedisDinamisFromPayload(reqLabObj) {
                         ? JSON.parse(kunjunganData.req_lab)
                         : kunjunganData.req_lab;
                 }
-                // Render dulu baru isi, agar elemen sudah ada di DOM
-                renderMedisDinamis();
-                loadMedisDinamisFromPayload(reqObj);
+                // BUG FIX (refresh): Pastikan _tarifCache terisi dulu agar elemen
+                // DOM (textarea pemx_, checkbox adm_) sudah dibuat oleh renderMedisDinamis()
+                // sebelum loadMedisDinamisFromPayload() mencoba mengisinya.
+                const _doLoad = () => {
+                    renderMedisDinamis();
+                    loadMedisDinamisFromPayload(reqObj);
+                };
+                if (typeof window._ensureTarifCacheThen === 'function') {
+                    window._ensureTarifCacheThen(_doLoad);
+                } else {
+                    _doLoad();
+                }
             } catch(e) {
                 console.warn('[medis-dinamis] Gagal load dari kunjungan:', e.message);
             }

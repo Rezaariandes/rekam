@@ -18,6 +18,27 @@
 //  Inisialisasi aplikasi, navigasi halaman, onload
 // ════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════
+//  UTILITY — Pastikan _tarifCache terisi sebelum jalankan callback.
+//  Dipakai oleh semua modul (penunjang, tindakan, medis-dinamis).
+//  Jika cache sudah ada: langsung cb().
+//  Jika belum & biayaAktif: fetch dulu, simpan, baru cb().
+// ════════════════════════════════════════════════════════
+window._ensureTarifCacheThen = function(cb) {
+    if (window._tarifCache && window._tarifCache.length > 0) {
+        cb();
+        return;
+    }
+    if (!window._biayaAktif || typeof sb_getTarif !== 'function') {
+        cb();
+        return;
+    }
+    sb_getTarif().then(tarif => {
+        window._tarifCache = tarif || [];
+        cb();
+    }).catch(() => cb());
+};
+
 // ── NAVIGASI HALAMAN ──
 function switchPage(id, navEl) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -231,6 +252,11 @@ async function initApp() {
                     document.querySelectorAll('[data-save="true"]').forEach(el =>
                         localStorage.setItem('rme_' + el.id, el.value)
                     );
+                    // Safety net: pastikan section dinamis (dokumen/admin)
+                    // ikut dirender setelah _tarifCache tersedia
+                    if (typeof renderMedisDinamis === 'function') {
+                        window._ensureTarifCacheThen(() => renderMedisDinamis());
+                    }
                 } else {
                     // Fallback ke autosave localStorage jika fetch gagal
                     if (typeof loadAutosave === 'function') loadAutosave();

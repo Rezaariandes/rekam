@@ -486,47 +486,36 @@ function _tambahThumb(fotoArea, penunjangId, url) {
 //  RESTORE STATE — dipanggil oleh pem-labor.js
 // ════════════════════════════════════════════════════════
 function _refreshPenunjangChipUI() {
-    const penunjangList = _getPenunjangList();
+    // Gunakan utility terpusat — pastikan _tarifCache terisi dulu,
+    // baru render chip dan apply state _reqLab yang sudah ada.
+    const _doRefresh = () => {
+        const penunjangList = _getPenunjangList();
+        if (penunjangList.length === 0) return;
 
-    // BUG FIX (refresh): Jika _tarifCache belum terisi, chip belum ada di DOM.
-    // Jalankan renderSectionPermintaanLab() yang sudah bisa auto-fetch tarif,
-    // lalu jadwalkan refresh ulang setelah render selesai.
-    if (penunjangList.length === 0 && window._biayaAktif && typeof sb_getTarif === 'function') {
-        sb_getTarif().then(tarif => {
-            window._tarifCache = tarif || [];
-            const container = document.getElementById('sectionPermintaanLab');
-            if (container) _renderPenunjangChips(container);
-            // Update visual chip setelah render
-            _getPenunjangList().forEach(p => {
-                const btn = document.getElementById('chip_' + p.id);
-                if (!btn) return;
-                const active = !!window._reqLab[p.id];
-                btn.style.background  = active ? 'var(--primary,#2563eb)' : '#fff';
-                btn.style.borderColor = active ? 'var(--primary,#2563eb)' : '#e2e8f0';
-                btn.style.color       = active ? '#fff' : 'var(--text,#334155)';
-            });
-            _renderSemuaPanel();
-        }).catch(() => {});
-        return;
-    }
-
-    // Jika chip sudah ada di DOM, cukup update visual & panel
-    const anyChipExists = penunjangList.some(p => !!document.getElementById('chip_' + p.id));
-    if (!anyChipExists && penunjangList.length > 0) {
-        // Chip belum dirender (misalnya setelah _renderSectionLabDinamic belum sempat jalan)
         const container = document.getElementById('sectionPermintaanLab');
-        if (container) _renderPenunjangChips(container);
-    }
+        // Jika chip belum ada di DOM, render ulang section dulu
+        const anyChipExists = penunjangList.some(p => !!document.getElementById('chip_' + p.id));
+        if (!anyChipExists && container) {
+            _renderPenunjangChips(container);
+        }
 
-    penunjangList.forEach(p => {
-        const btn = document.getElementById('chip_' + p.id);
-        if (!btn) return;
-        const active = !!window._reqLab[p.id];
-        btn.style.background  = active ? 'var(--primary,#2563eb)' : '#fff';
-        btn.style.borderColor = active ? 'var(--primary,#2563eb)' : '#e2e8f0';
-        btn.style.color       = active ? '#fff' : 'var(--text,#334155)';
-    });
-    _renderSemuaPanel();
+        // Update visual chip sesuai state _reqLab
+        penunjangList.forEach(p => {
+            const btn = document.getElementById('chip_' + p.id);
+            if (!btn) return;
+            const active = !!window._reqLab[p.id];
+            btn.style.background  = active ? 'var(--primary,#2563eb)' : '#fff';
+            btn.style.borderColor = active ? 'var(--primary,#2563eb)' : '#e2e8f0';
+            btn.style.color       = active ? '#fff' : 'var(--text,#334155)';
+        });
+        _renderSemuaPanel();
+    };
+
+    if (typeof window._ensureTarifCacheThen === 'function') {
+        window._ensureTarifCacheThen(_doRefresh);
+    } else {
+        _doRefresh();
+    }
 }
 
 // ════════════════════════════════════════════════════════

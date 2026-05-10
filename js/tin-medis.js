@@ -146,44 +146,27 @@ function _toggleTindakan(id) {
 
 // ── Refresh visual semua chip tindakan (dipanggil oleh pem-labor.js) ──
 function _refreshTindakanChipUI() {
-    const tindakanList = _getTindakanList();
+    // Gunakan utility terpusat — pastikan _tarifCache terisi dulu,
+    // baru render chip dan apply state _reqTindakan yang sudah ada.
+    const _doRefresh = () => {
+        const container = document.getElementById('sectionTindakan');
+        if (container) _renderSectionTindakan();
 
-    // BUG FIX (refresh): Jika _tarifCache belum terisi, chip belum ada di DOM.
-    // Fetch tarif dulu, lalu render + update state.
-    if (tindakanList.length === 0 && window._biayaAktif && typeof sb_getTarif === 'function') {
-        sb_getTarif().then(tarif => {
-            window._tarifCache = tarif || [];
-            const container = document.getElementById('sectionTindakan');
-            if (container) _renderSectionTindakan();
-            _getTindakanList().forEach(t => {
-                const btn = document.getElementById('chip_' + t.id);
-                if (!btn) return;
-                const active = !!window._reqTindakan[t.id];
-                btn.style.background  = active ? '#dc2626' : '#fff';
-                btn.style.borderColor = active ? '#dc2626' : '#e2e8f0';
-                btn.style.color       = active ? '#fff' : 'var(--text,#334155)';
-            });
-        }).catch(() => {});
-        return;
+        _getTindakanList().forEach(t => {
+            const btn = document.getElementById('chip_' + t.id);
+            if (!btn) return;
+            const active = !!window._reqTindakan[t.id];
+            btn.style.background  = active ? '#dc2626' : '#fff';
+            btn.style.borderColor = active ? '#dc2626' : '#e2e8f0';
+            btn.style.color       = active ? '#fff' : 'var(--text,#334155)';
+        });
+    };
+
+    if (typeof window._ensureTarifCacheThen === 'function') {
+        window._ensureTarifCacheThen(_doRefresh);
+    } else {
+        _doRefresh();
     }
-
-    const container = document.getElementById('sectionTindakan');
-
-    // BUG FIX: jika #sectionTindakan ada di DOM tapi chip belum dirender
-    // (terjadi setelah page refresh / buka kunjungan lama), render ulang dulu.
-    if (container) {
-        _renderSectionTindakan();
-    }
-
-    // Update gaya chip sesuai state terkini
-    _getTindakanList().forEach(t => {
-        const btn = document.getElementById('chip_' + t.id);
-        if (!btn) return;
-        const active = !!window._reqTindakan[t.id];
-        btn.style.background  = active ? '#dc2626' : '#fff';
-        btn.style.borderColor = active ? '#dc2626' : '#e2e8f0';
-        btn.style.color       = active ? '#fff' : 'var(--text,#334155)';
-    });
 }
 
 // ════════════════════════════════════════════════════════
