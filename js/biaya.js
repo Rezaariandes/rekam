@@ -25,141 +25,70 @@ const KAT_ICON = {
     'Lainnya':      '📌'
 };
 
-// ── Sub-grup Laboratorium — untuk pengelompokan di Page Biaya ──
-const LAB_SUB_GROUPS = [
-    { id: 'lab_dasar',       label: '🩸 Lab Dasar',        items: ['GDS', 'Kolesterol', 'Asam Urat'] },
-    { id: 'lab_darah_rutin', label: '🔴 Darah Rutin',      items: ['Hemoglobin (HB)', 'Trombosit', 'Leukosit', 'Eritrosit', 'Hematokrit'] },
-    { id: 'lab_triple',      label: '🧬 Triple Eliminasi', items: ['HIV', 'Sifilis', 'Hepatitis B'] },
-    { id: 'lab_lemak',       label: '💧 Profil Lemak',     items: ['HDL', 'LDL', 'Trigliserida'] },
-    { id: 'lab_gula',        label: '🍬 Gula Darah',       items: ['GDP', 'HbA1c'] },
-    { id: 'lab_hati',        label: '🫀 Fungsi Hati',      items: ['SGOT', 'SGPT'] },
-    { id: 'lab_ginjal',      label: '🫘 Fungsi Ginjal',    items: ['Ureum', 'Creatinin'] }
-];
+// ── Cache sub-kategori dari DB (diisi oleh _refreshSubKategoriCache()) ──
+// Struktur: { 'Tindakan': [{id, nama, urutan}, ...], 'Penunjang': [...], ... }
+if (typeof window._subKatCache === 'undefined') window._subKatCache = {};
 
-// ── Sub-grup Penunjang — Radiologi & Pencitraan ──
-const PENUNJANG_SUB_GROUPS = [
-    {
-        id: 'penunjang_radiologi',
-        label: '🩻 Pencitraan / Radiologi',
-        items: ['X-Ray / Rontgen', 'USG', 'CT Scan', 'MRI', 'Mammografi', 'Fluoroskopi', 'PET Scan', 'Bone Densitometry', 'Intervensi Radiologi']
-    },
-    {
-        id: 'penunjang_ekg',
-        label: '❤️ Kardiologi & EKG',
-        items: ['EKG / ECG', 'Echocardiography', 'Holter Monitor', 'Stress Test / Treadmill']
-    },
-    {
-        id: 'penunjang_endoskopi',
-        label: '🔬 Endoskopi & Prosedur',
-        items: ['Endoskopi', 'Kolonoskopi', 'Spirometri', 'Audiometri']
-    }
-];
-
-// ── Sub-grup Tindakan ──
-const TINDAKAN_SUB_GROUPS = [
-    {
-        id: 'tindakan_bedah_minor',
-        label: '🔪 Bedah Minor',
-        items: ['Hecting / Jahit Luka', 'Buka Jahitan', 'Insisi Abses', 'Ekstraksi Kuku', 'Ekstraksi Benda Asing', 'Sirkumsisi']
-    },
-    {
-        id: 'tindakan_perawatan',
-        label: '🩹 Perawatan Luka',
-        items: ['Ganti Balut', 'Debridement', 'Perawatan Luka Bakar', 'Nekrotomi']
-    },
-    {
-        id: 'tindakan_kb',
-        label: '🌿 KB & Reproduksi',
-        items: ['Pasang IUD', 'Lepas IUD', 'Pasang Implan', 'Lepas Implan', 'Suntik KB', 'Pap Smear']
-    },
-    {
-        id: 'tindakan_umum',
-        label: '⚕️ Tindakan Umum',
-        items: ['Nebulisasi', 'Pemasangan Kateter', 'Pemasangan Infus', 'Injeksi / Suntik', 'Suction / Penghisapan', 'Rekam Medis Baru']
-    }
-];
-
-// ── Sub-grup Pemeriksaan ──
-const PEMERIKSAAN_SUB_GROUPS = [
-    {
-        id: 'periksa_umum',
-        label: '🩺 Konsultasi & Umum',
-        items: ['Konsultasi Dokter', 'Konsultasi Dokter Spesialis', 'Pemeriksaan Fisik', 'Pemeriksaan Anak', 'Pemeriksaan Ibu Hamil (ANC)', 'Kunjungan Rumah']
-    },
-    {
-        id: 'periksa_gigi',
-        label: '🦷 Gigi & Mulut',
-        items: ['Konsultasi Gigi', 'Tambal Gigi', 'Cabut Gigi', 'Scaling / Pembersihan Karang Gigi', 'Perawatan Saluran Akar']
-    },
-    {
-        id: 'periksa_mata',
-        label: '👁️ Mata',
-        items: ['Pemeriksaan Visus', 'Tonometri', 'Pemeriksaan Fundus']
-    }
-];
-
-// ── Sub-grup Obat ──
-const OBAT_SUB_GROUPS = [
-    {
-        id: 'obat_umum',
-        label: '💊 Obat Umum',
-        items: ['Obat Generik', 'Obat Paten', 'Vitamin & Suplemen']
-    },
-    {
-        id: 'obat_kronis',
-        label: '💉 Obat Kronis & Khusus',
-        items: ['Obat Hipertensi', 'Obat Diabetes', 'Obat Kolesterol', 'Obat TB']
-    }
-];
-
-// ── Sub-grup Administrasi ──
-const ADMIN_SUB_GROUPS = [
-    {
-        id: 'admin_registrasi',
-        label: '📝 Registrasi & Pendaftaran',
-        items: ['Biaya Pendaftaran', 'Rekam Medis Baru', 'Administrasi Rawat Inap']
-    },
-    {
-        id: 'admin_surat',
-        label: '📄 Surat & Dokumen',
-        items: ['Surat Keterangan Sakit', 'Surat Keterangan Sehat', 'Surat Rujukan', 'Resume Medis', 'Legalisasi Dokumen']
-    }
-];
-
-// Mapping kategori → sub-group config
-const KATEGORI_SUB_GROUPS = {
-    'Laboratorium': LAB_SUB_GROUPS,
-    'Penunjang':    PENUNJANG_SUB_GROUPS,
-    'Tindakan':     TINDAKAN_SUB_GROUPS,
-    'Pemeriksaan':  PEMERIKSAAN_SUB_GROUPS,
-    'Obat':         OBAT_SUB_GROUPS,
-    'Administrasi': ADMIN_SUB_GROUPS,
-};
-
-// State accordion (key: groupId → bool open)
+// State accordion (key: sub_kategori_id → bool open)
 if (typeof window._accordionState === 'undefined') window._accordionState = {};
 
 // ════════════════════════════════════════
 //  INIT HALAMAN TARIF
 // ════════════════════════════════════════
 async function initPageBiaya() {
-    await _refreshTarifCache();
+    await Promise.all([
+        _refreshTarifCache(),
+        _refreshSubKategoriCache()
+    ]);
     renderDaftarTarif();
 }
 
 async function _refreshTarifCache() {
     try {
-        window._tarifCache = await sb_getTarif();
+        // Gunakan view v_tarif_dengan_sub agar sub_kategori_id & nama sudah ter-join
+        const { data, error } = await window._sb
+            .from('v_tarif_dengan_sub')
+            .select('*');
+        if (error) throw error;
+        window._tarifCache = data || [];
         if (window._tarifCache.length === 0) {
             showToast('⚠️ Belum ada tarif. Jalankan seed_tarif_layanan.sql di Supabase.', 'error');
         }
     } catch(e) {
-        showToast('❌ Gagal memuat tarif', 'error');
+        // Fallback ke sb_getTarif() jika view belum dibuat
+        try {
+            window._tarifCache = await sb_getTarif();
+        } catch(e2) {
+            showToast('❌ Gagal memuat tarif', 'error');
+        }
+    }
+}
+
+async function _refreshSubKategoriCache() {
+    try {
+        const { data, error } = await window._sb
+            .from('tarif_sub_kategori')
+            .select('id, kategori, nama, urutan')
+            .eq('aktif', true)
+            .order('kategori')
+            .order('urutan');
+        if (error) throw error;
+
+        // Kelompokkan per kategori: { 'Tindakan': [...], 'Penunjang': [...] }
+        window._subKatCache = {};
+        (data || []).forEach(row => {
+            if (!window._subKatCache[row.kategori]) window._subKatCache[row.kategori] = [];
+            window._subKatCache[row.kategori].push(row);
+        });
+    } catch(e) {
+        // Tabel belum ada — accordion akan tetap tampil per-kategori saja
+        console.warn('tarif_sub_kategori belum ada di DB:', e.message);
+        window._subKatCache = {};
     }
 }
 
 // ════════════════════════════════════════
-//  RENDER DAFTAR TARIF (dengan accordion)
+//  RENDER DAFTAR TARIF (dengan accordion dari DB)
 // ════════════════════════════════════════
 function renderDaftarTarif() {
     const container = document.getElementById('daftarTarif');
@@ -209,14 +138,16 @@ function renderDaftarTarif() {
         return;
     }
 
-    // Jika ada tab aktif dan ada sub-group untuk kategori ini → tampilkan accordion
-    if (_activeKatTab && KATEGORI_SUB_GROUPS[_activeKatTab]) {
-        container.innerHTML = _renderAccordionByKategori(_activeKatTab, filtered);
+    const subGroups = _activeKatTab ? (window._subKatCache[_activeKatTab] || []) : [];
+
+    if (_activeKatTab && subGroups.length > 0) {
+        // Tab kategori tertentu + ada sub-grup di DB → accordion per sub-grup
+        container.innerHTML = _renderAccordionBySubKat(_activeKatTab, filtered, subGroups);
     } else if (!_activeKatTab) {
-        // Tab "Semua" — kelompokkan per kategori, masing-masing jadi accordion grup
+        // Tab "Semua" → accordion per kategori
         container.innerHTML = _renderAccordionSemua(filtered);
     } else {
-        // Kategori tanpa sub-grup (Lainnya, dll) — tampil flat seperti semula
+        // Kategori tanpa sub-grup (Lainnya, atau belum ada di DB) → flat list
         container.innerHTML = filtered.map(t => _renderTarifRow(t)).join('');
     }
 }
@@ -229,9 +160,9 @@ function _renderAccordionSemua(filtered) {
         byKat[t.kategori].push(t);
     });
     return Object.keys(byKat).sort().map(kat => {
-        const groupId = 'grp_all_' + kat;
-        const isOpen  = window._accordionState[groupId] !== false; // default terbuka
-        const count   = byKat[kat].length;
+        const groupId    = 'grp_all_' + kat;
+        const isOpen     = window._accordionState[groupId] === true; // default tertutup
+        const count      = byKat[kat].length;
         const aktifCount = byKat[kat].filter(t => t.aktif).length;
         return _accordionShell({
             groupId,
@@ -244,38 +175,39 @@ function _renderAccordionSemua(filtered) {
     }).join('');
 }
 
-// ─── Render accordion: Tab kategori tertentu dengan sub-grup ─
-function _renderAccordionByKategori(kat, filtered) {
-    const subGroups = KATEGORI_SUB_GROUPS[kat];
-    const matched   = new Set();
+// ─── Render accordion: berdasarkan sub-kategori dari DB ──────
+function _renderAccordionBySubKat(kat, filtered, subGroups) {
+    const matched = new Set();
     let html = '';
 
     subGroups.forEach(sg => {
-        const items = filtered.filter(t => sg.items.includes(t.nama));
+        // Cocokkan tarif berdasarkan sub_kategori_id (dari view v_tarif_dengan_sub)
+        const items = filtered.filter(t => t.sub_kategori_id === sg.id);
         items.forEach(t => matched.add(t.id));
 
-        // Tampilkan accordion meski items kosong (siap diisi nanti)
-        const groupId  = sg.id;
-        const isOpen   = window._accordionState[groupId] !== false;
+        const groupId    = 'sg_' + sg.id;
+        const isOpen     = window._accordionState[groupId] === true; // default tertutup
         const aktifCount = items.filter(t => t.aktif).length;
 
         html += _accordionShell({
             groupId,
-            label: sg.label,
+            label: sg.nama,
             count: items.length,
             aktifCount,
             isOpen,
             bodyHtml: items.length > 0
                 ? items.map(t => _renderTarifRow(t)).join('')
-                : `<div style="text-align:center;color:#94a3b8;padding:14px 0;font-size:12px;">Belum ada tarif untuk kelompok ini</div>`
+                : `<div style="text-align:center;color:#94a3b8;padding:14px 0;font-size:12px;">
+                       Belum ada tarif — tambah via tombol "➕ Tambah Manual" lalu pilih kategori ini
+                   </div>`
         });
     });
 
-    // Item yang tidak masuk sub-grup mana pun → tampil di "Lainnya"
+    // Item tanpa sub_kategori_id (NULL) → masuk accordion "Lainnya"
     const unmatched = filtered.filter(t => !matched.has(t.id));
     if (unmatched.length > 0) {
-        const groupId    = kat + '_lainnya';
-        const isOpen     = window._accordionState[groupId] !== false;
+        const groupId    = 'sg_null_' + kat;
+        const isOpen     = window._accordionState[groupId] === true;
         const aktifCount = unmatched.filter(t => t.aktif).length;
         html += _accordionShell({
             groupId,
@@ -325,7 +257,6 @@ function _toggleAccordion(groupId) {
     window._accordionState[groupId] = nowOpen;
     body.style.display = nowOpen ? 'block' : 'none';
 
-    // Update ikon panah
     const btn = body.previousElementSibling;
     if (btn) {
         const arrow = btn.querySelector('span:last-child');
@@ -342,7 +273,7 @@ function _renderTarifRow(t, showKat = false) {
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
         <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:13px;${!t.aktif ? 'color:#94a3b8;' : ''}">${t.nama}</div>
-            ${showKat ? `<div style="font-size:10px;color:#94a3b8">${KAT_ICON[t.kategori] || ''} ${t.kategori}</div>` : ''}
+            ${showKat ? `<div style="font-size:10px;color:#94a3b8">${KAT_ICON[t.kategori] || ''} ${t.kategori}${t.sub_kategori_nama ? ' · ' + t.sub_kategori_nama : ''}</div>` : ''}
             ${t.keterangan ? `<div style="font-size:10px;color:#94a3b8">${t.keterangan}</div>` : ''}
         </div>
         <div style="font-weight:700;color:${t.aktif ? 'var(--primary)' : '#94a3b8'};font-size:13px;white-space:nowrap">
