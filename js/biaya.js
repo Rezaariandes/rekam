@@ -83,6 +83,25 @@ function renderDaftarTarif() {
         ? window._tarifCache.filter(t => t.kategori === _activeKatTab)
         : window._tarifCache;
 
+    // Tombol aksi massal — tampil di bawah tabs
+    let bulkEl = document.getElementById('_biayaBulkActions');
+    if (!bulkEl) {
+        bulkEl = document.createElement('div');
+        bulkEl.id = '_biayaBulkActions';
+        container.parentElement.insertBefore(bulkEl, container);
+    }
+    const labelSesi = _activeKatTab ? `"${_activeKatTab}"` : 'semua kategori';
+    bulkEl.style.cssText = 'display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;';
+    bulkEl.innerHTML = `
+        <button onclick="bulkToggleTarif(true)"
+            style="padding:5px 14px;border:1.5px solid #22c55e;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:#f0fdf4;color:#16a34a;white-space:nowrap">
+            ✅ Aktifkan semua ${_activeKatTab ? '"' + _activeKatTab + '"' : ''}
+        </button>
+        <button onclick="bulkToggleTarif(false)"
+            style="padding:5px 14px;border:1.5px solid #e2e8f0;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:#f8fafc;color:#94a3b8;white-space:nowrap">
+            ⛔ Nonaktifkan semua ${_activeKatTab ? '"' + _activeKatTab + '"' : ''}
+        </button>`;
+
     container.innerHTML = filtered.length === 0
         ? `<p style="text-align:center;color:#94a3b8;padding:32px 0">Belum ada tarif di database</p>`
         : filtered.map(t => `
@@ -113,9 +132,6 @@ function _setBiayaTab(kat) {
 // ════════════════════════════════════════
 //  FORM TAMBAH / EDIT TARIF
 // ════════════════════════════════════════
-function openAddTarif() {
-    _openTarifModal(null);
-}
 
 function openEditTarif(id) {
     const t = window._tarifCache.find(x => String(x.id) === String(id));
@@ -123,55 +139,34 @@ function openEditTarif(id) {
 }
 
 function _openTarifModal(tarif) {
-    const isEdit     = !!tarif;
-    const categories = ['Pemeriksaan','Laboratorium','Penunjang','Tindakan','Administrasi','Obat','Lainnya'];
+    if (!tarif) return;
 
     document.getElementById('_tarifModal')?.remove();
     const modal = document.createElement('div');
     modal.id = '_tarifModal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
-
-    // Saat edit: nama & kategori read-only, hanya harga & status aktif yang bisa diubah
-    // Saat tambah baru: semua field bisa diisi
-    const namaField = isEdit
-        ? `<div style="padding:8px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 10px;color:#475569">
-               ${KAT_ICON[tarif.kategori] || ''} ${tarif.nama}
-           </div>
-           <input type="hidden" id="_tf_nama" value="${tarif.nama}">`
-        : `<input id="_tf_nama" value="" placeholder="Nama layanan"
-               style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 10px;box-sizing:border-box">`;
-
-    const katField = isEdit
-        ? `<div style="padding:8px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 10px;color:#475569">
-               ${tarif.kategori}
-           </div>
-           <input type="hidden" id="_tf_kat" value="${tarif.kategori}">`
-        : `<select id="_tf_kat" style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 10px;box-sizing:border-box">
-               ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
-           </select>`;
-
-    const ketField = isEdit ? '' : `
-        <label style="font-size:12px;font-weight:600">Keterangan (opsional)</label>
-        <input id="_tf_ket" value="" placeholder="—"
-            style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 10px;box-sizing:border-box">`;
-
     modal.innerHTML = `
         <div style="background:#fff;border-radius:16px;padding:24px;width:340px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.18)">
-            <h3 style="margin:0 0 16px;font-size:16px">${isEdit ? '✏️ Edit Harga' : '➕ Tambah Tarif'}</h3>
+            <h3 style="margin:0 0 16px;font-size:16px">✏️ Edit Harga</h3>
             <label style="font-size:12px;font-weight:600">Nama Layanan</label>
-            ${namaField}
+            <div style="padding:8px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 10px;color:#475569">
+                ${KAT_ICON[tarif.kategori] || ''} ${tarif.nama}
+            </div>
+            <input type="hidden" id="_tf_nama" value="${tarif.nama}">
             <label style="font-size:12px;font-weight:600">Kategori</label>
-            ${katField}
+            <div style="padding:8px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 10px;color:#475569">
+                ${tarif.kategori}
+            </div>
+            <input type="hidden" id="_tf_kat" value="${tarif.kategori}">
             <label style="font-size:12px;font-weight:600">Harga (Rp)</label>
-            <input id="_tf_harga" type="number" value="${isEdit ? tarif.harga : ''}" placeholder="0"
+            <input id="_tf_harga" type="number" value="${tarif.harga}" placeholder="0"
                 style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 16px;box-sizing:border-box">
-            ${ketField}
             <div style="display:flex;gap:8px">
                 <button onclick="document.getElementById('_tarifModal').remove()"
                     style="flex:1;padding:10px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:13px;cursor:pointer;background:#fff">
                     Batal
                 </button>
-                <button onclick="_saveTarifFromModal(${isEdit ? "'" + tarif.id + "'" : 'null'})"
+                <button onclick="_saveTarifFromModal('${tarif.id}')"
                     style="flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;cursor:pointer;background:var(--primary);color:#fff;font-weight:700">
                     Simpan
                 </button>
@@ -184,11 +179,9 @@ async function _saveTarifFromModal(id) {
     const nama  = document.getElementById('_tf_nama').value.trim();
     const kat   = document.getElementById('_tf_kat').value;
     const harga = document.getElementById('_tf_harga').value;
-    const ketEl = document.getElementById('_tf_ket');
-    const ket   = ketEl ? ketEl.value.trim() : null;
-    // Saat edit: ambil nilai aktif dari cache agar tidak berubah
-    const existing = id ? window._tarifCache.find(x => String(x.id) === String(id)) : null;
+    const existing = window._tarifCache.find(x => String(x.id) === String(id));
     const aktif = existing ? existing.aktif : true;
+    const ket   = existing ? existing.keterangan : null;
 
     if (!nama) return showToast('❌ Nama layanan wajib diisi', 'error');
 
@@ -221,6 +214,33 @@ async function toggleAktifTarif(id, aktifBaru) {
         showToast('❌ Gagal mengubah status', 'error');
     }
 }
+
+async function bulkToggleTarif(aktifBaru) {
+    const targets = _activeKatTab
+        ? window._tarifCache.filter(t => t.kategori === _activeKatTab)
+        : window._tarifCache;
+
+    // Saring hanya yang perlu diubah
+    const perlu = targets.filter(t => t.aktif !== aktifBaru);
+    if (perlu.length === 0) {
+        showToast(`Semua sudah ${aktifBaru ? 'aktif' : 'nonaktif'}`, 'info');
+        return;
+    }
+
+    showToast(`⏳ Memproses ${perlu.length} layanan...`, 'info');
+    try {
+        await Promise.all(perlu.map(t =>
+            sb_saveTarif({ id: t.id, nama: t.nama, kategori: t.kategori, harga: t.harga, keterangan: t.keterangan, aktif: aktifBaru })
+        ));
+        await _refreshTarifCache();
+        renderDaftarTarif();
+        const label = _activeKatTab ? `"${_activeKatTab}"` : 'semua';
+        showToast(`✅ ${perlu.length} layanan ${label} berhasil di${aktifBaru ? 'aktifkan' : 'nonaktifkan'}`, 'success');
+    } catch(e) {
+        showToast('❌ Gagal mengubah status massal', 'error');
+    }
+}
+
 
 // ════════════════════════════════════════
 //  MODAL TAGIHAN (setelah simpan rekam medis)
