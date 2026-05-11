@@ -14,13 +14,15 @@ async function sb_getTarif() {
 
 /** Simpan tarif (upsert by id) */
 async function sb_saveTarif(payload) {
-    const { id, nama, kategori, harga, keterangan, aktif } = payload;
+    const { id, nama, kategori, harga, keterangan, aktif, sub_group, sub_group_order } = payload;
     const body = {
-        nama:       (nama || '').trim(),
-        kategori:   kategori  || 'Umum',
-        harga:      Number(harga) || 0,
-        keterangan: keterangan || null,
-        aktif:      aktif !== false
+        nama:             (nama || '').trim(),
+        kategori:         kategori  || 'Umum',
+        harga:            Number(harga) || 0,
+        keterangan:       keterangan || null,
+        aktif:            aktif !== false,
+        sub_group:        sub_group || null,
+        sub_group_order:  sub_group_order != null ? Number(sub_group_order) : 99
     };
     if (id) {
         await _sbFetch(`tarif_layanan?id=eq.${id}`, {
