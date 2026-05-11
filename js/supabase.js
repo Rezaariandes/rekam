@@ -389,7 +389,6 @@ async function sb_getKunjunganById(kunjunganId) {
         diag: r.diagnosa, diagnosa2: r.diagnosa2,
         terapi: r.terapi, surat_sakit: r.surat_sakit,
         req_lab: r.req_lab || null,
-        riwayat_penyakit: r.riwayat_penyakit || null,
         status: r.status
     };
 }
@@ -408,7 +407,7 @@ async function sb_saveKunjungan(payload) {
         lab_sgot, lab_sgpt,
         lab_ureum, lab_creatinin,
         keluhan, fisik, diagnosa, diagnosa2, terapi, suratSakit,
-        alergi, req_lab, riwayat_penyakit
+        alergi, req_lab
     } = payload;
 
     // BUG E FIX: Guard — jangan PATCH pasien jika pasienId tidak valid
@@ -497,7 +496,6 @@ async function sb_saveKunjungan(payload) {
         terapi:    terapi    || null,
         surat_sakit: suratSakit || null,
         req_lab: req_lab || null,
-        riwayat_penyakit: riwayat_penyakit !== undefined ? (riwayat_penyakit || null) : null,
         status: isSelesai ? 'Selesai' : 'Menunggu'
     };
 
