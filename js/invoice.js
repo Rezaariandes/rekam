@@ -6,6 +6,170 @@
 //  Dipisah dari biaya.js agar struktur lebih modular.
 // ════════════════════════════════════════════════════════
 
+/** Format angka ke Rupiah tanpa simbol, misal 15000 → "15.000" */
+function _fmtRp(n) {
+    return Number(n || 0).toLocaleString('id-ID');
+}
+
+// ════════════════════════════════════════
+//  STATE MODAL TAGIHAN (input baru)
+// ════════════════════════════════════════
+let _tagihanKunjId     = null;
+let _tagihanPasienId   = null;
+let _tagihanPasienNama = '';
+let _tagihanTgl        = '';
+let _tagihanItems      = [];
+let _tagihanDiskon     = 0;
+
+// ════════════════════════════════════════
+//  openModalTagihan — dipanggil setelah simpan rekam medis
+//  Menggantikan showTagihanModal lama di biaya.js
+// ════════════════════════════════════════
+async function openModalTagihan(kunjunganId, pasienId, pasienNama, tgl, kunjunganData) {
+    if (!window._biayaAktif) return;
+    _tagihanKunjId     = kunjunganId;
+    _tagihanPasienId   = pasienId;
+    _tagihanPasienNama = pasienNama || '—';
+    _tagihanTgl        = tgl || '';
+    _tagihanDiskon     = 0;
+
+    // Pastikan tarif cache terisi
+    if (!window._tarifCache || window._tarifCache.length === 0) {
+        try { await _refreshTarifCache(); } catch(e) {}
+    }
+
+    // Auto-generate items dari kunjungan
+    try {
+        _tagihanItems = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData || {});
+    } catch(e) {
+        _tagihanItems = [];
+    }
+
+    let modal = document.getElementById('modalTagihan');
+    if (!modal) {
+        modal = _buildModalTagihan();
+        document.body.appendChild(modal);
+    }
+    _renderModalTagihanContent();
+    modal.style.display = 'flex';
+}
+
+// ════════════════════════════════════════
+//  _buildModalTagihan — buat elemen modal sekali
+// ════════════════════════════════════════
+function _buildModalTagihan() {
+    const modal = document.createElement('div');
+    modal.id = 'modalTagihan';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:flex-end;justify-content:center;';
+    modal.innerHTML = `<div id="modalTagihanInner"
+        style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;box-shadow:0 -4px 24px rgba(0,0,0,.15)">
+    </div>`;
+    return modal;
+}
+
+// ════════════════════════════════════════
+//  _renderModalTagihanContent — render/re-render isi modal tagihan
+// ════════════════════════════════════════
+function _renderModalTagihanContent() {
+    const inner = document.getElementById('modalTagihanInner');
+    if (!inner) return;
+
+    const items    = _tagihanItems || [];
+    const subtotal = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
+    const diskon   = Number(_tagihanDiskon) || 0;
+    const total    = Math.max(0, subtotal - diskon);
+
+    inner.innerHTML = `
+        <h3 style="margin:0 0 4px;font-size:16px">🧾 Rincian Tagihan</h3>
+        <p style="font-size:12px;color:#64748b;margin:0 0 14px">${_tagihanPasienNama} · ${_tagihanTgl ? formatTglIndo(_tagihanTgl) : ''}</p>
+        <div id="_mtItemList">
+            ${items.length === 0
+                ? '<div style="text-align:center;color:#94a3b8;font-size:12px;padding:14px">Belum ada item tagihan.</div>'
+                : items.map((it, i) => _mtItemRow(it, i)).join('')}
+        </div>
+        <button onclick="_mtTambahItem()"
+            style="width:100%;padding:9px;border:1.5px dashed var(--primary);border-radius:10px;color:var(--primary);font-size:13px;cursor:pointer;background:#f8faff;margin:8px 0">
+            ➕ Tambah Item
+        </button>
+        <div style="border-top:1.5px solid #e2e8f0;margin:10px 0;padding-top:10px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+                <span>Subtotal</span>
+                <span id="_mtSubtotal">Rp ${_fmtRp(subtotal)}</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:10px">
+                <span>Diskon (Rp)</span>
+                <input id="_mtDiskon" type="number" value="${diskon}" min="0"
+                    oninput="_tagihanDiskon=Number(this.value)||0;_mtRecalc()"
+                    style="width:120px;padding:5px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;text-align:right">
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:var(--primary)">
+                <span>TOTAL</span>
+                <span id="_mtTotal">Rp ${_fmtRp(total)}</span>
+            </div>
+        </div>
+        <textarea id="_mtCatatan" placeholder="Catatan (opsional)" rows="2"
+            style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;resize:none"></textarea>
+        <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('modalTagihan').style.display='none'"
+                style="flex:1;padding:12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;cursor:pointer;background:#fff">
+                Lewati
+            </button>
+            <button onclick="_mtSimpan()"
+                style="flex:2;padding:12px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;background:var(--primary);color:#fff">
+                💾 Simpan Tagihan
+            </button>
+        </div>`;
+}
+
+function _mtItemRow(it, idx) {
+    return `<div id="_mtrow_${idx}" style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #f1f5f9">
+        <div style="flex:1;font-size:12px;font-weight:600">${escHtml(it.nama_item)}</div>
+        <input type="number" value="${it.jumlah||1}" min="1"
+            oninput="_tagihanItems[${idx}].jumlah=Number(this.value);_mtRecalc()"
+            style="width:40px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-align:center">
+        <input type="number" value="${it.harga_satuan}" min="0"
+            oninput="_tagihanItems[${idx}].harga_satuan=Number(this.value);_mtRecalc()"
+            style="width:90px;padding:3px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-align:right">
+        <button onclick="_mtHapusItem(${idx})"
+            style="padding:3px 7px;border:1px solid #ef4444;border-radius:6px;color:#ef4444;font-size:11px;cursor:pointer;background:#fff">✕</button>
+    </div>`;
+}
+
+function _mtTambahItem() {
+    _tagihanItems = _tagihanItems || [];
+    _tagihanItems.push({ nama_item: 'Item Baru', kategori: 'Lainnya', jumlah: 1, harga_satuan: 0 });
+    _renderModalTagihanContent();
+}
+
+function _mtHapusItem(idx) {
+    _tagihanItems.splice(idx, 1);
+    _renderModalTagihanContent();
+}
+
+function _mtRecalc() {
+    const items  = _tagihanItems || [];
+    const sub    = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
+    const diskon = Number(document.getElementById('_mtDiskon')?.value) || 0;
+    const total  = Math.max(0, sub - diskon);
+    const subEl  = document.getElementById('_mtSubtotal');
+    const totEl  = document.getElementById('_mtTotal');
+    if (subEl) subEl.innerText = 'Rp ' + _fmtRp(sub);
+    if (totEl) totEl.innerText = 'Rp ' + _fmtRp(total);
+}
+
+async function _mtSimpan() {
+    const diskon  = Number(document.getElementById('_mtDiskon')?.value)   || 0;
+    const catatan = document.getElementById('_mtCatatan')?.value           || '';
+    if (!_tagihanKunjId) return showToast('⚠️ ID kunjungan tidak tersedia', 'error');
+    try {
+        const result = await sb_saveTagihan(_tagihanKunjId, _tagihanPasienId, _tagihanItems, diskon, catatan);
+        document.getElementById('modalTagihan').style.display = 'none';
+        showToast(`✅ Tagihan Rp ${_fmtRp(Number(result.total))} berhasil disimpan`, 'success');
+    } catch(e) {
+        showToast('❌ Gagal menyimpan tagihan: ' + (e.message || ''), 'error');
+    }
+}
+
 // ════════════════════════════════════════
 //  LIHAT TAGIHAN DARI RIWAYAT / KUNJUNGAN
 // ════════════════════════════════════════
