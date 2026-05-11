@@ -137,14 +137,20 @@ function _renderAccordionSemua(filtered) {
 // ─── Render accordion: Tab kategori tertentu — sub-group dari DB ─
 function _renderAccordionByKategori(kat, filtered) {
     // Kumpulkan sub_group unik dari DB, urut alfabet
-    const subGroupMap = {};   // sub_group_label → [tarif]
+    const subGroupMap = {};   // sub_group_label → { items: [], sub2Map: {} }
     const noGroup     = [];   // item tanpa sub_group
 
     filtered.forEach(t => {
-        const sg = (t.sub_group || '').trim();
+        const sg  = (t.sub_group  || '').trim();
+        const sg2 = (t.sub_group_2 || '').trim();
         if (sg) {
-            if (!subGroupMap[sg]) subGroupMap[sg] = [];
-            subGroupMap[sg].push(t);
+            if (!subGroupMap[sg]) subGroupMap[sg] = { items: [], sub2Map: {} };
+            if (sg2) {
+                if (!subGroupMap[sg].sub2Map[sg2]) subGroupMap[sg].sub2Map[sg2] = [];
+                subGroupMap[sg].sub2Map[sg2].push(t);
+            } else {
+                subGroupMap[sg].items.push(t);
+            }
         } else {
             noGroup.push(t);
         }
@@ -153,14 +159,40 @@ function _renderAccordionByKategori(kat, filtered) {
     let html = '';
 
     Object.keys(subGroupMap).sort().forEach(sg => {
-        const items      = subGroupMap[sg];
+        const { items, sub2Map } = subGroupMap[sg];
+        const allItems   = [...items, ...Object.values(sub2Map).flat()];
         const groupId    = 'sg_' + kat + '_' + sg.replace(/\W+/g, '_');
-        const isOpen     = window._accordionState[groupId] === true; // default TERTUTUP
-        const aktifCount = items.filter(t => t.aktif).length;
+        const isOpen     = window._accordionState[groupId] === true;
+        const aktifCount = allItems.filter(t => t.aktif).length;
+
+        // Bangun isi body: items langsung + nested sub_group_2
+        let bodyHtml = items.map(t => _renderTarifRow(t)).join('');
+
+        Object.keys(sub2Map).sort().forEach(sg2 => {
+            const sg2Items   = sub2Map[sg2];
+            const sg2Id      = groupId + '_sg2_' + sg2.replace(/\W+/g, '_');
+            const sg2Open    = window._accordionState[sg2Id] === true;
+            const sg2Aktif   = sg2Items.filter(t => t.aktif).length;
+            bodyHtml += `
+            <div style="border:1px solid rgba(8,145,178,0.2);border-radius:10px;margin:6px 0;overflow:hidden;">
+                <button onclick="_toggleAccordion('${sg2Id}')"
+                    style="width:100%;display:flex;align-items:center;gap:6px;padding:7px 12px;
+                           background:${sg2Open ? 'rgba(8,145,178,0.07)' : 'rgba(8,145,178,0.03)'};
+                           border:none;cursor:pointer;text-align:left;">
+                    <span style="font-size:11px;font-weight:700;color:#0891b2;flex:1;">📂 ${sg2}</span>
+                    <span style="font-size:9px;color:#94a3b8;font-weight:600;">${sg2Aktif}/${sg2Items.length} aktif</span>
+                    <span style="font-size:12px;color:#94a3b8;transition:transform 0.2s;transform:rotate(${sg2Open ? '90' : '0'}deg);">▶</span>
+                </button>
+                <div id="acc_body_${sg2Id}" style="display:${sg2Open ? 'block' : 'none'};padding:0 12px 4px;">
+                    ${sg2Items.map(t => _renderTarifRow(t)).join('')}
+                </div>
+            </div>`;
+        });
+
         html += _accordionShell({
             groupId, label: sg,
-            count: items.length, aktifCount, isOpen,
-            bodyHtml: items.map(t => _renderTarifRow(t)).join('')
+            count: allItems.length, aktifCount, isOpen,
+            bodyHtml
         });
     });
 
@@ -233,10 +265,13 @@ function _renderTarifRow(t, showKat = false) {
     const subGroupBadge = t.sub_group
         ? `<span style="font-size:9px;color:#6366f1;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:1px 6px;margin-left:4px;">${t.sub_group}</span>`
         : '';
+    const subGroup2Badge = t.sub_group_2
+        ? `<span style="font-size:9px;color:#0891b2;background:rgba(8,145,178,0.08);border:1px solid rgba(8,145,178,0.2);border-radius:10px;padding:1px 6px;margin-left:4px;">📂 ${t.sub_group_2}</span>`
+        : '';
     return `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
         <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:13px;${!t.aktif ? 'color:#94a3b8;' : ''}">${t.nama}${showKat ? subGroupBadge : ''}</div>
+            <div style="font-weight:600;font-size:13px;${!t.aktif ? 'color:#94a3b8;' : ''}">${t.nama}${showKat ? subGroupBadge : ''}${subGroup2Badge}</div>
             ${showKat ? `<div style="font-size:10px;color:#94a3b8">${KAT_ICON[t.kategori] || ''} ${t.kategori}</div>` : ''}
             ${t.keterangan ? `<div style="font-size:10px;color:#94a3b8">${t.keterangan}</div>` : ''}
         </div>
@@ -260,6 +295,223 @@ function _setBiayaTab(kat) {
 }
 
 // ════════════════════════════════════════
+//  MODAL TAMBAH TARIF BARU (Input Manual)
+// ════════════════════════════════════════
+function openTambahTarif() {
+    _openTambahTarifModal();
+}
+
+function _openTambahTarifModal() {
+    const KATEGORI_LIST = ['Administrasi', 'Laboratorium', 'Pemeriksaan', 'Penunjang', 'Tindakan', 'Obat', 'Lainnya'];
+
+    // Ambil sub_group yang sudah ada (grouped by kategori)
+    const subsByKat = {};
+    KATEGORI_LIST.forEach(k => {
+        subsByKat[k] = [...new Set(
+            window._tarifCache.filter(x => x.kategori === k && x.sub_group).map(x => x.sub_group.trim())
+        )].sort();
+    });
+
+    // Build option sub_group untuk default kategori pertama
+    const defaultKat = 'Administrasi';
+    const subOpts = _buildSubOptions(subsByKat[defaultKat] || [], '');
+    const sub2Opts = _buildSubOptions([], '');
+
+    document.getElementById('_tarifModal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = '_tarifModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:0;';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 -4px 32px rgba(0,0,0,.18)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+                <h3 style="margin:0;font-size:16px;font-weight:800;">➕ Tambah Tarif Baru</h3>
+                <button onclick="document.getElementById('_tarifModal').remove()"
+                    style="padding:4px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;cursor:pointer;background:#f8fafc;color:#64748b;">✕</button>
+            </div>
+
+            <!-- Nama Layanan -->
+            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:4px;">Nama Layanan <span style="color:#ef4444">*</span></label>
+            <input id="_nt_nama" type="text" placeholder="cth: Pemeriksaan EKG, GDS Strip, Konsultasi Gizi..."
+                style="width:100%;padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;box-sizing:border-box;"
+                oninput="this.style.borderColor=this.value?'#6366f1':'#e2e8f0'">
+
+            <!-- Kategori -->
+            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:4px;">Kategori <span style="color:#ef4444">*</span></label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;" id="_nt_katPills">
+                ${KATEGORI_LIST.map((k, i) => `
+                    <label style="cursor:pointer;">
+                        <input type="radio" name="_nt_kat" value="${k}" ${i===0?'checked':''} style="display:none"
+                            onchange="_onTambahKatChange('${k}')">
+                        <span id="_nt_kat_pill_${k}"
+                            style="display:inline-block;padding:5px 12px;border:1.5px solid ${i===0?'var(--primary)':'#e2e8f0'};border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:${i===0?'var(--primary)':'#fff'};color:${i===0?'#fff':'var(--text)'};white-space:nowrap;transition:all 0.15s;">
+                            ${KAT_ICON[k]||'📌'} ${k}
+                        </span>
+                    </label>`).join('')}
+            </div>
+
+            <!-- Harga -->
+            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:4px;">Harga (Rp) <span style="color:#ef4444">*</span></label>
+            <input id="_nt_harga" type="number" placeholder="0" min="0"
+                style="width:100%;padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;box-sizing:border-box;"
+                oninput="this.style.borderColor=this.value?'#6366f1':'#e2e8f0'">
+
+            <!-- Sub Kelompok (level 1) -->
+            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:2px;">Sub Kelompok
+                <span style="font-weight:400;color:#94a3b8;font-size:10px;">— pengelompokan level 1 (opsional)</span>
+            </label>
+            <select id="_nt_sub_select" onchange="_onNtSubSelect(this.value)"
+                style="width:100%;padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 6px;box-sizing:border-box;background:#fff">
+                <option value="">— Tanpa kelompok —</option>
+                ${subOpts}
+                <option value="__new__">✏️ Ketik kelompok baru...</option>
+            </select>
+            <input id="_nt_sub_new" type="text" placeholder="Nama sub kelompok baru (misal: 🩸 Darah Rutin)"
+                style="width:100%;padding:8px;border:1.5px solid #6366f1;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;display:none;">
+
+            <!-- Sub Sub Kelompok (level 2) -->
+            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:2px;">Sub Sub Kelompok
+                <span style="font-weight:400;color:#94a3b8;font-size:10px;">— pengelompokan level 2, di dalam Sub Kelompok (opsional)</span>
+            </label>
+            <select id="_nt_sub2_select" onchange="_onNtSub2Select(this.value)"
+                style="width:100%;padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 6px;box-sizing:border-box;background:#fff">
+                <option value="">— Tanpa sub sub kelompok —</option>
+                ${sub2Opts}
+                <option value="__new__">✏️ Ketik sub sub kelompok baru...</option>
+            </select>
+            <input id="_nt_sub2_new" type="text" placeholder="Nama sub sub kelompok baru (misal: 🧬 Metabolisme)"
+                style="width:100%;padding:8px;border:1.5px solid #0891b2;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;display:none;">
+
+            <!-- Keterangan -->
+            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:4px;">Keterangan <span style="color:#94a3b8;font-weight:400">(opsional)</span></label>
+            <input id="_nt_ket" type="text" placeholder="cth: Untuk pasien BPJS, termasuk reagen"
+                style="width:100%;padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:18px;box-sizing:border-box;">
+
+            <!-- Aktif toggle -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
+                <span style="font-size:12px;font-weight:700;color:#374151;flex:1;">Status Tarif</span>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="checkbox" id="_nt_aktif" checked style="width:16px;height:16px;accent-color:var(--primary);">
+                    <span style="font-size:12px;font-weight:600;color:#16a34a">Aktif (masuk tagihan otomatis)</span>
+                </label>
+            </div>
+
+            <div style="display:flex;gap:8px">
+                <button onclick="document.getElementById('_tarifModal').remove()"
+                    style="flex:1;padding:12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;cursor:pointer;background:#fff;font-weight:600">
+                    Batal
+                </button>
+                <button onclick="_simpanTarifBaru()"
+                    style="flex:2;padding:12px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;background:var(--primary);color:#fff;">
+                    💾 Simpan Tarif
+                </button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+
+    // Simpan subsByKat ke window untuk dipakai onchange
+    window._ntSubsByKat = subsByKat;
+}
+
+function _onTambahKatChange(kat) {
+    // Update pill style semua kategori
+    const allKats = ['Administrasi', 'Laboratorium', 'Pemeriksaan', 'Penunjang', 'Tindakan', 'Obat', 'Lainnya'];
+    allKats.forEach(k => {
+        const pill = document.getElementById('_nt_kat_pill_' + k);
+        if (!pill) return;
+        if (k === kat) {
+            pill.style.background = 'var(--primary)'; pill.style.color = '#fff'; pill.style.borderColor = 'var(--primary)';
+        } else {
+            pill.style.background = '#fff'; pill.style.color = 'var(--text)'; pill.style.borderColor = '#e2e8f0';
+        }
+    });
+
+    // Update opsi sub_group sesuai kategori baru
+    const subs = (window._ntSubsByKat || {})[kat] || [];
+    const sel = document.getElementById('_nt_sub_select');
+    if (sel) {
+        sel.innerHTML = `<option value="">— Tanpa kelompok —</option>` + _buildSubOptions(subs, '') + `<option value="__new__">✏️ Ketik kelompok baru...</option>`;
+        document.getElementById('_nt_sub_new').style.display = 'none';
+    }
+    // Reset sub2
+    const sel2 = document.getElementById('_nt_sub2_select');
+    if (sel2) {
+        sel2.innerHTML = `<option value="">— Tanpa sub sub kelompok —</option><option value="__new__">✏️ Ketik sub sub kelompok baru...</option>`;
+        document.getElementById('_nt_sub2_new').style.display = 'none';
+    }
+}
+
+function _buildSubOptions(list, selected) {
+    return list.map(sg => `<option value="${sg}" ${sg === selected ? 'selected' : ''}>${sg}</option>`).join('');
+}
+
+function _onNtSubSelect(val) {
+    const inp = document.getElementById('_nt_sub_new');
+    if (!inp) return;
+    if (val === '__new__') { inp.style.display = 'block'; inp.focus(); }
+    else { inp.style.display = 'none'; inp.value = ''; }
+
+    // Update sub2 options berdasarkan sub_group yang dipilih
+    const katEl = document.querySelector('input[name="_nt_kat"]:checked');
+    const kat = katEl ? katEl.value : '';
+    const subGroup = val === '__new__' ? '' : val;
+    const subs2 = [...new Set(
+        window._tarifCache.filter(x => x.kategori === kat && x.sub_group === subGroup && x.sub_group_2).map(x => x.sub_group_2.trim())
+    )].sort();
+    const sel2 = document.getElementById('_nt_sub2_select');
+    if (sel2) {
+        sel2.innerHTML = `<option value="">— Tanpa sub sub kelompok —</option>` + _buildSubOptions(subs2, '') + `<option value="__new__">✏️ Ketik sub sub kelompok baru...</option>`;
+        document.getElementById('_nt_sub2_new').style.display = 'none';
+    }
+}
+
+function _onNtSub2Select(val) {
+    const inp = document.getElementById('_nt_sub2_new');
+    if (!inp) return;
+    if (val === '__new__') { inp.style.display = 'block'; inp.focus(); }
+    else { inp.style.display = 'none'; inp.value = ''; }
+}
+
+async function _simpanTarifBaru() {
+    const nama  = (document.getElementById('_nt_nama')?.value || '').trim();
+    const katEl = document.querySelector('input[name="_nt_kat"]:checked');
+    const kat   = katEl ? katEl.value : 'Lainnya';
+    const harga = Number(document.getElementById('_nt_harga')?.value) || 0;
+    const ket   = (document.getElementById('_nt_ket')?.value || '').trim() || null;
+    const aktif = document.getElementById('_nt_aktif')?.checked !== false;
+
+    if (!nama) {
+        showToast('❌ Nama layanan wajib diisi', 'error');
+        document.getElementById('_nt_nama')?.focus();
+        return;
+    }
+
+    // sub_group
+    const sv = document.getElementById('_nt_sub_select')?.value;
+    let sub_group = null;
+    if (sv === '__new__') sub_group = (document.getElementById('_nt_sub_new')?.value || '').trim() || null;
+    else sub_group = sv || null;
+
+    // sub_group_2
+    const sv2 = document.getElementById('_nt_sub2_select')?.value;
+    let sub_group_2 = null;
+    if (sv2 === '__new__') sub_group_2 = (document.getElementById('_nt_sub2_new')?.value || '').trim() || null;
+    else sub_group_2 = sv2 || null;
+
+    try {
+        await sb_saveTarif({ nama, kategori: kat, harga, keterangan: ket, aktif, sub_group, sub_group_2 });
+        document.getElementById('_tarifModal')?.remove();
+        showToast('✅ Tarif baru berhasil ditambahkan', 'success');
+        await _refreshTarifCache();
+        // Pindah ke tab kategori yang baru ditambahkan
+        _activeKatTab = kat;
+        renderDaftarTarif();
+    } catch(e) {
+        console.error('[biaya] ❌ Gagal tambah tarif:', e);
+        showToast('❌ Gagal menyimpan tarif: ' + (e.message || e), 'error');
+    }
+}
+
+// ════════════════════════════════════════
 //  MODAL EDIT TARIF
 //  (termasuk edit sub_group langsung dari UI)
 // ════════════════════════════════════════
@@ -278,8 +530,19 @@ function _openTarifModal(tarif) {
             .map(x => x.sub_group.trim())
     )].sort();
 
+    // Kumpulkan daftar sub_group_2 yang sudah ada untuk sub_group yang sama
+    const existingSubs2 = [...new Set(
+        window._tarifCache
+            .filter(x => x.kategori === tarif.kategori && x.sub_group === tarif.sub_group && x.sub_group_2)
+            .map(x => x.sub_group_2.trim())
+    )].sort();
+
     const subOptions = existingSubs.map(sg =>
         `<option value="${sg}" ${sg === (tarif.sub_group || '') ? 'selected' : ''}>${sg}</option>`
+    ).join('');
+
+    const sub2Options = existingSubs2.map(sg =>
+        `<option value="${sg}" ${sg === (tarif.sub_group_2 || '') ? 'selected' : ''}>${sg}</option>`
     ).join('');
 
     document.getElementById('_tarifModal')?.remove();
@@ -287,7 +550,7 @@ function _openTarifModal(tarif) {
     modal.id = '_tarifModal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
     modal.innerHTML = `
-        <div style="background:#fff;border-radius:16px;padding:24px;width:360px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+        <div style="background:#fff;border-radius:16px;padding:24px;width:380px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18)">
             <h3 style="margin:0 0 16px;font-size:16px">✏️ Edit Tarif</h3>
 
             <label style="font-size:12px;font-weight:600">Nama Layanan</label>
@@ -307,7 +570,7 @@ function _openTarifModal(tarif) {
                 style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 12px;box-sizing:border-box">
 
             <label style="font-size:12px;font-weight:600">Sub Kelompok
-                <span style="font-weight:400;color:#94a3b8;font-size:10px;margin-left:4px;">— untuk pengelompokan accordion</span>
+                <span style="font-weight:400;color:#94a3b8;font-size:10px;margin-left:4px;">— level 1 pengelompokan accordion</span>
             </label>
             <select id="_tf_sub_select"
                 onchange="_onSubGroupSelect(this.value)"
@@ -316,9 +579,23 @@ function _openTarifModal(tarif) {
                 ${subOptions}
                 <option value="__new__">✏️ Ketik kelompok baru...</option>
             </select>
-            <input id="_tf_sub_new" type="text" placeholder="Nama kelompok baru (misal: 🩸 Darah Rutin)"
+            <input id="_tf_sub_new" type="text" placeholder="Nama sub kelompok baru (misal: 🩸 Darah Rutin)"
                 style="width:100%;padding:8px;border:1.5px solid #6366f1;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;display:${tarif.sub_group && !existingSubs.includes(tarif.sub_group) ? 'block' : 'none'};"
                 value="${tarif.sub_group && !existingSubs.includes(tarif.sub_group) ? tarif.sub_group : ''}">
+
+            <label style="font-size:12px;font-weight:600">Sub Sub Kelompok
+                <span style="font-weight:400;color:#94a3b8;font-size:10px;margin-left:4px;">— level 2 (opsional, di dalam Sub Kelompok)</span>
+            </label>
+            <select id="_tf_sub2_select"
+                onchange="_onSub2GroupSelect(this.value)"
+                style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 6px;box-sizing:border-box;background:#fff">
+                <option value="">— Tanpa sub sub kelompok —</option>
+                ${sub2Options}
+                <option value="__new__">✏️ Ketik sub sub kelompok baru...</option>
+            </select>
+            <input id="_tf_sub2_new" type="text" placeholder="Nama sub sub kelompok baru (misal: 🧬 Metabolisme)"
+                style="width:100%;padding:8px;border:1.5px solid #0891b2;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;display:${tarif.sub_group_2 && !existingSubs2.includes(tarif.sub_group_2) ? 'block' : 'none'};"
+                value="${tarif.sub_group_2 && !existingSubs2.includes(tarif.sub_group_2) ? tarif.sub_group_2 : ''}">
 
             <label style="font-size:12px;font-weight:600">Keterangan</label>
             <input id="_tf_ket" type="text" value="${tarif.keterangan || ''}" placeholder="Opsional"
@@ -350,6 +627,18 @@ function _onSubGroupSelect(val) {
     }
 }
 
+function _onSub2GroupSelect(val) {
+    const inp = document.getElementById('_tf_sub2_new');
+    if (!inp) return;
+    if (val === '__new__') {
+        inp.style.display = 'block';
+        inp.focus();
+    } else {
+        inp.style.display = 'none';
+        inp.value = '';
+    }
+}
+
 async function _saveTarifFromModal(id) {
     const nama  = document.getElementById('_tf_nama').value.trim();
     const kat   = document.getElementById('_tf_kat').value;
@@ -367,10 +656,19 @@ async function _saveTarifFromModal(id) {
         sub_group = selVal || null;
     }
 
+    // Tentukan sub_group_2
+    const sel2Val = document.getElementById('_tf_sub2_select').value;
+    let sub_group_2 = null;
+    if (sel2Val === '__new__') {
+        sub_group_2 = (document.getElementById('_tf_sub2_new').value || '').trim() || null;
+    } else {
+        sub_group_2 = sel2Val || null;
+    }
+
     if (!nama) return showToast('❌ Nama layanan wajib diisi', 'error');
 
     try {
-        await sb_saveTarif({ id: id || undefined, nama, kategori: kat, harga: Number(harga) || 0, keterangan: ket, aktif, sub_group });
+        await sb_saveTarif({ id: id || undefined, nama, kategori: kat, harga: Number(harga) || 0, keterangan: ket, aktif, sub_group, sub_group_2 });
         document.getElementById('_tarifModal')?.remove();
         showToast('✅ Tarif berhasil disimpan', 'success');
         await _refreshTarifCache();
