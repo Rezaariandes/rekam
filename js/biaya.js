@@ -57,26 +57,56 @@ const PENUNJANG_SUB_GROUPS = [
 
 // ── Sub-grup Tindakan ──
 const TINDAKAN_SUB_GROUPS = [
-    {
-        id: 'tindakan_bedah_minor',
-        label: '🔪 Bedah Minor',
-        items: ['Hecting / Jahit Luka', 'Buka Jahitan', 'Insisi Abses', 'Ekstraksi Kuku', 'Ekstraksi Benda Asing', 'Sirkumsisi']
-    },
-    {
-        id: 'tindakan_perawatan',
-        label: '🩹 Perawatan Luka',
-        items: ['Ganti Balut', 'Debridement', 'Perawatan Luka Bakar', 'Nekrotomi']
-    },
-    {
-        id: 'tindakan_kb',
-        label: '🌿 KB & Reproduksi',
-        items: ['Pasang IUD', 'Lepas IUD', 'Pasang Implan', 'Lepas Implan', 'Suntik KB', 'Pap Smear']
-    },
-    {
-        id: 'tindakan_umum',
-        label: '⚕️ Tindakan Umum',
-        items: ['Nebulisasi', 'Pemasangan Kateter', 'Pemasangan Infus', 'Injeksi / Suntik', 'Suction / Penghisapan', 'Rekam Medis Baru']
-    }
+    { id: 'tindakan_1',  label: '🔪 Bedah & Operatif',
+      items: ['Sirkumsisi','Bedah Umum','Bedah Digestif','Bedah Thoraks','Bedah Orthopedi','Bedah Saraf','Bedah Plastik','Bedah Onkologi','Bedah Urologi','Bedah THT','Bedah Mata'] },
+    { id: 'tindakan_2',  label: '🩺 Bedah Minimal Invasif',
+      items: ['Laparoskopi','Thoracoscopy (VATS)','Arthroskopi','Endoskopi Intervensi','Robotik Surgery','Intervensi Vaskular'] },
+    { id: 'tindakan_3',  label: '💉 Anestesi',
+      items: ['Anestesi Umum','Anestesi Regional','Sedasi','Analgesia','Blok Saraf'] },
+    { id: 'tindakan_4',  label: '🤰 Obstetri & Ginekologi',
+      items: ['Persalinan Normal','Sectio Caesarea','Kuretase','USG Fetomaternal','Fertility Procedure'] },
+    { id: 'tindakan_5',  label: '❤️ Kardiologi & Vaskular',
+      items: ['Kateterisasi Jantung','PCI / Stenting','Ablasi Jantung','Pacemaker','Intervensi Vaskular'] },
+    { id: 'tindakan_6',  label: '🫘 Urologi',
+      items: ['ESWL','TURP','Endourologi','Biopsi Prostat'] },
+    { id: 'tindakan_7',  label: '🎗️ Onkologi',
+      items: ['Kemoterapi','Radioterapi','Immunotherapy','Ablasi Tumor'] },
+    { id: 'tindakan_8',  label: '🚨 Gawat Darurat & Resusitasi',
+      items: ['CPR','Intubasi','Defibrilasi','Resusitasi Cairan','Penanganan Syok'] },
+    { id: 'tindakan_9',  label: '🩸 Transfusi & Hematologi',
+      items: ['Transfusi Darah','Aferesis','Bone Marrow Procedure'] },
+    { id: 'tindakan_10', label: '🔍 Diagnostik Invasif',
+      items: ['Biopsi','Aspirasi','Pungsi','Kateterisasi'] },
+    { id: 'tindakan_11', label: '🏃 Rehabilitasi Medik & Fisiatri',
+      items: ['Fisioterapi','Terapi Wicara','Okupasi Terapi','Akupunktur Medik'] },
+    { id: 'tindakan_12', label: '⚕️ Terapeutik Lainnya',
+      items: ['Hemodialisis','CAPD','Ventilator Support','Hyperbaric Oxygen Therapy','Laser Therapy'] },
+    { id: 'tindakan_13', label: '🧴 Dermatologi',
+      items: ['Bedah Kulit','Cryotherapy','Laser Dermatologi','Estetika Medik'] },
+    { id: 'tindakan_14', label: '🦷 Gigi & Mulut',
+      items: ['Scaling','Tambal Gigi','Pencabutan','Root Canal Treatment','Behel / Ortodonti','Prostodonti'] },
+    { id: 'tindakan_15', label: '👂 THT & Neurotologi',
+      items: ['Ear Toilet','Sinus Procedure','Tonsilektomi','Neurotologi'] },
+    { id: 'tindakan_16', label: '👁️ Oftalmologi',
+      items: ['Operasi Katarak','Retina Procedure','LASIK','Glaukoma Procedure'] },
+    { id: 'tindakan_17', label: '🧠 Neurologi',
+      items: ['Lumbar Puncture','Botulinum Injection','Neurointervensi'] },
+    { id: 'tindakan_18', label: '🫁 Gastroenterologi',
+      items: ['ERCP','Endoskopi Terapeutik','Hepatobiliary Procedure'] },
+    { id: 'tindakan_19', label: '🫁 Pulmonologi',
+      items: ['Bronkoskopi','Thoracentesis','Ventilator Procedure'] },
+    { id: 'tindakan_20', label: '🫘 Nefrologi',
+      items: ['Dialisis','Biopsi Ginjal'] },
+    { id: 'tindakan_21', label: '🧪 Endokrinologi',
+      items: ['Thyroid Procedure','Endocrine Dynamic Test'] },
+    { id: 'tindakan_22', label: '🦴 Reumatologi',
+      items: ['Joint Injection','Autoimmune Therapy'] },
+    { id: 'tindakan_23', label: '👴 Geriatri',
+      items: ['Comprehensive Geriatric Assessment','Rehabilitasi Lansia'] },
+    { id: 'tindakan_24', label: '👶 Pediatri',
+      items: ['Tindakan Neonatal','Tumbuh Kembang','Resusitasi Neonatus'] },
+    { id: 'tindakan_25', label: '🕊️ Paliatif & Hospice',
+      items: ['Pain Management','Symptom Control','End of Life Care'] }
 ];
 
 // ── Sub-grup Pemeriksaan ──
