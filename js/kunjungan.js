@@ -386,8 +386,14 @@ async function bukaRekamMedisHariIni(kId) {
     if ($('infoPasienNama')) $('infoPasienNama').innerText = namaPasien || '—';
     if ($('infoPasienNik'))  $('infoPasienNik').innerText  = "NIK: " + (p ? (p.nik || '-') : '-');
     if ($('infoPasienUmur')) $('infoPasienUmur').innerText = "Umur: " + umur;
-
-    // BUG-DATE FIX: Gunakan h.tgl (tanggal asli kunjungan) bukan filterDate.
+    // Tampilkan tanggal lahir di banner info pasien (Section 1 page-medis baru)
+    const tglLahirEl = $('infoPasienTglLahir');
+    if (tglLahirEl && p && p.tgl) {
+        tglLahirEl.innerText     = typeof formatTglIndo === 'function' ? formatTglIndo(p.tgl) : p.tgl;
+        tglLahirEl.style.display = '';
+    } else if (tglLahirEl) {
+        tglLahirEl.style.display = 'none';
+    }: Gunakan h.tgl (tanggal asli kunjungan) bukan filterDate.
     // Sebelumnya pakai filterDate → saat buka kunjungan hari lama, banner
     // header menampilkan tanggal hari ini, bukan tanggal asli kunjungan.
     const tglKunjungan = h.tgl || ($('filterDate') ? $('filterDate').value : '');
@@ -416,6 +422,13 @@ async function bukaRekamMedisHariIni(kId) {
             _isiFormDariKunjungan(kunjunganData);
         } else {
             if (typeof loadAutosave === 'function') loadAutosave();
+        }
+        // Isi field riwayat_penyakit dari DB (field baru, mungkin tidak di-handle _isiFormDariKunjungan lama)
+        if (kunjunganData) {
+            const rpEl = $('riwayat_penyakit');
+            if (rpEl && kunjunganData.riwayat_penyakit !== undefined) {
+                rpEl.value = kunjunganData.riwayat_penyakit || '';
+            }
         }
     } catch(e) {
         if (typeof loadAutosave === 'function') loadAutosave();
@@ -1154,7 +1167,9 @@ async function saveAll(showInvoice = true) {
             terapi:   $('terapi')  ? $('terapi').value   : '',
             suratSakit,
             // ── Permintaan Lab ──
-            req_lab: (typeof getReqLabPayload === 'function') ? getReqLabPayload() : null
+            req_lab: (typeof getReqLabPayload === 'function') ? getReqLabPayload() : null,
+            // ── Riwayat Penyakit Dahulu ──
+            riwayat_penyakit: $('riwayat_penyakit') ? ($('riwayat_penyakit').value || null) : null
         };
 
         const result = await sb_saveKunjungan(payload);
