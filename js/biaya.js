@@ -88,12 +88,16 @@ function renderDaftarTarif() {
         : filtered.map(t => `
             <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
                 <div style="flex:1;min-width:0">
-                    <div style="font-weight:600;font-size:13px">${KAT_ICON[t.kategori] || ''} ${t.nama}</div>
-                    <div style="font-size:11px;color:#64748b">${t.kategori} · ${t.aktif ? '✅ Aktif' : '⛔ Nonaktif'}</div>
+                    <div style="font-weight:600;font-size:13px;${!t.aktif ? 'color:#94a3b8;' : ''}">${KAT_ICON[t.kategori] || ''} ${t.nama}</div>
+                    <div style="font-size:11px;color:#94a3b8">${t.kategori}</div>
                 </div>
-                <div style="font-weight:700;color:var(--primary);font-size:13px;white-space:nowrap">
+                <div style="font-weight:700;color:${t.aktif ? 'var(--primary)' : '#94a3b8'};font-size:13px;white-space:nowrap">
                     Rp ${Number(t.harga).toLocaleString('id-ID')}
                 </div>
+                <button onclick="toggleAktifTarif('${t.id}', ${!t.aktif})" title="${t.aktif ? 'Nonaktifkan' : 'Aktifkan'}"
+                    style="padding:3px 8px;border:1.5px solid ${t.aktif ? '#22c55e' : '#e2e8f0'};border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:${t.aktif ? '#f0fdf4' : '#f8fafc'};color:${t.aktif ? '#16a34a' : '#94a3b8'};white-space:nowrap">
+                    ${t.aktif ? '✅ Aktif' : '⛔ Nonaktif'}
+                </button>
                 <button onclick="openEditTarif('${t.id}')"
                     style="padding:4px 10px;border:1px solid var(--primary);border-radius:8px;color:var(--primary);font-size:11px;cursor:pointer;background:#fff">
                     Edit
@@ -153,19 +157,15 @@ function _openTarifModal(tarif) {
 
     modal.innerHTML = `
         <div style="background:#fff;border-radius:16px;padding:24px;width:340px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.18)">
-            <h3 style="margin:0 0 16px;font-size:16px">${isEdit ? '✏️ Edit Tarif' : '➕ Tambah Tarif'}</h3>
+            <h3 style="margin:0 0 16px;font-size:16px">${isEdit ? '✏️ Edit Harga' : '➕ Tambah Tarif'}</h3>
             <label style="font-size:12px;font-weight:600">Nama Layanan</label>
             ${namaField}
             <label style="font-size:12px;font-weight:600">Kategori</label>
             ${katField}
             <label style="font-size:12px;font-weight:600">Harga (Rp)</label>
             <input id="_tf_harga" type="number" value="${isEdit ? tarif.harga : ''}" placeholder="0"
-                style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 10px;box-sizing:border-box">
+                style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;margin:4px 0 16px;box-sizing:border-box">
             ${ketField}
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:14px;cursor:pointer">
-                <input type="checkbox" id="_tf_aktif" ${!isEdit || tarif.aktif ? 'checked' : ''}> Aktif
-            </label>
-            ${isEdit ? `<p style="font-size:11px;color:#94a3b8;margin:0 0 12px">💡 Nama & kategori tidak dapat diubah. Nonaktifkan layanan jika tidak ingin ditampilkan.</p>` : ''}
             <div style="display:flex;gap:8px">
                 <button onclick="document.getElementById('_tarifModal').remove()"
                     style="flex:1;padding:10px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:13px;cursor:pointer;background:#fff">
@@ -184,8 +184,11 @@ async function _saveTarifFromModal(id) {
     const nama  = document.getElementById('_tf_nama').value.trim();
     const kat   = document.getElementById('_tf_kat').value;
     const harga = document.getElementById('_tf_harga').value;
-    const ket   = document.getElementById('_tf_ket').value.trim();
-    const aktif = document.getElementById('_tf_aktif').checked;
+    const ketEl = document.getElementById('_tf_ket');
+    const ket   = ketEl ? ketEl.value.trim() : null;
+    // Saat edit: ambil nilai aktif dari cache agar tidak berubah
+    const existing = id ? window._tarifCache.find(x => String(x.id) === String(id)) : null;
+    const aktif = existing ? existing.aktif : true;
 
     if (!nama) return showToast('❌ Nama layanan wajib diisi', 'error');
 
@@ -207,7 +210,17 @@ async function _saveTarifFromModal(id) {
     }
 }
 
-
+async function toggleAktifTarif(id, aktifBaru) {
+    try {
+        const t = window._tarifCache.find(x => String(x.id) === String(id));
+        if (!t) return;
+        await sb_saveTarif({ id, nama: t.nama, kategori: t.kategori, harga: t.harga, keterangan: t.keterangan, aktif: aktifBaru });
+        await _refreshTarifCache();
+        renderDaftarTarif();
+    } catch(e) {
+        showToast('❌ Gagal mengubah status', 'error');
+    }
+}
 
 // ════════════════════════════════════════
 //  MODAL TAGIHAN (setelah simpan rekam medis)
