@@ -112,6 +112,54 @@ function _pm_icon(nama, map, def = '⚙️') {
 }
 
 // ══════════════════════════════════════════════════════
+//  KALKULASI & VALIDASI KLINIS — TTV, Antropometri, Lab
+//  (dipindahkan dari utils.js — bagian dari page medis)
+// ══════════════════════════════════════════════════════
+
+/** Hitung IMT dari field #bb dan #tb, tampilkan di #imtCalc */
+function calculateIMT() {
+    const bbEl = document.getElementById('bb');
+    const tbEl = document.getElementById('tb');
+    const imtEl = document.getElementById('imtCalc');
+    if (!bbEl || !tbEl || !imtEl) return;
+    const bb = parseFloat(bbEl.value);
+    const tb = parseFloat(tbEl.value) / 100;
+    if (bb && tb && tb > 0) {
+        const imt = (bb / (tb * tb)).toFixed(1);
+        let kat = imt < 18.5 ? "Underweight" : imt < 25 ? "Normal" : imt < 30 ? "Overweight" : "Obesitas";
+        imtEl.innerText = `IMT: ${imt} (${kat})`;
+    } else {
+        imtEl.innerText = "";
+    }
+}
+
+/** Tandai field tensi merah jika melebihi batas normal */
+function checkTensi() {
+    const sEl = document.getElementById('sistol');
+    const dEl = document.getElementById('diastol');
+    if (!sEl || !dEl) return;
+    const s = parseInt(sEl.value);
+    const d = parseInt(dEl.value);
+    if (s >= 140) sEl.classList.add('is-high'); else sEl.classList.remove('is-high');
+    if (d >= 90)  dEl.classList.add('is-high'); else dEl.classList.remove('is-high');
+}
+
+/** Tampilkan alert jika nilai lab (GDS, Kolesterol, Asam Urat) di luar normal */
+function checkLabAlert() {
+    const gds  = parseFloat(document.getElementById('lab_gds')  ? document.getElementById('lab_gds').value  : '');
+    const chol = parseFloat(document.getElementById('lab_chol') ? document.getElementById('lab_chol').value : '');
+    const ua   = parseFloat(document.getElementById('lab_ua')   ? document.getElementById('lab_ua').value   : '');
+    const alerts = [];
+    if (!isNaN(gds))  { if (gds  >= 200) alerts.push(`⚠️ GDS ${gds} mg/dL (Tinggi)`);  else if (gds < 70) alerts.push(`⚠️ GDS ${gds} mg/dL (Rendah)`); }
+    if (!isNaN(chol)) { if (chol >= 200) alerts.push(`⚠️ Kolesterol ${chol} mg/dL (Tinggi)`); }
+    if (!isNaN(ua))   { if (ua   >  7.0) alerts.push(`⚠️ Asam Urat ${ua} mg/dL (Tinggi)`); }
+    const el = document.getElementById('labAlert');
+    if (!el) return;
+    if (alerts.length > 0) { el.innerHTML = alerts.join(' &nbsp;|&nbsp; '); el.style.display = 'block'; }
+    else                   { el.style.display = 'none'; }
+}
+
+// ══════════════════════════════════════════════════════
 //  CSS INJECT — penunjang panel & dokumen modal
 // ══════════════════════════════════════════════════════
 (function _pm_injectCSS() {

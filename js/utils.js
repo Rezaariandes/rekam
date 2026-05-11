@@ -93,45 +93,7 @@ _themeRotateTimer = setInterval(() => {
     applyTheme(currentTheme);
 }, 8000);
 
-// ── KALKULASI IMT ──
-function calculateIMT() {
-    const bbEl = $('bb'); const tbEl = $('tb'); const imtEl = $('imtCalc');
-    if (!bbEl || !tbEl || !imtEl) return;
-    const bb = parseFloat(bbEl.value);
-    const tb = parseFloat(tbEl.value) / 100;
-    if (bb && tb && tb > 0) {
-        const imt = (bb / (tb * tb)).toFixed(1);
-        let kat = imt < 18.5 ? "Underweight" : imt < 25 ? "Normal" : imt < 30 ? "Overweight" : "Obesitas";
-        imtEl.innerText = `IMT: ${imt} (${kat})`;
-    } else {
-        imtEl.innerText = "";
-    }
-}
 
-// ── CEK TENSI TINGGI ──
-function checkTensi() {
-    const sEl = $('sistol'); const dEl = $('diastol');
-    if (!sEl || !dEl) return;
-    const s = parseInt(sEl.value);
-    const d = parseInt(dEl.value);
-    if (s >= 140) sEl.classList.add('is-high'); else sEl.classList.remove('is-high');
-    if (d >= 90)  dEl.classList.add('is-high'); else dEl.classList.remove('is-high');
-}
-
-// ── CEK NILAI LAB ABNORMAL ──
-function checkLabAlert() {
-    const gds  = parseFloat($('lab_gds')  ? $('lab_gds').value  : '');
-    const chol = parseFloat($('lab_chol') ? $('lab_chol').value : '');
-    const ua   = parseFloat($('lab_ua')   ? $('lab_ua').value   : '');
-    const alerts = [];
-    if (!isNaN(gds))  { if (gds  >= 200) alerts.push(`⚠️ GDS ${gds} mg/dL (Tinggi)`);  else if (gds < 70) alerts.push(`⚠️ GDS ${gds} mg/dL (Rendah)`); }
-    if (!isNaN(chol)) { if (chol >= 200) alerts.push(`⚠️ Kolesterol ${chol} mg/dL (Tinggi)`); }
-    if (!isNaN(ua))   { if (ua   >  7.0) alerts.push(`⚠️ Asam Urat ${ua} mg/dL (Tinggi)`); }
-    const el = $('labAlert');
-    if (!el) return;
-    if (alerts.length > 0) { el.innerHTML = alerts.join(' &nbsp;|&nbsp; '); el.style.display = 'block'; }
-    else                   { el.style.display = 'none'; }
-}
 function loadAutosave() {
     document.querySelectorAll('[data-save="true"]').forEach(el => {
         const v = localStorage.getItem('rme_' + el.id);
