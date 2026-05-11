@@ -250,6 +250,12 @@ async function initApp() {
             $('infoTglPemeriksaan').innerText     = localStorage.getItem('cTglEdit') || 'Tgl: -';
             $('infoTglPemeriksaan').style.display = 'block';
         }
+        // Restore tanggal lahir di banner
+        const _savedTglLahir = localStorage.getItem('cP_tglLahir');
+        if ($('infoPasienTglLahir') && _savedTglLahir) {
+            $('infoPasienTglLahir').innerText     = _savedTglLahir;
+            $('infoPasienTglLahir').style.display = '';
+        }
 
         try {
             currentRiwayat = JSON.parse(localStorage.getItem('cP_riwayat') || '[]');
@@ -272,6 +278,14 @@ async function initApp() {
                     );
                     if (typeof renderMedisDinamis === 'function') {
                         window._ensureTarifCacheThen(() => renderMedisDinamis());
+                    }
+                    // Restore resep dari DB (in-memory _resepItems kosong setelah refresh)
+                    if (window._stokAktif && typeof loadResepByKunjungan === 'function') {
+                        loadResepByKunjungan(currentKunjunganId).catch(() => {});
+                    }
+                    // Restore riwayat_penyakit
+                    if (kunjunganData.riwayat_penyakit && $('riwayat_penyakit')) {
+                        $('riwayat_penyakit').value = kunjunganData.riwayat_penyakit;
                     }
                 } else {
                     if (typeof loadAutosave === 'function') loadAutosave();

@@ -1,6 +1,10 @@
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — SUPABASE CLIENT
 //  Menggantikan semua komunikasi ke Google Apps Script
+//
+//  ✅ supabase-patch.js sudah digabung ke file ini:
+//     - riwayat_penyakit field di sb_saveKunjungan & sb_getKunjunganById
+//  File supabase-patch.js TIDAK perlu di-load lagi.
 // ════════════════════════════════════════════════════════
 
 const _SB_URL = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
@@ -176,6 +180,7 @@ async function sb_initData(filterDate) {
             lab_gds: k.lab_gds, lab_chol: k.lab_chol, lab_ua: k.lab_ua,
             diag: k.diagnosa, status: k.status || 'Menunggu',
             user_id: k.user_id || null,
+            req_lab: k.req_lab || null,
             dokterNama,
             // Status obat & bayar — disimpan di Supabase agar persist lintas sesi
             status_obat:  !!k.status_obat,
@@ -389,6 +394,7 @@ async function sb_getKunjunganById(kunjunganId) {
         diag: r.diagnosa, diagnosa2: r.diagnosa2,
         terapi: r.terapi, surat_sakit: r.surat_sakit,
         req_lab: r.req_lab || null,
+        riwayat_penyakit: r.riwayat_penyakit || null,
         status: r.status
     };
 }
@@ -407,11 +413,12 @@ async function sb_saveKunjungan(payload) {
         lab_sgot, lab_sgpt,
         lab_ureum, lab_creatinin,
         keluhan, fisik, diagnosa, diagnosa2, terapi, suratSakit,
-        alergi, req_lab
+        alergi, req_lab, riwayat_penyakit
     } = payload;
 
     // BUG E FIX: Guard — jangan PATCH pasien jika pasienId tidak valid
-    if (pasienId && pasienId !== 'null' && pasienId !== 'undefined') {
+    // BUG EXTRA: Jangan PATCH jika nama kosong — mencegah korupsi data pasien
+    if (pasienId && pasienId !== 'null' && pasienId !== 'undefined' && nama) {
         await _sbFetch(`pasien?id=eq.${pasienId}`, {
             method: 'PATCH',
             body: { nama, nik, jk, ...(tgl_lahir && {tgl_lahir}), ...(alamat && {alamat}), alergi: alergi || null },
@@ -496,6 +503,7 @@ async function sb_saveKunjungan(payload) {
         terapi:    terapi    || null,
         surat_sakit: suratSakit || null,
         req_lab: req_lab || null,
+        riwayat_penyakit: riwayat_penyakit || null,
         status: isSelesai ? 'Selesai' : 'Menunggu'
     };
 

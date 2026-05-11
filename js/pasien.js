@@ -109,6 +109,8 @@ async function lanjutPemeriksaan() {
     localStorage.setItem('cP_nik',    "NIK: " + ($('nik') ? $('nik').value : '-'));
     localStorage.setItem('cP_umur',   "Umur: " + umur);
     localStorage.setItem('cTglEdit',  tanggalRekamLabel);
+    const _tglLahirRaw = $('tgl_lahir') ? $('tgl_lahir').value.trim() : '';
+    localStorage.setItem('cP_tglLahir', _tglLahirRaw ? (typeof formatTglIndo === 'function' ? formatTglIndo(_tglLahirRaw) : _tglLahirRaw) : '');
 
     if ($('historyListMedis')) {
         $('historyListMedis').innerHTML =

@@ -147,7 +147,7 @@ function clearSession() {
     document.querySelectorAll('[data-save="true"]').forEach(el => localStorage.removeItem('rme_' + el.id));
     localStorage.removeItem('activePage');
     // BUG D FIX: Hapus semua keys sesi pasien agar reload tidak restore state lama
-    ['cP_id','cK_id','cP_nama','cP_nik','cP_umur','cTglEdit','cP_riwayat'].forEach(k => localStorage.removeItem(k));
+    ['cP_id','cK_id','cP_nama','cP_nik','cP_umur','cTglEdit','cP_riwayat','cP_tglLahir'].forEach(k => localStorage.removeItem(k));
     const ss = $('suratSakit');
     if (ss) ss.checked = false;
     const imt = $('imtCalc');

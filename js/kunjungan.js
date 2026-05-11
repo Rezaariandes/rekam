@@ -1,6 +1,12 @@
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — MODUL KUNJUNGAN PASIEN
 //  Mengelola daftar kunjungan harian & rekam medis
+//
+//  ✅ kunjungan-patch.js sudah digabung ke file ini:
+//     - riwayat_penyakit field di saveAll() payload
+//     - Tampil tgl_lahir di banner info pasien
+//     - Indikator permintaan lab di card kunjungan
+//  File kunjungan-patch.js TIDAK perlu di-load lagi.
 // ════════════════════════════════════════════════════════
 
 let kunjunganHariIni   = [];
@@ -239,6 +245,27 @@ function renderKunjunganHariIni() {
             ? `<div style="font-size:11px;color:var(--text-muted);">Diagnosa: ${h.diag || '-'}</div>`
             : '';
 
+        // ── Indikator permintaan lab (req_lab)
+        let labReqRow = '';
+        if (h.req_lab) {
+            try {
+                const reqObj = typeof h.req_lab === 'string' ? JSON.parse(h.req_lab) : h.req_lab;
+                const labReqs = Object.entries(reqObj)
+                    .filter(([k, v]) => v && k.startsWith('lab_req_'))
+                    .map(([k]) => k.replace('lab_req_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+                const pnjReqs = Object.entries(reqObj)
+                    .filter(([k, v]) => v && k.startsWith('penunjang_'))
+                    .map(([k]) => k.replace('penunjang_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+                const allReqs = [...labReqs, ...pnjReqs];
+                if (allReqs.length > 0) {
+                    const chips = allReqs.map(r =>
+                        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;background:rgba(124,58,237,0.1);color:#6d28d9;font-size:9.5px;font-weight:700;border:1px solid rgba(124,58,237,0.25);">✔ ${r}</span>`
+                    ).join('');
+                    labReqRow = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${chips}</div>`;
+                }
+            } catch(e) {}
+        }
+
         // ── Dokter pemeriksa
         const dokterRow = (has('mod_kunjungan_dokter') && h.dokterNama)
             ? `<div style="font-size:10px;color:#059669;font-weight:600;margin-top:2px;">👨‍⚕️ dr. ${h.dokterNama}</div>`
@@ -293,7 +320,7 @@ function renderKunjunganHariIni() {
                 <div class="visit-time-badge" style="flex-shrink:0;">${h.waktu || '-'}</div>
                 <div style="flex:1; min-width:0;">
                     ${has('mod_kunjungan_identitas') ? `<div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tampilNama}</div>` : ''}
-                    ${keluhanRow}${ttvRow}${labRow}${diagRow}${dokterRow}
+                    ${keluhanRow}${ttvRow}${labRow}${diagRow}${dokterRow}${labReqRow}
                 </div>
                 ${statusBadge}
             </div>
@@ -387,6 +414,15 @@ async function bukaRekamMedisHariIni(kId) {
     if ($('infoPasienNik'))  $('infoPasienNik').innerText  = "NIK: " + (p ? (p.nik || '-') : '-');
     if ($('infoPasienUmur')) $('infoPasienUmur').innerText = "Umur: " + umur;
 
+    // Tampilkan tanggal lahir di banner info pasien
+    const tglLahirEl = document.getElementById('infoPasienTglLahir');
+    if (tglLahirEl && p && p.tgl) {
+        tglLahirEl.innerText  = formatTglIndo(p.tgl);
+        tglLahirEl.style.display = '';
+    } else if (tglLahirEl) {
+        tglLahirEl.style.display = 'none';
+    }
+
     // BUG-DATE FIX: Gunakan h.tgl (tanggal asli kunjungan) bukan filterDate.
     // Sebelumnya pakai filterDate → saat buka kunjungan hari lama, banner
     // header menampilkan tanggal hari ini, bukan tanggal asli kunjungan.
@@ -401,6 +437,7 @@ async function bukaRekamMedisHariIni(kId) {
     localStorage.setItem('cP_nama',  namaPasien);
     localStorage.setItem('cP_nik',   p ? (p.nik || '') : '');
     localStorage.setItem('cP_umur',  "Umur: " + umur);
+    localStorage.setItem('cP_tglLahir', (p && p.tgl) ? formatTglIndo(p.tgl) : '');
     localStorage.setItem('cTglEdit', tglKunjungan ? "Tgl: " + formatTglIndo(tglKunjungan) : '');
     localStorage.setItem('activePage', 'pageMedis');
 
@@ -1100,7 +1137,10 @@ async function saveAll(showInvoice = true) {
         const userId = (typeof loggedInUser !== 'undefined' && loggedInUser) ? loggedInUser.id : null;
 
         // ── Ambil data pasien dari form (untuk update profil) ──
-        const namaPasien = $('nama')      ? $('nama').value.trim()      : '';
+        // Guard: jika $('nama') kosong (field di pageDaftar tidak visible/belum terisi),
+        // fallback ke localStorage cP_nama agar pasien record tidak ter-PATCH dengan nama kosong.
+        const _namaDariForm = $('nama') ? $('nama').value.trim() : '';
+        const namaPasien = _namaDariForm || localStorage.getItem('cP_nama') || '';
         const nik        = $('nik')       ? $('nik').value.trim()       : '';
         const jk         = $('jk')        ? $('jk').value               : 'L';
         const tgl_lahir  = $('tgl_lahir') ? $('tgl_lahir').value.trim() : '';
@@ -1154,7 +1194,9 @@ async function saveAll(showInvoice = true) {
             terapi:   $('terapi')  ? $('terapi').value   : '',
             suratSakit,
             // ── Permintaan Lab ──
-            req_lab: (typeof getReqLabPayload === 'function') ? getReqLabPayload() : null
+            req_lab: (typeof getReqLabPayload === 'function') ? getReqLabPayload() : null,
+            // ── Riwayat Penyakit Dahulu ──
+            riwayat_penyakit: $('riwayat_penyakit') ? ($('riwayat_penyakit').value || null) : null
         };
 
         const result = await sb_saveKunjungan(payload);
@@ -1195,11 +1237,15 @@ async function saveAll(showInvoice = true) {
 
         showToast('✅ Rekam medis berhasil disimpan!', 'success');
 
-        // Buka modal tagihan otomatis jika modul biaya aktif
-        if (showInvoice && window._biayaAktif && currentKunjunganId && typeof openModalTagihan === 'function') {
+        // Buka modal tagihan otomatis jika modul biaya aktif (konsisten dengan lihat riwayat)
+        if (showInvoice && window._biayaAktif && currentKunjunganId && diag1) {
             try {
-                const namaPasienDisplay = $('infoPasienNama') ? $('infoPasienNama').innerText : namaPasien;
-                await openModalTagihan(currentKunjunganId, currentPasienId, namaPasienDisplay, localDate, payload);
+                if (typeof showTagihanModal === 'function') {
+                    await showTagihanModal(currentKunjunganId, currentPasienId, payload);
+                } else if (typeof openModalTagihan === 'function') {
+                    const namaPasienDisplay = $('infoPasienNama') ? $('infoPasienNama').innerText : namaPasien;
+                    await openModalTagihan(currentKunjunganId, currentPasienId, namaPasienDisplay, localDate, payload);
+                }
             } catch(e) {
                 console.warn('[Klikpro] Modal tagihan gagal:', e.message);
             }
