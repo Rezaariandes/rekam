@@ -36,6 +36,109 @@ const LAB_SUB_GROUPS = [
     { id: 'lab_ginjal',      label: '🫘 Fungsi Ginjal',    items: ['Ureum', 'Creatinin'] }
 ];
 
+// ── Sub-grup Penunjang — Radiologi & Pencitraan ──
+const PENUNJANG_SUB_GROUPS = [
+    {
+        id: 'penunjang_radiologi',
+        label: '🩻 Pencitraan / Radiologi',
+        items: ['X-Ray / Rontgen', 'USG', 'CT Scan', 'MRI', 'Mammografi', 'Fluoroskopi', 'PET Scan', 'Bone Densitometry', 'Intervensi Radiologi']
+    },
+    {
+        id: 'penunjang_ekg',
+        label: '❤️ Kardiologi & EKG',
+        items: ['EKG / ECG', 'Echocardiography', 'Holter Monitor', 'Stress Test / Treadmill']
+    },
+    {
+        id: 'penunjang_endoskopi',
+        label: '🔬 Endoskopi & Prosedur',
+        items: ['Endoskopi', 'Kolonoskopi', 'Spirometri', 'Audiometri']
+    }
+];
+
+// ── Sub-grup Tindakan ──
+const TINDAKAN_SUB_GROUPS = [
+    {
+        id: 'tindakan_bedah_minor',
+        label: '🔪 Bedah Minor',
+        items: ['Hecting / Jahit Luka', 'Buka Jahitan', 'Insisi Abses', 'Ekstraksi Kuku', 'Ekstraksi Benda Asing', 'Sirkumsisi']
+    },
+    {
+        id: 'tindakan_perawatan',
+        label: '🩹 Perawatan Luka',
+        items: ['Ganti Balut', 'Debridement', 'Perawatan Luka Bakar', 'Nekrotomi']
+    },
+    {
+        id: 'tindakan_kb',
+        label: '🌿 KB & Reproduksi',
+        items: ['Pasang IUD', 'Lepas IUD', 'Pasang Implan', 'Lepas Implan', 'Suntik KB', 'Pap Smear']
+    },
+    {
+        id: 'tindakan_umum',
+        label: '⚕️ Tindakan Umum',
+        items: ['Nebulisasi', 'Pemasangan Kateter', 'Pemasangan Infus', 'Injeksi / Suntik', 'Suction / Penghisapan', 'Rekam Medis Baru']
+    }
+];
+
+// ── Sub-grup Pemeriksaan ──
+const PEMERIKSAAN_SUB_GROUPS = [
+    {
+        id: 'periksa_umum',
+        label: '🩺 Konsultasi & Umum',
+        items: ['Konsultasi Dokter', 'Konsultasi Dokter Spesialis', 'Pemeriksaan Fisik', 'Pemeriksaan Anak', 'Pemeriksaan Ibu Hamil (ANC)', 'Kunjungan Rumah']
+    },
+    {
+        id: 'periksa_gigi',
+        label: '🦷 Gigi & Mulut',
+        items: ['Konsultasi Gigi', 'Tambal Gigi', 'Cabut Gigi', 'Scaling / Pembersihan Karang Gigi', 'Perawatan Saluran Akar']
+    },
+    {
+        id: 'periksa_mata',
+        label: '👁️ Mata',
+        items: ['Pemeriksaan Visus', 'Tonometri', 'Pemeriksaan Fundus']
+    }
+];
+
+// ── Sub-grup Obat ──
+const OBAT_SUB_GROUPS = [
+    {
+        id: 'obat_umum',
+        label: '💊 Obat Umum',
+        items: ['Obat Generik', 'Obat Paten', 'Vitamin & Suplemen']
+    },
+    {
+        id: 'obat_kronis',
+        label: '💉 Obat Kronis & Khusus',
+        items: ['Obat Hipertensi', 'Obat Diabetes', 'Obat Kolesterol', 'Obat TB']
+    }
+];
+
+// ── Sub-grup Administrasi ──
+const ADMIN_SUB_GROUPS = [
+    {
+        id: 'admin_registrasi',
+        label: '📝 Registrasi & Pendaftaran',
+        items: ['Biaya Pendaftaran', 'Rekam Medis Baru', 'Administrasi Rawat Inap']
+    },
+    {
+        id: 'admin_surat',
+        label: '📄 Surat & Dokumen',
+        items: ['Surat Keterangan Sakit', 'Surat Keterangan Sehat', 'Surat Rujukan', 'Resume Medis', 'Legalisasi Dokumen']
+    }
+];
+
+// Mapping kategori → sub-group config
+const KATEGORI_SUB_GROUPS = {
+    'Laboratorium': LAB_SUB_GROUPS,
+    'Penunjang':    PENUNJANG_SUB_GROUPS,
+    'Tindakan':     TINDAKAN_SUB_GROUPS,
+    'Pemeriksaan':  PEMERIKSAAN_SUB_GROUPS,
+    'Obat':         OBAT_SUB_GROUPS,
+    'Administrasi': ADMIN_SUB_GROUPS,
+};
+
+// State accordion (key: groupId → bool open)
+if (typeof window._accordionState === 'undefined') window._accordionState = {};
+
 // ════════════════════════════════════════
 //  INIT HALAMAN TARIF
 // ════════════════════════════════════════
@@ -56,7 +159,7 @@ async function _refreshTarifCache() {
 }
 
 // ════════════════════════════════════════
-//  RENDER DAFTAR TARIF
+//  RENDER DAFTAR TARIF (dengan accordion)
 // ════════════════════════════════════════
 function renderDaftarTarif() {
     const container = document.getElementById('daftarTarif');
@@ -83,14 +186,13 @@ function renderDaftarTarif() {
         ? window._tarifCache.filter(t => t.kategori === _activeKatTab)
         : window._tarifCache;
 
-    // Tombol aksi massal — tampil di bawah tabs
+    // Tombol aksi massal
     let bulkEl = document.getElementById('_biayaBulkActions');
     if (!bulkEl) {
         bulkEl = document.createElement('div');
         bulkEl.id = '_biayaBulkActions';
         container.parentElement.insertBefore(bulkEl, container);
     }
-    const labelSesi = _activeKatTab ? `"${_activeKatTab}"` : 'semua kategori';
     bulkEl.style.cssText = 'display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;';
     bulkEl.innerHTML = `
         <button onclick="bulkToggleTarif(true)"
@@ -102,26 +204,159 @@ function renderDaftarTarif() {
             ⛔ Nonaktifkan semua ${_activeKatTab ? '"' + _activeKatTab + '"' : ''}
         </button>`;
 
-    container.innerHTML = filtered.length === 0
-        ? `<p style="text-align:center;color:#94a3b8;padding:32px 0">Belum ada tarif di database</p>`
-        : filtered.map(t => `
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
-                <div style="flex:1;min-width:0">
-                    <div style="font-weight:600;font-size:13px;${!t.aktif ? 'color:#94a3b8;' : ''}">${KAT_ICON[t.kategori] || ''} ${t.nama}</div>
-                    <div style="font-size:11px;color:#94a3b8">${t.kategori}</div>
-                </div>
-                <div style="font-weight:700;color:${t.aktif ? 'var(--primary)' : '#94a3b8'};font-size:13px;white-space:nowrap">
-                    Rp ${Number(t.harga).toLocaleString('id-ID')}
-                </div>
-                <button onclick="toggleAktifTarif('${t.id}', ${!t.aktif})" title="${t.aktif ? 'Nonaktifkan' : 'Aktifkan'}"
-                    style="padding:3px 8px;border:1.5px solid ${t.aktif ? '#22c55e' : '#e2e8f0'};border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:${t.aktif ? '#f0fdf4' : '#f8fafc'};color:${t.aktif ? '#16a34a' : '#94a3b8'};white-space:nowrap">
-                    ${t.aktif ? '✅ Aktif' : '⛔ Nonaktif'}
-                </button>
-                <button onclick="openEditTarif('${t.id}')"
-                    style="padding:4px 10px;border:1px solid var(--primary);border-radius:8px;color:var(--primary);font-size:11px;cursor:pointer;background:#fff">
-                    Edit
-                </button>
-            </div>`).join('');
+    if (filtered.length === 0) {
+        container.innerHTML = `<p style="text-align:center;color:#94a3b8;padding:32px 0">Belum ada tarif di database</p>`;
+        return;
+    }
+
+    // Jika ada tab aktif dan ada sub-group untuk kategori ini → tampilkan accordion
+    if (_activeKatTab && KATEGORI_SUB_GROUPS[_activeKatTab]) {
+        container.innerHTML = _renderAccordionByKategori(_activeKatTab, filtered);
+    } else if (!_activeKatTab) {
+        // Tab "Semua" — kelompokkan per kategori, masing-masing jadi accordion grup
+        container.innerHTML = _renderAccordionSemua(filtered);
+    } else {
+        // Kategori tanpa sub-grup (Lainnya, dll) — tampil flat seperti semula
+        container.innerHTML = filtered.map(t => _renderTarifRow(t)).join('');
+    }
+}
+
+// ─── Render accordion: Tab "Semua" ─────────────────────────
+function _renderAccordionSemua(filtered) {
+    const byKat = {};
+    filtered.forEach(t => {
+        if (!byKat[t.kategori]) byKat[t.kategori] = [];
+        byKat[t.kategori].push(t);
+    });
+    return Object.keys(byKat).sort().map(kat => {
+        const groupId = 'grp_all_' + kat;
+        const isOpen  = window._accordionState[groupId] !== false; // default terbuka
+        const count   = byKat[kat].length;
+        const aktifCount = byKat[kat].filter(t => t.aktif).length;
+        return _accordionShell({
+            groupId,
+            label: `${KAT_ICON[kat] || ''} ${kat}`,
+            count,
+            aktifCount,
+            isOpen,
+            bodyHtml: byKat[kat].map(t => _renderTarifRow(t, true)).join('')
+        });
+    }).join('');
+}
+
+// ─── Render accordion: Tab kategori tertentu dengan sub-grup ─
+function _renderAccordionByKategori(kat, filtered) {
+    const subGroups = KATEGORI_SUB_GROUPS[kat];
+    const matched   = new Set();
+    let html = '';
+
+    subGroups.forEach(sg => {
+        const items = filtered.filter(t => sg.items.includes(t.nama));
+        items.forEach(t => matched.add(t.id));
+
+        // Tampilkan accordion meski items kosong (siap diisi nanti)
+        const groupId  = sg.id;
+        const isOpen   = window._accordionState[groupId] !== false;
+        const aktifCount = items.filter(t => t.aktif).length;
+
+        html += _accordionShell({
+            groupId,
+            label: sg.label,
+            count: items.length,
+            aktifCount,
+            isOpen,
+            bodyHtml: items.length > 0
+                ? items.map(t => _renderTarifRow(t)).join('')
+                : `<div style="text-align:center;color:#94a3b8;padding:14px 0;font-size:12px;">Belum ada tarif untuk kelompok ini</div>`
+        });
+    });
+
+    // Item yang tidak masuk sub-grup mana pun → tampil di "Lainnya"
+    const unmatched = filtered.filter(t => !matched.has(t.id));
+    if (unmatched.length > 0) {
+        const groupId    = kat + '_lainnya';
+        const isOpen     = window._accordionState[groupId] !== false;
+        const aktifCount = unmatched.filter(t => t.aktif).length;
+        html += _accordionShell({
+            groupId,
+            label: '📌 Lainnya',
+            count: unmatched.length,
+            aktifCount,
+            isOpen,
+            bodyHtml: unmatched.map(t => _renderTarifRow(t)).join('')
+        });
+    }
+
+    return html;
+}
+
+// ─── Shell HTML accordion ────────────────────────────────────
+function _accordionShell({ groupId, label, count, aktifCount, isOpen, bodyHtml }) {
+    const inactiveCount = count - aktifCount;
+    const badgeAktif    = aktifCount > 0
+        ? `<span style="background:#dcfce7;color:#16a34a;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700;">${aktifCount} aktif</span>`
+        : '';
+    const badgeNon      = inactiveCount > 0
+        ? `<span style="background:#f1f5f9;color:#94a3b8;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700;">${inactiveCount} nonaktif</span>`
+        : '';
+
+    return `
+    <div style="border:1.5px solid #e2e8f0;border-radius:12px;margin-bottom:8px;overflow:hidden;">
+        <button onclick="_toggleAccordion('${groupId}')"
+            style="width:100%;display:flex;align-items:center;gap:8px;padding:10px 14px;
+                   background:${isOpen ? 'linear-gradient(135deg,rgba(99,102,241,0.06),rgba(139,92,246,0.04))' : '#fafbfc'};
+                   border:none;cursor:pointer;text-align:left;transition:background 0.2s;">
+            <span style="font-size:13px;font-weight:700;color:var(--primary-dark);flex:1;">${label}</span>
+            ${badgeAktif}${badgeNon}
+            <span style="font-size:10px;color:#94a3b8;font-weight:600;">${count} item</span>
+            <span style="font-size:14px;color:#94a3b8;transition:transform 0.2s;transform:rotate(${isOpen ? '90' : '0'}deg);">▶</span>
+        </button>
+        <div id="acc_body_${groupId}" style="display:${isOpen ? 'block' : 'none'};padding:0 14px 6px;">
+            ${bodyHtml}
+        </div>
+    </div>`;
+}
+
+// ─── Toggle buka/tutup accordion ────────────────────────────
+function _toggleAccordion(groupId) {
+    const body = document.getElementById('acc_body_' + groupId);
+    if (!body) return;
+    const nowOpen = body.style.display === 'none';
+    window._accordionState[groupId] = nowOpen;
+    body.style.display = nowOpen ? 'block' : 'none';
+
+    // Update ikon panah
+    const btn = body.previousElementSibling;
+    if (btn) {
+        const arrow = btn.querySelector('span:last-child');
+        if (arrow) arrow.style.transform = `rotate(${nowOpen ? '90' : '0'}deg)`;
+        btn.style.background = nowOpen
+            ? 'linear-gradient(135deg,rgba(99,102,241,0.06),rgba(139,92,246,0.04))'
+            : '#fafbfc';
+    }
+}
+
+// ─── Render satu baris tarif ─────────────────────────────────
+function _renderTarifRow(t, showKat = false) {
+    return `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
+        <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:13px;${!t.aktif ? 'color:#94a3b8;' : ''}">${t.nama}</div>
+            ${showKat ? `<div style="font-size:10px;color:#94a3b8">${KAT_ICON[t.kategori] || ''} ${t.kategori}</div>` : ''}
+            ${t.keterangan ? `<div style="font-size:10px;color:#94a3b8">${t.keterangan}</div>` : ''}
+        </div>
+        <div style="font-weight:700;color:${t.aktif ? 'var(--primary)' : '#94a3b8'};font-size:13px;white-space:nowrap">
+            Rp ${Number(t.harga).toLocaleString('id-ID')}
+        </div>
+        <button onclick="toggleAktifTarif('${t.id}', ${!t.aktif})" title="${t.aktif ? 'Nonaktifkan' : 'Aktifkan'}"
+            style="padding:3px 8px;border:1.5px solid ${t.aktif ? '#22c55e' : '#e2e8f0'};border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:${t.aktif ? '#f0fdf4' : '#f8fafc'};color:${t.aktif ? '#16a34a' : '#94a3b8'};white-space:nowrap">
+            ${t.aktif ? '✅' : '⛔'}
+        </button>
+        <button onclick="openEditTarif('${t.id}')"
+            style="padding:4px 10px;border:1px solid var(--primary);border-radius:8px;color:var(--primary);font-size:11px;cursor:pointer;background:#fff">
+            Edit
+        </button>
+    </div>`;
 }
 
 function _setBiayaTab(kat) {
