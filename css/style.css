@@ -523,7 +523,7 @@ input.is-high { color: var(--danger) !important; }
 }
 #infoPasienNik, #infoPasienUmur {
     font-size: 11px !important;
-    color: var(--text-muted) !important;
+    color: #ffffff !important;
 }
 .pasien-badge {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
