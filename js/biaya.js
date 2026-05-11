@@ -149,35 +149,15 @@ async function initPageBiaya() {
 
 async function _refreshTarifCache() {
     try {
-        // ── Pastikan Supabase client tersedia ──
-        const sb = window._sb || window.supabase || window._supabase;
-        if (!sb) {
-            console.error('[biaya] ❌ Supabase client tidak ditemukan (window._sb / window.supabase)');
-            showToast('❌ Koneksi database tidak ditemukan', 'error');
-            return;
-        }
-
-        const { data, error } = await sb
-            .from('tarif_layanan')
-            .select('id, nama, kategori, harga, keterangan, aktif')
-            .order('kategori')
-            .order('nama');
-
-        if (error) {
-            console.error('[biaya] ❌ Query tarif_layanan error:', error.message, error);
-            showToast('❌ Gagal memuat tarif: ' + error.message, 'error');
-            return;
-        }
-
+        const data = await _sbFetch('tarif_layanan?select=*&order=kategori.asc,nama.asc');
         window._tarifCache = data || [];
         console.log('[biaya] ✅ Tarif dimuat:', window._tarifCache.length, 'item');
-
         if (window._tarifCache.length === 0) {
             showToast('⚠️ Tabel tarif_layanan kosong. Jalankan migrasi SQL terlebih dahulu.', 'error');
         }
     } catch(e) {
-        console.error('[biaya] ❌ Exception saat memuat tarif:', e);
-        showToast('❌ Gagal memuat tarif', 'error');
+        console.error('[biaya] ❌ Gagal memuat tarif:', e.message, e);
+        showToast('❌ Gagal memuat tarif: ' + e.message, 'error');
     }
 }
 
@@ -452,18 +432,8 @@ async function _saveTarifFromModal(id) {
 
     if (!nama) return showToast('❌ Nama layanan wajib diisi', 'error');
 
-    const sb = window._sb || window.supabase || window._supabase;
-    if (!sb) return showToast('❌ Koneksi database tidak ditemukan', 'error');
-
     try {
-        const payload = { nama, kategori: kat, harga: Number(harga) || 0, keterangan: ket || null, aktif, updated_at: new Date().toISOString() };
-        let error;
-        if (id) {
-            ({ error } = await sb.from('tarif_layanan').update(payload).eq('id', id));
-        } else {
-            ({ error } = await sb.from('tarif_layanan').insert(payload));
-        }
-        if (error) throw error;
+        await sb_saveTarif({ id: id || undefined, nama, kategori: kat, harga: Number(harga) || 0, keterangan: ket || null, aktif });
         document.getElementById('_tarifModal')?.remove();
         showToast('✅ Tarif berhasil disimpan', 'success');
         await _refreshTarifCache();
@@ -475,13 +445,10 @@ async function _saveTarifFromModal(id) {
 }
 
 async function toggleAktifTarif(id, aktifBaru) {
-    const sb = window._sb || window.supabase || window._supabase;
-    if (!sb) return showToast('❌ Koneksi database tidak ditemukan', 'error');
     try {
         const t = window._tarifCache.find(x => String(x.id) === String(id));
         if (!t) return;
-        const { error } = await sb.from('tarif_layanan').update({ aktif: aktifBaru, updated_at: new Date().toISOString() }).eq('id', id);
-        if (error) throw error;
+        await sb_saveTarif({ id, nama: t.nama, kategori: t.kategori, harga: t.harga, keterangan: t.keterangan, aktif: aktifBaru });
         await _refreshTarifCache();
         renderDaftarTarif();
     } catch(e) {
@@ -491,9 +458,6 @@ async function toggleAktifTarif(id, aktifBaru) {
 }
 
 async function bulkToggleTarif(aktifBaru) {
-    const sb = window._sb || window.supabase || window._supabase;
-    if (!sb) return showToast('❌ Koneksi database tidak ditemukan', 'error');
-
     const targets = _activeKatTab
         ? window._tarifCache.filter(t => t.kategori === _activeKatTab)
         : window._tarifCache;
@@ -506,11 +470,9 @@ async function bulkToggleTarif(aktifBaru) {
 
     showToast(`⏳ Memproses ${perlu.length} layanan...`, 'info');
     try {
-        const ids = perlu.map(t => t.id);
-        const { error } = await sb.from('tarif_layanan')
-            .update({ aktif: aktifBaru, updated_at: new Date().toISOString() })
-            .in('id', ids);
-        if (error) throw error;
+        await Promise.all(perlu.map(t =>
+            sb_saveTarif({ id: t.id, nama: t.nama, kategori: t.kategori, harga: t.harga, keterangan: t.keterangan, aktif: aktifBaru })
+        ));
         await _refreshTarifCache();
         renderDaftarTarif();
         const label = _activeKatTab ? `"${_activeKatTab}"` : 'semua';
