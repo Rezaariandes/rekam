@@ -396,4 +396,174 @@
                         nama:     $('nama')      ? $('nama').value.trim()      : '',
                         nik:      $('nik')       ? $('nik').value.trim()       : '',
                         jk:       $('jk')        ? $('jk').value               : 'L',
-                      
+                        tgl_lahir:$('tgl_lahir') ? $('tgl_lahir').value.trim() : '',
+                        alamat:   $('alamat')    ? $('alamat').value.trim()    : '',
+                        alergi:   $('alergi')    ? $('alergi').value.trim()    : '',
+                        td,
+                        nadi:     $('nadi')  ? $('nadi').value  : '',
+                        suhu:     $('suhu')  ? $('suhu').value  : '',
+                        rr:       $('rr')    ? $('rr').value    : '',
+                        bb:       $('bb')    ? $('bb').value    : '',
+                        tb:       $('tb')    ? $('tb').value    : '',
+                        lab_gds:  $('lab_gds')  ? $('lab_gds').value  : '',
+                        lab_chol: $('lab_chol') ? $('lab_chol').value : '',
+                        lab_ua:   $('lab_ua')   ? $('lab_ua').value   : '',
+                        lab_hb:         $('lab_hb')         ? $('lab_hb').value         : '',
+                        lab_trombosit:  $('lab_trombosit')  ? $('lab_trombosit').value  : '',
+                        lab_leukosit:   $('lab_leukosit')   ? $('lab_leukosit').value   : '',
+                        lab_eritrosit:  $('lab_eritrosit')  ? $('lab_eritrosit').value  : '',
+                        lab_hematokrit: $('lab_hematokrit') ? $('lab_hematokrit').value : '',
+                        lab_hiv:        $('lab_hiv')        ? $('lab_hiv').value        : '',
+                        lab_sifilis:    $('lab_sifilis')    ? $('lab_sifilis').value    : '',
+                        lab_hepatitis:  $('lab_hepatitis')  ? $('lab_hepatitis').value  : '',
+                        lab_hdl:  $('lab_hdl')  ? $('lab_hdl').value  : '',
+                        lab_ldl:  $('lab_ldl')  ? $('lab_ldl').value  : '',
+                        lab_tg:   $('lab_tg')   ? $('lab_tg').value   : '',
+                        lab_gdp:  $('lab_gdp')  ? $('lab_gdp').value  : '',
+                        lab_hba1c:$('lab_hba1c')? $('lab_hba1c').value: '',
+                        lab_sgot: $('lab_sgot') ? $('lab_sgot').value : '',
+                        lab_sgpt: $('lab_sgpt') ? $('lab_sgpt').value : '',
+                        lab_ureum:    $('lab_ureum')    ? $('lab_ureum').value    : '',
+                        lab_creatinin:$('lab_creatinin')? $('lab_creatinin').value: '',
+                        keluhan:  $('keluhan') ? $('keluhan').value  : '',
+                        fisik:    $('fisik')   ? $('fisik').value    : '',
+                        diagnosa: diag1, diagnosa2: diag2,
+                        terapi:   $('terapi')  ? $('terapi').value   : '',
+                        suratSakit,
+                        req_lab: (typeof getReqLabPayload === 'function') ? getReqLabPayload() : null
+                    };
+
+                    const result = await sb_saveKunjungan(payload);
+                    if (result && result.kunjunganId) {
+                        currentKunjunganId = result.kunjunganId;
+                        localStorage.setItem('cK_id', currentKunjunganId);
+                    }
+
+                    if (window._stokAktif && currentKunjunganId && typeof _getResepItems === 'function') {
+                        try {
+                            const resepItems = _getResepItems();
+                            if (resepItems && resepItems.length > 0) await sb_saveResep(currentKunjunganId, resepItems);
+                        } catch(e) { console.warn('[saveAll] Resep gagal:', e.message); }
+                    }
+
+                    if (typeof kunjunganHariIni !== 'undefined' && currentKunjunganId) {
+                        const isSelesai = !!(diag1 && payload.terapi);
+                        const kIdx = kunjunganHariIni.findIndex(x => x.id === currentKunjunganId);
+                        if (kIdx !== -1) {
+                            kunjunganHariIni[kIdx].status  = isSelesai ? 'Selesai' : 'Menunggu';
+                            kunjunganHariIni[kIdx].td      = td;
+                            kunjunganHariIni[kIdx].suhu    = payload.suhu;
+                            kunjunganHariIni[kIdx].nadi    = payload.nadi;
+                            kunjunganHariIni[kIdx].keluhan = payload.keluhan;
+                            kunjunganHariIni[kIdx].diag    = diag1;
+                        }
+                    }
+
+                    if (typeof showToast === 'function') showToast('✅ Rekam medis berhasil disimpan!', 'success');
+
+                    if (showInvoice && window._biayaAktif && currentKunjunganId && diag1 && typeof openModalTagihan === 'function') {
+                        try {
+                            const namaDisplay = $('infoPasienNama') ? $('infoPasienNama').innerText : payload.nama;
+                            await openModalTagihan(currentKunjunganId, currentPasienId, namaDisplay, localDate, payload);
+                        } catch(e) { console.warn('[saveAll] Modal tagihan gagal:', e.message); }
+                    }
+
+                    try {
+                        if (currentPasienId && typeof _sbFetch === 'function') {
+                            const riwayatRows = await _sbFetch(
+                                `kunjungan?pasien_id=eq.${currentPasienId}&order=tgl.desc,waktu.desc&select=*`
+                            );
+                            if (!window._usersCache || window._usersCache.length === 0) {
+                                window._usersCache = await _sbFetch('users?select=id,nama,jabatan&order=nama.asc').catch(() => []);
+                            }
+                            currentRiwayat = riwayatRows.map(r => {
+                                const du = r.user_id ? (window._usersCache||[]).find(u => u.id === r.user_id && u.jabatan?.toLowerCase() === 'dokter') : null;
+                                return {
+                                    id: r.id, tgl: r.tgl, waktu: r.waktu,
+                                    td: r.td, nadi: r.nadi, suhu: r.suhu, rr: r.rr, bb: r.bb, tb: r.tb,
+                                    keluhan: r.keluhan, fisik: r.fisik,
+                                    lab_gds: r.lab_gds, lab_chol: r.lab_chol, lab_ua: r.lab_ua,
+                                    diag: r.diagnosa, diagnosa2: r.diagnosa2,
+                                    terapi: r.terapi, surat_sakit: r.surat_sakit,
+                                    status: r.status, user_id: r.user_id,
+                                    status_obat: !!r.status_obat, status_bayar: !!r.status_bayar,
+                                    dokterNama: du ? du.nama : ''
+                                };
+                            });
+                            localStorage.setItem('cP_riwayat', JSON.stringify(currentRiwayat));
+                            if (typeof renderRiwayatList === 'function') renderRiwayatList(currentRiwayat, 'historyListMedis');
+                        }
+                    } catch(e) { console.warn('[saveAll] Refresh riwayat gagal:', e.message); }
+
+                } catch(e) {
+                    console.error('[saveAll] Error:', e);
+                    if (typeof showToast === 'function') showToast('❌ Gagal menyimpan: ' + (e.message || 'Cek koneksi internet'), 'error');
+                } finally {
+                    if (btn) { btn.disabled = false; btn.innerText = '✓ Simpan Rekam Medis'; }
+                }
+            };
+
+            // ── PATCH 3: Fix riwayat fetch ──
+            if (typeof bukaRekamMedisHariIni === 'function') {
+                const _origBuka = bukaRekamMedisHariIni;
+                window.bukaRekamMedisHariIni = async function(kId) {
+                    await _origBuka(kId);
+                };
+            }
+
+            // ── PATCH 4: Status badge ──
+            window._statusCache = window._statusCache || {};
+
+            window._getStatusKunjungan = function(kId) {
+                if (window._statusCache[kId]) return window._statusCache[kId];
+                const k = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : []).find(x => x.id === kId);
+                if (k) {
+                    const s = { obat: !!k.status_obat, bayar: !!k.status_bayar };
+                    window._statusCache[kId] = s;
+                    return s;
+                }
+                return { obat: false, bayar: false };
+            };
+
+            window.toggleStatusKunjungan = async function(event, kId, field) {
+                event.stopPropagation();
+                const s   = window._getStatusKunjungan(kId);
+                const val = !s[field];
+                s[field]  = val;
+                window._statusCache[kId] = s;
+                const k = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : []).find(x => x.id === kId);
+                if (k) k[field === 'obat' ? 'status_obat' : 'status_bayar'] = val;
+
+                const badge = document.getElementById(`badge_${field}_${kId}`);
+                if (badge) {
+                    const isObat = field === 'obat';
+                    badge.innerHTML = val
+                        ? `<span style="font-size:10px;">${isObat ? '💊' : '💰'}</span> ${isObat ? 'Resep' : 'Bayar'} ✓`
+                        : `<span style="font-size:10px;">✕</span> ${isObat ? 'Resep' : 'Bayar'}`;
+                    const base = 'cursor:pointer;display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;';
+                    badge.style.cssText = base + (val
+                        ? (isObat ? 'background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;' : 'background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;')
+                        : 'background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;');
+                }
+
+                const label = field === 'obat' ? 'Resep' : 'Pembayaran';
+                if (typeof showToast === 'function') showToast(val ? `✅ ${label} sudah ditandai` : `↩️ ${label} dibatalkan`, val ? 'success' : 'info');
+
+                try {
+                    const col = field === 'obat' ? 'status_obat' : 'status_bayar';
+                    await _sbFetch(`kunjungan?id=eq.${kId}`, { method: 'PATCH', body: { [col]: val }, prefer: 'return=minimal' });
+                } catch(e) { console.warn('[Klikpro] Gagal simpan status:', e.message); }
+            };
+
+            // ── PATCH 5: Resep Modal ──
+            if (!window._ModalResepPatched && typeof _tampilModalResep === 'function') {
+                window._ModalResepPatched = true;
+                console.log('[Klikpro] ✅ modal-resep.js aktif dari GitHub');
+            }
+
+            console.log('[Klikpro] ✅ Local patches applied');
+        }, INTERVAL);
+    })();
+    </script>
+</body>
+</html>
