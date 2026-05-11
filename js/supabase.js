@@ -1,12 +1,11 @@
 // ════════════════════════════════════════════════════════
-//  KLIKPRO RME — SUPABASE CLIENT
-//  Menggantikan semua komunikasi ke Google Apps Script
+//  KLIKPRO RME — SUPABASE CLIENT (CONSOLIDATED)
 //
+//  ✅ supabase-secure.js → sudah digabung (auth, user, dokter)
 //  ✅ supabase-patch.js  → sudah digabung (riwayat_penyakit)
 //  ✅ supabase-stok.js   → sudah digabung (modul stok obat)
 //  ✅ supabase-biaya.js  → sudah digabung (modul pembiayaan)
-//  Cukup load 1 file ini saja — supabase-stok.js & supabase-biaya.js
-//  TIDAK perlu di-load lagi.
+//  Cukup load 1 file ini saja — file-file di atas TIDAK perlu di-load lagi.
 // ════════════════════════════════════════════════════════
 
 const _SB_URL = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
@@ -40,8 +39,30 @@ async function sb_getSettings() {
     const rows = await _sbFetch('konfigurasi?select=key,value');
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
+
+    // Set global flags agar modul stok, biaya, dan chip kunjungan bisa tampil
+    const _toBool = v => v === true || v === 'true' || v === '1';
+    window._stokAktif  = _toBool(settings['stok_aktif']);
+    window._biayaAktif = _toBool(settings['biaya_aktif']);
+    window._labAktif   = _toBool(settings['lab_aktif']);
+
     const dokter = await _sbFetch('dokter?select=*');
     return { status: 'success', settings, dokter };
+}
+
+/** Muat ulang flags modul dari konfigurasi — bisa dipanggil kapan saja */
+async function sb_initFlags() {
+    try {
+        const rows = await _sbFetch('konfigurasi?select=key,value');
+        const cfg = {};
+        rows.forEach(r => { cfg[r.key] = r.value; });
+        const _toBool = v => v === true || v === 'true' || v === '1';
+        window._stokAktif  = _toBool(cfg['stok_aktif']);
+        window._biayaAktif = _toBool(cfg['biaya_aktif']);
+        window._labAktif   = _toBool(cfg['lab_aktif']);
+    } catch(e) {
+        console.warn('[sb_initFlags] Gagal memuat flags:', e.message);
+    }
 }
 
 async function sb_saveSettings(payload) {
@@ -147,6 +168,32 @@ async function sb_tambahDokterDariUser({ nama, jabatan, nik, ihs, sip, spesialis
         body: { nama, jabatan: jabatan || 'Dokter', nik: nik || '', ihs: ihs || '', sip: sip || '', spesialis: spesialis || '', user_id },
         prefer: 'return=minimal'
     });
+    return { status: 'success' };
+}
+
+/** Ambil data dokter berdasarkan user_id (untuk form edit user) */
+async function sb_getDokterByUserId(userId) {
+    if (!userId) return null;
+    const rows = await _sbFetch(`dokter?user_id=eq.${userId}&select=*&limit=1`);
+    return rows.length > 0 ? rows[0] : null;
+}
+
+/** Update atau buat data dokter dari modal edit user */
+async function sb_upsertDokterFromUser({ userId, nama, nik, ihs, sip, spesialis }) {
+    const existing = await _sbFetch(`dokter?user_id=eq.${userId}&select=id`);
+    const body = { nama, nik: nik||'', ihs: ihs||'', sip: sip||'', spesialis: spesialis||'', user_id: userId, jabatan: 'Dokter' };
+    if (existing && existing.length > 0) {
+        await _sbFetch(`dokter?id=eq.${existing[0].id}`, { method: 'PATCH', body, prefer: 'return=minimal' });
+        return { status: 'updated', id: existing[0].id };
+    } else {
+        await _sbFetch('dokter', { method: 'POST', body, prefer: 'return=minimal' });
+        return { status: 'created' };
+    }
+}
+
+/** Hapus data dokter saja (tanpa hapus user), dipakai saat jabatan berubah dari Dokter */
+async function sb_deleteDokterByUserId(userId) {
+    await _sbFetch(`dokter?user_id=eq.${userId}`, { method: 'DELETE', prefer: 'return=minimal' });
     return { status: 'success' };
 }
 
