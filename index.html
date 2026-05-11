@@ -7,7 +7,8 @@
 
     <script>
         const SUPABASE_URL = 'https://aqqlxytpryuwdggadjlt.supabase.co';
-        const supabaseClient = null;
+        let   SUPABASE_ANON_KEY = '';   // diisi saat bootstrap via Edge Function
+        const supabaseClient    = null;
 
         const BASE_URL = 'https://raw.githubusercontent.com/Rezaariandes/rekam/main';
 
@@ -200,6 +201,18 @@
 
     async function bootstrap() {
         try {
+            // ── 0. Ambil anon key dari Edge Function (key tidak pernah ada di kode) ──
+            setLoadStep('Menghubungkan ke server...');
+            try {
+                const cfgRes = await fetch(SUPABASE_URL + '/functions/v1/get-config');
+                if (!cfgRes.ok) throw new Error('Edge Function get-config gagal: ' + cfgRes.status);
+                const cfg = await cfgRes.json();
+                if (!cfg.anon_key) throw new Error('anon_key tidak ditemukan di respons get-config');
+                SUPABASE_ANON_KEY = cfg.anon_key;
+            } catch(e) {
+                throw new Error('Gagal mengambil konfigurasi keamanan: ' + e.message);
+            }
+
             setLoadStep('Mengunduh tampilan...');
 
             const htmlKeys = ['css','modalRiwayat','modalUser','header','nav',
