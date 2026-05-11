@@ -11,8 +11,9 @@
                     <span id="infoPasienNik" style="font-size:11px;color:var(--text-muted);">NIK: —</span>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                    <div id="infoTglPemeriksaan" class="pasien-badge" style="background:var(--success);display:none;">Tgl: -</div>
+                    <div id="infoPasienTglLahir" class="pasien-badge" style="background:var(--primary);display:none;">Tgl: -</div>
                     <div id="infoPasienUmur" class="pasien-badge">Umur: -</div>
+                    <div id="infoTglPemeriksaan" class="pasien-badge" style="background:var(--success);display:none;">Tgl: -</div>
                 </div>
             </div>
         </div>
@@ -21,8 +22,10 @@
     <!-- ══════════════════════════════════════════════════ -->
     <!--  SECTION 2 — PEMERIKSAAN MEDIS                    -->
     <!--    a. Tanda-Tanda Vital                           -->
-    <!--    b. Keluhan Pasien                              -->
-    <!--    c. Pemeriksaan Fisik                           -->
+    <!--    b. Antropometri                                -->
+    <!--    c. Keluhan Pasien                              -->
+    <!--    d. Riwayat Penyakit Dahulu                     -->
+    <!--    e. Pemeriksaan Fisik                           -->
     <!-- ══════════════════════════════════════════════════ -->
     <div class="card rm-card">
         <div class="rm-section-header">
@@ -37,7 +40,6 @@
                     <span class="rm-subsection-dot" style="background:var(--primary);"></span>
                     Tanda-Tanda Vital
                 </div>
-
                 <div class="row g-2 mb-2">
                     <div class="col-12 col-sm-4">
                         <div class="ttv-item d-flex align-items-center w-100">
@@ -63,17 +65,25 @@
                     <div class="col-4 col-sm-2">
                         <div class="ttv-item"><label>RR</label><input type="number" id="rr" placeholder="20" data-save="true"></div>
                     </div>
-                    <div class="col-6 col-sm-2">
+                </div>
+            </div>
+
+            <!-- ── 2b. Antropometri ── -->
+            <div class="rm-subsection">
+                <div class="rm-subsection-label">
+                    <span class="rm-subsection-dot" style="background:#0891b2;"></span>
+                    Antropometri
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
                         <div class="ttv-item"><label>BB (kg)</label><input type="number" id="bb" placeholder="60" data-save="true"></div>
                     </div>
-                    <div class="col-6 col-sm-2">
+                    <div class="col-6">
                         <div class="ttv-item"><label>TB (cm)</label><input type="number" id="tb" placeholder="165" data-save="true"></div>
                     </div>
                 </div>
-
                 <!-- IMT -->
                 <div id="imtCalc" style="text-align:right;font-size:11px;font-weight:700;color:var(--primary);margin-top:2px;margin-bottom:10px;padding-right:4px;"></div>
-
                 <!-- Riwayat Alergi -->
                 <div style="background:rgba(180,83,9,0.06);border:1px solid rgba(180,83,9,0.22);border-radius:10px;padding:10px 12px;">
                     <label class="form-label" style="color:#b45309;font-weight:700;margin-bottom:6px;display:block;">⚠️ Riwayat Alergi</label>
@@ -84,7 +94,7 @@
                 </div>
             </div>
 
-            <!-- ── 2b. Keluhan Pasien ── -->
+            <!-- ── 2c. Keluhan Pasien ── -->
             <div class="rm-subsection">
                 <div class="rm-subsection-label">
                     <span class="rm-subsection-dot" style="background:#7c3aed;"></span>
@@ -98,7 +108,21 @@
                 </div>
             </div>
 
-            <!-- ── 2c. Pemeriksaan Fisik ── -->
+            <!-- ── 2d. Riwayat Penyakit Dahulu ── -->
+            <div class="rm-subsection">
+                <div class="rm-subsection-label">
+                    <span class="rm-subsection-dot" style="background:#d97706;"></span>
+                    Riwayat Penyakit Dahulu
+                </div>
+                <div class="form-group" style="position:relative;">
+                    <label class="form-label">Riwayat Penyakit / Kondisi Kronis</label>
+                    <textarea id="riwayat_penyakit" class="form-control" data-save="true"
+                              placeholder="Contoh: DM tipe 2, Hipertensi, Asma, Operasi sesar 2020..." rows="2"></textarea>
+                    <button class="stt-btn" onclick="startSTT('riwayat_penyakit')">🎙️</button>
+                </div>
+            </div>
+
+            <!-- ── 2e. Pemeriksaan Fisik ── -->
             <div class="rm-subsection" style="border-bottom:1px dashed var(--border);padding-bottom:14px;margin-bottom:14px;">
                 <div class="rm-subsection-label">
                     <span class="rm-subsection-dot" style="background:#059669;"></span>
@@ -112,11 +136,8 @@
                 </div>
             </div>
 
-            <!-- ── 2d. Pemeriksaan Tambahan Dinamis ──
-                 Diisi otomatis oleh medis-dinamis.js berdasarkan
-                 item kategori "Pemeriksaan" yang ditambahkan di halaman Biaya.
-                 Item bawaan (Vital Sign, Konsultasi Medis, Pemeriksaan Fisik, Anamnesa)
-                 tidak dirender di sini — sudah ditangani di atas.
+            <!-- ── 2f. Pemeriksaan Tambahan Dinamis (dari tarif kategori Pemeriksaan) ──
+                 Diisi oleh medis-dinamis.js. Item bawaan tidak dirender ulang.
             -->
             <div id="sectionPemeriksaanDinamis" style="display:none;"></div>
 
@@ -142,14 +163,22 @@
         </div>
         <div class="card-body">
 
-            <!-- ── 3a. Hasil Laboratorium (dirender dinamis oleh kunjungan.js) ── -->
+            <!-- ── 3a. Hasil Laboratorium ── -->
+            <!-- _renderSectionLabDinamic() akan mengisi bagian ini -->
+            <!-- Item lab aktif/nonaktif dikontrol dari halaman Biaya (kategori Laboratorium) -->
             <div class="rm-subsection" id="sectionLab">
-                <!-- _renderSectionLabDinamic() akan mengisi bagian ini -->
-                <!-- Konten default jika JS belum render -->
                 <div class="rm-subsection-label">
                     <span class="rm-subsection-dot" style="background:#2563eb;"></span>
                     Hasil Laboratorium
                 </div>
+                <!-- Permintaan lab: centang untuk minta pemeriksaan -->
+                <div id="sectionPermintaanLabRequest" style="margin-bottom:10px;display:none;">
+                    <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px;font-weight:600;">
+                        🔔 Centang untuk membuat permintaan pemeriksaan ke petugas lab:
+                    </div>
+                    <div id="chipsPermintaanLab" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+                </div>
+                <!-- Input hasil lab (render dinamis) -->
                 <div class="row g-2 mb-3">
                     <div class="col-4">
                         <div class="ttv-item">
@@ -173,10 +202,10 @@
                 <div id="labAlert" style="display:none;font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:rgba(239,68,68,0.09);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"></div>
             </div>
 
-            <!-- ── 3b. Pemeriksaan Penunjang (chip button, dirender oleh lab-request.js) ── -->
+            <!-- ── 3b. Pemeriksaan Penunjang (chip button, dirender oleh pem-penunjang.js) ── -->
+            <!-- Item penunjang aktif/nonaktif dikontrol dari halaman Biaya (kategori Penunjang) -->
             <div id="sectionPermintaanLab" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:4px;">
                 <!-- renderSectionPermintaanLab() akan mengisi bagian ini -->
-                <!-- Kosong jika tidak ada penunjang aktif di tarif -->
             </div>
 
             <!-- ── Mini Save Button ── -->
@@ -191,7 +220,6 @@
 
     <!-- ══════════════════════════════════════════════════ -->
     <!--  SECTION 4 — DIAGNOSA                             -->
-    <!--    Diagnosa 1 + 2, Tombol AI                      -->
     <!-- ══════════════════════════════════════════════════ -->
     <div class="card rm-card">
         <div class="rm-section-header">
@@ -249,8 +277,7 @@
         </div>
         <div class="card-body">
 
-            <!-- ── 5a. Resep Obat ── -->
-            <!-- Tampil jika modul stok aktif (renderSectionResep via kunjungan.js) -->
+            <!-- ── 5a. Resep Obat (tampil jika modul stok aktif) ── -->
             <div id="sectionResep" style="display:none;"></div>
 
             <!-- Terapi manual (tampil jika modul stok tidak aktif) -->
@@ -267,12 +294,12 @@
                 </div>
             </div>
 
-            <!-- ── 5b. Tindakan Medis (dirender oleh lab-request.js) ── -->
-            <!-- _renderSectionTindakan() inject ke sini via sectionDiagnosa lookup -->
-            <!-- Wrapper ini memastikan tindakan tampil di dalam card Tatalaksana -->
+            <!-- ── 5b. Tindakan Medis (dirender oleh tin-medis.js) ──
+                 Item tindakan aktif/nonaktif dikontrol dari halaman Biaya (kategori Tindakan).
+                 Jika tidak ada tindakan aktif di tarif, seksi ini tersembunyi otomatis.
+            -->
             <div id="sectionTindakan" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:8px;">
-                <!-- Diisi oleh _renderSectionTindakan() dari lab-request.js -->
-                <!-- Kosong jika tidak ada tindakan aktif di tarif -->
+                <!-- Diisi oleh _renderSectionTindakan() dari tin-medis.js -->
             </div>
 
             <!-- ── Mini Save Button ── -->
@@ -287,8 +314,8 @@
 
     <!-- ══════════════════════════════════════════════════ -->
     <!--  SECTION 6 — DOKUMEN KESEHATAN                    -->
-    <!--    a. Surat Sakit                                 -->
-    <!--    b. (placeholder untuk penambahan berikutnya)   -->
+    <!--    a. Surat Sakit (hardcoded)                     -->
+    <!--    b. Dokumen Administrasi Dinamis (dari tarif)   -->
     <!-- ══════════════════════════════════════════════════ -->
     <div class="card rm-card">
         <div class="rm-section-header">
@@ -297,22 +324,28 @@
         </div>
         <div class="card-body">
 
-            <!-- ── 6a. Surat Sakit ── -->
-            <div class="rm-doc-item">
+            <!-- ── 6a. Surat Keterangan Sakit ── -->
+            <!-- Centang → otomatis tampilkan tombol lihat surat -->
+            <div class="rm-doc-item" id="wrapSuratSakit">
                 <div class="rm-doc-check">
-                    <input type="checkbox" id="suratSakit" style="width:16px;height:16px;accent-color:var(--danger);">
+                    <input type="checkbox" id="suratSakit"
+                        style="width:16px;height:16px;accent-color:var(--danger);"
+                        onchange="_onSuratSakitChange()">
                     <label for="suratSakit" class="rm-doc-label" style="color:var(--danger);">
                         Surat Keterangan Sakit
                     </label>
+                    <button id="btnLihatSuratSakit"
+                        style="display:none;margin-left:8px;padding:3px 10px;border-radius:20px;border:1.5px solid var(--danger);background:rgba(239,68,68,0.07);color:var(--danger);font-size:11px;font-weight:700;cursor:pointer;"
+                        onclick="bukaModalSuratSakit()">
+                        🔗 Lihat Surat
+                    </button>
                 </div>
                 <div class="rm-doc-desc">Centang jika pasien memerlukan surat keterangan sakit</div>
             </div>
 
             <!-- ── 6b. Dokumen Administrasi Dinamis ──
-                 Diisi otomatis oleh medis-dinamis.js berdasarkan
-                 item kategori "Administrasi" yang ditambahkan di halaman Biaya.
-                 "Surat Keterangan Sakit" tidak dirender di sini (sudah ada di atas).
-                 Contoh: Surat Keterangan Sehat, Surat Rujukan, Visum, dll.
+                 Diisi oleh medis-dinamis.js dari tarif kategori "Administrasi".
+                 "Surat Keterangan Sakit" tidak dirender ulang (sudah hardcoded di atas).
             -->
             <div id="sectionAdministrasiDinamis" style="display:none;"></div>
 
@@ -333,7 +366,7 @@
         <div class="card-body" style="padding:14px 16px;">
             <button onclick="saveAll()" id="btnSave"
                 class="btn-custom btn-success-custom w-100">
-                ✓ Simpan Rekam Medis
+                ✓ Simpan &amp; Tampilkan Invoice
             </button>
             <a href="#" onclick="resetSession(); return false;" class="cancel-link">
                 ✕ Batalkan &amp; Kembali
@@ -350,6 +383,28 @@
             <div class="empty-state">
                 <div class="empty-icon">📂</div>
                 Menunggu data...
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  MODAL SURAT KETERANGAN SAKIT                     -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div id="modalSuratSakit" class="modal-surat-overlay" style="display:none;"
+        onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-surat-box">
+            <div class="modal-surat-header">
+                <span>📄 Surat Keterangan Sakit</span>
+                <button class="modal-surat-close"
+                    onclick="document.getElementById('modalSuratSakit').style.display='none'">✕</button>
+            </div>
+            <div class="modal-surat-body" id="bodySuratSakit">
+                <!-- Konten diisi oleh bukaModalSuratSakit() -->
+            </div>
+            <div class="modal-surat-footer">
+                <button onclick="window.print()" class="modal-surat-btn-print">🖨️ Cetak</button>
+                <button onclick="document.getElementById('modalSuratSakit').style.display='none'"
+                    class="modal-surat-btn-close">Tutup</button>
             </div>
         </div>
     </div>
@@ -404,10 +459,7 @@
             background:var(--surface-2, rgba(0,0,0,0.03));
             border-bottom:1px solid var(--border);
         }
-        .rm-section-icon {
-            font-size:15px;
-            line-height:1;
-        }
+        .rm-section-icon { font-size:15px; line-height:1; }
         .rm-section-title {
             font-size:13px;
             font-weight:700;
@@ -452,6 +504,7 @@
             align-items:center;
             gap:8px;
             margin-bottom:3px;
+            flex-wrap:wrap;
         }
         .rm-doc-label {
             font-size:13px;
@@ -465,7 +518,7 @@
             padding-left:24px;
         }
 
-        /* ── Tombol simpan mini di setiap section ── */
+        /* Tombol simpan mini di setiap section */
         ._mini-save-btn {
             width:100%;
             padding:9px 14px;
@@ -492,6 +545,69 @@
         ._mini-save-btn:active {
             background:rgba(37,99,235,0.14);
             transform:scale(0.98);
+        }
+
+        /* Modal surat overlay */
+        .modal-surat-overlay {
+            position:fixed;inset:0;z-index:10000;
+            background:rgba(15,23,42,0.55);
+            display:flex;align-items:flex-end;justify-content:center;
+        }
+        .modal-surat-box {
+            background:#fff;width:100%;max-width:480px;
+            border-radius:20px 20px 0 0;
+            box-shadow:0 -8px 40px rgba(0,0,0,0.18);
+            max-height:90vh;display:flex;flex-direction:column;
+        }
+        .modal-surat-header {
+            display:flex;justify-content:space-between;align-items:center;
+            padding:14px 16px 10px;
+            font-size:14px;font-weight:800;color:#1e293b;
+            border-bottom:1px solid #f1f5f9;
+            flex-shrink:0;
+        }
+        .modal-surat-close {
+            background:rgba(100,116,139,0.1);border:none;border-radius:50%;
+            width:30px;height:30px;font-size:16px;cursor:pointer;
+            display:flex;align-items:center;justify-content:center;color:#64748b;
+        }
+        .modal-surat-body {
+            overflow-y:auto;padding:16px;flex:1;
+        }
+        .modal-surat-footer {
+            padding:12px 16px 20px;
+            display:flex;gap:8px;
+            border-top:1px solid #f1f5f9;
+            flex-shrink:0;
+        }
+        .modal-surat-btn-print {
+            flex:1;padding:11px 0;
+            background:linear-gradient(135deg,#2563eb,#60a5fa);
+            color:#fff;border:none;border-radius:12px;
+            font-size:13px;font-weight:700;cursor:pointer;
+        }
+        .modal-surat-btn-close {
+            padding:11px 16px;background:#f1f5f9;color:#475569;
+            border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;
+        }
+
+        /* Chip permintaan lab */
+        .lab-req-chip {
+            display:inline-flex;align-items:center;gap:4px;
+            padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;
+            cursor:pointer;border:1.5px solid #c7d9f5;
+            background:#fff;color:var(--text,#334155);
+            transition:all .15s;margin:2px 2px 0 0;
+        }
+        .lab-req-chip.active {
+            border-color:#2563eb;background:#2563eb;color:#fff;
+        }
+
+        @media print {
+            body > *:not(#modalSuratSakit) { display:none !important; }
+            #modalSuratSakit { position:static!important;background:none!important;padding:0!important; }
+            .modal-surat-box { box-shadow:none!important;border-radius:0!important;max-height:none!important;overflow:visible!important;width:100%!important; }
+            .modal-surat-footer { display:none!important; }
         }
     </style>
 
