@@ -1,6 +1,10 @@
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — SUPABASE: MODUL PEMBIAYAAN
 //  Tabel: tarif_layanan, tagihan, tagihan_item
+//
+//  STRUKTUR TARIF (4 level):
+//  Kategori → Sub Kelompok → Sub-Sub Kelompok → Nama Item
+//  Kolom DB: kategori, sub_group, sub_sub_group, nama
 // ════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════
@@ -9,21 +13,30 @@
 
 /** Ambil semua tarif layanan */
 async function sb_getTarif() {
-    return await _sbFetch('tarif_layanan?select=*&order=kategori.asc,nama.asc');
+    return await _sbFetch('tarif_layanan?select=*&order=kategori.asc,sub_group.asc,sub_sub_group.asc,nama.asc');
 }
 
-/** Simpan tarif (upsert by id) */
+/**
+ * Simpan tarif (upsert by id)
+ * Mendukung 4 level: kategori → sub_group → sub_sub_group → nama
+ */
 async function sb_saveTarif(payload) {
-    const { id, nama, kategori, harga, keterangan, aktif, sub_group, sub_group_order } = payload;
+    const {
+        id, nama, kategori, harga, keterangan, aktif,
+        sub_group, sub_sub_group, sub_group_order
+    } = payload;
+
     const body = {
-        nama:             (nama || '').trim(),
-        kategori:         kategori  || 'Umum',
-        harga:            Number(harga) || 0,
-        keterangan:       keterangan || null,
-        aktif:            aktif !== false,
-        sub_group:        sub_group || null,
-        sub_group_order:  sub_group_order != null ? Number(sub_group_order) : 99
+        nama:            (nama || '').trim(),
+        kategori:        kategori         || 'Umum',
+        harga:           Number(harga)    || 0,
+        keterangan:      keterangan       || null,
+        aktif:           aktif !== false,
+        sub_group:       sub_group        || null,
+        sub_sub_group:   sub_sub_group    || null,
+        sub_group_order: sub_group_order != null ? Number(sub_group_order) : 99
     };
+
     if (id) {
         await _sbFetch(`tarif_layanan?id=eq.${id}`, {
             method: 'PATCH', body, prefer: 'return=minimal'
@@ -60,9 +73,9 @@ async function sb_getTagihan(kunjunganId) {
 /** Buat atau update tagihan untuk kunjungan */
 async function sb_saveTagihan(kunjunganId, pasienId, items, diskon, catatan) {
     // Hitung total
-    const subtotal = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
+    const subtotal     = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
     const nominalDiskon = Number(diskon) || 0;
-    const total = Math.max(0, subtotal - nominalDiskon);
+    const total        = Math.max(0, subtotal - nominalDiskon);
 
     // Cek apakah tagihan sudah ada
     const existing = await _sbFetch(
@@ -137,7 +150,6 @@ async function sb_getLaporanTagihan(tglMulai, tglSelesai) {
 async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
     // Ambil tarif aktif
     const tarif = await sb_getTarif();
-
     const tarifAktif = tarif.filter(t => t.aktif);
 
     const items = [];
@@ -176,26 +188,26 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
 
     // 3. Tarif lab per item
     const labFields = [
-        { key: 'lab_gds',       nama: 'GDS' },
-        { key: 'lab_chol',      nama: 'Kolesterol' },
-        { key: 'lab_ua',        nama: 'Asam Urat' },
-        { key: 'lab_hb',        nama: 'Hemoglobin (HB)' },
-        { key: 'lab_trombosit', nama: 'Trombosit' },
-        { key: 'lab_leukosit',  nama: 'Leukosit' },
-        { key: 'lab_eritrosit', nama: 'Eritrosit' },
-        { key: 'lab_hematokrit',nama: 'Hematokrit' },
-        { key: 'lab_hiv',       nama: 'HIV' },
-        { key: 'lab_sifilis',   nama: 'Sifilis' },
-        { key: 'lab_hepatitis', nama: 'Hepatitis B' },
-        { key: 'lab_hdl',       nama: 'HDL' },
-        { key: 'lab_ldl',       nama: 'LDL' },
-        { key: 'lab_tg',        nama: 'Trigliserida' },
-        { key: 'lab_gdp',       nama: 'GDP' },
-        { key: 'lab_hba1c',     nama: 'HbA1c' },
-        { key: 'lab_sgot',      nama: 'SGOT' },
-        { key: 'lab_sgpt',      nama: 'SGPT' },
-        { key: 'lab_ureum',     nama: 'Ureum' },
-        { key: 'lab_creatinin', nama: 'Creatinin' }
+        { key: 'lab_gds',        nama: 'GDS' },
+        { key: 'lab_chol',       nama: 'Kolesterol' },
+        { key: 'lab_ua',         nama: 'Asam Urat' },
+        { key: 'lab_hb',         nama: 'Hemoglobin (HB)' },
+        { key: 'lab_trombosit',  nama: 'Trombosit' },
+        { key: 'lab_leukosit',   nama: 'Leukosit' },
+        { key: 'lab_eritrosit',  nama: 'Eritrosit' },
+        { key: 'lab_hematokrit', nama: 'Hematokrit' },
+        { key: 'lab_hiv',        nama: 'HIV' },
+        { key: 'lab_sifilis',    nama: 'Sifilis' },
+        { key: 'lab_hepatitis',  nama: 'Hepatitis B' },
+        { key: 'lab_hdl',        nama: 'HDL' },
+        { key: 'lab_ldl',        nama: 'LDL' },
+        { key: 'lab_tg',         nama: 'Trigliserida' },
+        { key: 'lab_gdp',        nama: 'GDP' },
+        { key: 'lab_hba1c',      nama: 'HbA1c' },
+        { key: 'lab_sgot',       nama: 'SGOT' },
+        { key: 'lab_sgpt',       nama: 'SGPT' },
+        { key: 'lab_ureum',      nama: 'Ureum' },
+        { key: 'lab_creatinin',  nama: 'Creatinin' }
     ];
     labFields.forEach(f => {
         if (kunjunganData[f.key] && kunjunganData[f.key] !== '—') {
@@ -205,26 +217,23 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
     });
 
     // 4. ── PEMERIKSAAN PENUNJANG ──
-    // Ambil dari tabel penunjang_item berdasarkan kunjunganId
     try {
         const penunjangRows = await _sbFetch(`penunjang_item?kunjungan_id=eq.${kunjunganId}&select=jenis`);
         penunjangRows.forEach(r => {
             if (!r.jenis) return;
-            // Cari tarif di kategori Penunjang dengan nama yang sama
             const t = tarifAktif.find(x => x.kategori === 'Penunjang' && x.nama === r.jenis);
             const harga = t ? t.harga : 0;
             addItem('Penunjang: ' + r.jenis, 'Penunjang', harga);
         });
-    } catch(e) { /* penunjang_item mungkin belum ada saat migrasi pertama */ }
+    } catch(e) { /* penunjang_item mungkin belum ada */ }
 
     // 5. ── TINDAKAN MEDIS ──
-    // Ambil dari tabel tindakan_item berdasarkan kunjunganId
     try {
         const tindakanRows = await _sbFetch(`tindakan_item?kunjungan_id=eq.${kunjunganId}&select=*`);
         tindakanRows.forEach(r => {
             addItem(r.nama_tindakan, 'Tindakan', r.harga_satuan, r.jumlah || 1, r.catatan || null);
         });
-    } catch(e) { /* tindakan_item mungkin belum ada saat migrasi pertama */ }
+    } catch(e) { /* tindakan_item mungkin belum ada */ }
 
     // 6. Obat dari resep (jika modul stok aktif)
     if (window._stokAktif) {
@@ -251,7 +260,6 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
 
 /** Simpan seluruh penunjang untuk satu kunjungan (replace) */
 async function sb_savePenunjang(kunjunganId, items) {
-    // Hapus lama dulu
     await _sbFetch(`penunjang_item?kunjungan_id=eq.${kunjunganId}`, {
         method: 'DELETE', prefer: 'return=minimal'
     });
@@ -281,12 +289,12 @@ async function sb_saveTindakanKunjungan(kunjunganId, items) {
     if (!items || items.length === 0) return { status: 'success' };
 
     const rows = items.map(it => ({
-        kunjungan_id:     kunjunganId,
+        kunjungan_id:      kunjunganId,
         jenis_tindakan_id: it.jenis_tindakan_id || null,
-        nama_tindakan:    it.nama_tindakan || '',
-        harga_satuan:     Number(it.harga_satuan) || 0,
-        jumlah:           Number(it.jumlah) || 1,
-        catatan:          it.catatan || null
+        nama_tindakan:     it.nama_tindakan || '',
+        harga_satuan:      Number(it.harga_satuan) || 0,
+        jumlah:            Number(it.jumlah) || 1,
+        catatan:           it.catatan || null
     }));
     await _sbFetch('tindakan_item', {
         method: 'POST', body: rows, prefer: 'return=minimal'
