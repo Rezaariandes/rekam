@@ -56,14 +56,15 @@
             jsSupabaseBiaya:      BASE_URL + '/js/supabase-biaya.js',
             jsBiaya:              BASE_URL + '/js/biaya.js',
             jsInvoice:            BASE_URL + '/js/invoice.js',
-            jsModalResep:         BASE_URL + '/js/modal-resep.js',
-            jsModalKonfirmasi:    BASE_URL + '/js/modal-konfirmasi.js',
-            jsModalPasienDetail:  BASE_URL + '/js/modal-pasien-detail.js',
             jsSuratTemplate:      BASE_URL + '/js/surat-template.js',
-            // ─── KONSOLIDASI (patch sudah digabung ke file utama) ───
-            // supabase-patch.js  → sudah digabung ke supabase.js
-            // kunjungan-patch.js → sudah digabung ke kunjungan.js
-            // medis-dinamis.js   → sudah digabung ke pemeriksaan-medis.js
+            // ─── KONSOLIDASI (sudah digabung ke file utama) ───
+            // supabase-patch.js    → sudah digabung ke supabase.js
+            // kunjungan-patch.js   → sudah digabung ke kunjungan.js
+            // medis-dinamis.js     → sudah digabung ke pemeriksaan-medis.js
+            // modal-resep.js       → sudah digabung ke modal.js
+            // modal-konfirmasi.js  → sudah digabung ke modal.js
+            // modal-pasien-detail.js → sudah digabung ke modal.js
+            // modal-dokumen.js     → sudah digabung ke modal.js
             jsPemeriksaanMedis:   BASE_URL + '/js/pemeriksaan-medis.js',
         };
     </script>
@@ -241,19 +242,19 @@
             setLoadStep('Memuat modul aplikasi...');
 
             // URUTAN LOAD (wajib diikuti):
-            // supabase.js → kunjungan.js → pemeriksaan-medis.js
-            // supabase-patch, kunjungan-patch, medis-dinamis sudah TIDAK diperlukan lagi
+            // supabase.js → kunjungan.js → modal.js → pemeriksaan-medis.js
+            // modal.js sudah mencakup: modal-resep, modal-riwayat,
+            //   modal-konfirmasi, modal-pasien-detail, modal-dokumen
             const jsKeys = [
                 'jsUtils', 'jsSupabase',
                 'jsSupabaseStok', 'jsSupabaseBiaya',
                 'jsSettings', 'jsAuth',
                 'jsIcd10', 'jsPasien', 'jsKunj',
-                'jsModalResep', 'jsModal', 'jsUser',
+                'jsModal', 'jsUser',
                 'jsLaporan', 'jsStok', 'jsBiaya', 'jsInvoice',
                 'jsSuratTemplate',
                 'jsPemeriksaanMedis',
                 'jsApp', 'jsAiRek',
-                'jsModalKonfirmasi', 'jsModalPasienDetail',
             ];
 
             const jsTexts = await Promise.all(
