@@ -363,18 +363,37 @@ function renderKunjunganHariIni() {
                 ${_badgeHtml('bayar', bayarDone)}</span>`
             : '';
 
-        // ── Action buttons
+        // ── Action buttons (icon kotak)
         let actionBtns = '';
         if (has('mod_kunjungan_btn_invoice') && window._biayaAktif) {
             actionBtns += `<button onclick="event.stopPropagation();_quickInvoice('${h.id}','${escHtml(tampilNama)}')"
-                style="flex:1;padding:5px 0;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px;">
-                🧾 Invoice</button>`;
+                title="Invoice"
+                style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+                    width:52px;height:52px;border-radius:14px;border:none;cursor:pointer;
+                    background:linear-gradient(135deg,#059669,#10b981);color:#fff;
+                    font-size:20px;font-weight:700;box-shadow:0 2px 8px rgba(5,150,105,0.25);">
+                🧾<span style="font-size:8px;font-weight:800;letter-spacing:0.3px;">Invoice</span>
+            </button>`;
         }
         if (has('mod_kunjungan_btn_resep') && window._stokAktif) {
             actionBtns += `<button onclick="event.stopPropagation();_quickResep('${h.id}','${escHtml(tampilNama)}')"
-                style="flex:1;padding:5px 0;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;border:none;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px;">
-                💊 Resep</button>`;
+                title="Resep"
+                style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+                    width:52px;height:52px;border-radius:14px;border:none;cursor:pointer;
+                    background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;
+                    font-size:20px;font-weight:700;box-shadow:0 2px 8px rgba(124,58,237,0.25);">
+                💊<span style="font-size:8px;font-weight:800;letter-spacing:0.3px;">Resep</span>
+            </button>`;
         }
+        // Tombol Dokumen (buka detail / surat)
+        actionBtns += `<button onclick="event.stopPropagation();_openDetailKunjungan('${h.id}')"
+            title="Dokumen"
+            style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+                width:52px;height:52px;border-radius:14px;border:none;cursor:pointer;
+                background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;
+                font-size:20px;font-weight:700;box-shadow:0 2px 8px rgba(37,99,235,0.25);">
+            📄<span style="font-size:8px;font-weight:800;letter-spacing:0.3px;">Dokumen</span>
+        </button>`;
 
         // ── Status kunjungan badge (menunggu/selesai)
         const statusBadge = has('mod_kunjungan_status_kunjungan')
@@ -395,9 +414,12 @@ function renderKunjunganHariIni() {
             </div>
             ${hasActionRow ? `
             <div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:7px;border-top:1px dashed var(--border);" onclick="event.stopPropagation()">
-                ${badgeObat}${badgeBayar}
-                <div style="flex:1;"></div>
-                ${actionBtns}
+                <div style="display:flex;gap:5px;align-items:center;flex:1;">
+                    ${badgeObat}${badgeBayar}
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                    ${actionBtns}
+                </div>
             </div>` : ''}
         </div>`;
     }).join('');
@@ -623,6 +645,52 @@ function escHtml(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+/** Buka detail kunjungan dari card (pageKunjungan) via kunjunganHariIni */
+function _openDetailKunjungan(kId) {
+    const h = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : []).find(x => x.id === kId);
+    if (!h) return;
+    // Map field kunjungan ke format yang dipakai openModal
+    const dataObj = {
+        id:        h.id,
+        tgl:       h.tgl,
+        waktu:     h.waktu,
+        td:        h.td,
+        nadi:      h.nadi,
+        suhu:      h.suhu,
+        rr:        h.rr,
+        bb:        h.bb,
+        tb:        h.tb,
+        keluhan:   h.keluhan,
+        fisik:     h.fisik,
+        lab_gds:   h.lab_gds,
+        lab_chol:  h.lab_chol,
+        lab_ua:    h.lab_ua,
+        lab_hb:    h.lab_hb,
+        lab_trombosit: h.lab_trombosit,
+        lab_leukosit:  h.lab_leukosit,
+        lab_eritrosit: h.lab_eritrosit,
+        lab_hematokrit:h.lab_hematokrit,
+        lab_hiv:    h.lab_hiv,
+        lab_sifilis:h.lab_sifilis,
+        lab_hepatitis:h.lab_hepatitis,
+        lab_hdl:    h.lab_hdl,
+        lab_ldl:    h.lab_ldl,
+        lab_tg:     h.lab_tg,
+        lab_gdp:    h.lab_gdp,
+        lab_hba1c:  h.lab_hba1c,
+        lab_sgot:   h.lab_sgot,
+        lab_sgpt:   h.lab_sgpt,
+        lab_ureum:  h.lab_ureum,
+        lab_creatinin: h.lab_creatinin,
+        req_lab:    h.req_lab,
+        diag:       h.diag,
+        diagnosa2:  h.diagnosa2,
+        terapi:     h.terapi,
+        dokterNama: h.dokterNama || '',
+    };
+    openModal(0, dataObj);
+}
+
 // ════════════════════════════════════════════════════════
 //  MODAL DETAIL PASIEN (dari riwayat list)
 //  Urutan tampilan sesuai section pemeriksaan medis:
@@ -630,9 +698,13 @@ function escHtml(str) {
 //  4. Penunjang  5. Diagnosa  6. Tindakan  7. Dokter
 // ════════════════════════════════════════════════════════
 
-function openModal(idx) {
-    const list = (typeof currentRiwayat !== 'undefined' ? currentRiwayat : []);
-    const r    = list[idx];
+function openModal(idx, dataObj) {
+    // dataObj bisa dikirim langsung (dari card kunjungan), atau cari dari currentRiwayat via idx
+    let r = dataObj || null;
+    if (!r) {
+        const list = (typeof currentRiwayat !== 'undefined' ? currentRiwayat : []);
+        r = list[idx];
+    }
     if (!r) return;
 
     // Hapus modal lama jika ada

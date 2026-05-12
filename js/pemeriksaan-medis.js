@@ -927,7 +927,7 @@ function _renderSectionTindakan() {
         const id     = _pm_slug('tindakan', t.nama);
         const icon   = _pm_icon(t.nama, _TINDAKAN_ICONS, '⚕️');
         const active = !!window._reqTindakan[id];
-        return `<button id="chip_${id}" onclick="_toggleTindakan('${id}')"
+        return `<button id="chip_${id}" onclick="event.stopPropagation();_toggleTindakan('${id}')"
             style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ${active?'#dc2626':'#e2e8f0'};background:${active?'#dc2626':'#fff'};color:${active?'#fff':'var(--text,#334155)'};transition:all .15s;margin:3px 3px 0 0;">
             ${icon} ${_pm_escHtml(t.nama)}
         </button>`;
@@ -977,7 +977,7 @@ function _renderSectionTindakan() {
         const allList = _getTindakanList();
         const chips = allList.map(t => {
             const active = !!window._reqTindakan[t.id];
-            return `<button id="chip_${t.id}" onclick="_toggleTindakan('${t.id}')"
+            return `<button id="chip_${t.id}" onclick="event.stopPropagation();_toggleTindakan('${t.id}')"
                 style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ${active?'#dc2626':'#e2e8f0'};background:${active?'#dc2626':'#fff'};color:${active?'#fff':'var(--text,#334155)'};transition:all .15s;margin:3px 3px 0 0;">
                 ${t.icon} ${_pm_escHtml(t.label)}
             </button>`;
@@ -1002,6 +1002,7 @@ window._tidAccToggle = function(sgId) {
 };
 
 function _toggleTindakan(id) {
+    // Toggle eksplisit — pastikan false jika sebelumnya truthy
     window._reqTindakan[id] = !window._reqTindakan[id];
     const btn = document.getElementById('chip_' + id);
     if (!btn) return;
@@ -1066,7 +1067,7 @@ function _renderSectionPemeriksaanExtra() {
         const active = !!(window._reqPemeriksaanExtra[slug] && String(window._reqPemeriksaanExtra[slug]).trim());
         const icon   = _pm_icon(t.nama, _PEMX_ICONS, '🩺');
         return `<button id="chip_${slug}"
-            onclick="_togglePemx('${slug}','${_pm_escHtml(t.nama)}')"
+            onclick="event.stopPropagation();_togglePemx('${slug}','${_pm_escHtml(t.nama)}')"
             style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;
                 font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;margin:3px 3px 0 0;
                 border:1.5px solid ${active?'#7c3aed':'#e2e8f0'};
