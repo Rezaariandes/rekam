@@ -250,9 +250,13 @@ function renderKunjunganHariIni() {
         if (h.req_lab) {
             try {
                 const reqObj = typeof h.req_lab === 'string' ? JSON.parse(h.req_lab) : h.req_lab;
+                // Gunakan nama asli (_labname_) jika tersedia, fallback ke rekonstruksi slug
                 const labReqs = Object.entries(reqObj)
                     .filter(([k, v]) => v && k.startsWith('lab_req_'))
-                    .map(([k]) => k.replace('lab_req_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+                    .map(([k]) => {
+                        const nameKey = '_labname_' + k;
+                        return reqObj[nameKey] || k.replace('lab_req_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    });
                 const pnjReqs = Object.entries(reqObj)
                     .filter(([k, v]) => v && k.startsWith('penunjang_'))
                     .map(([k]) => k.replace('penunjang_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));

@@ -242,37 +242,327 @@ async function _sbStorageDeleteFoto(publicUrl) {
 }
 
 // ══════════════════════════════════════════════════════
-//  SECTION 3a — CHIP PERMINTAAN LABORATORIUM
-//  Chip request (tanda centang) — sebelum isi hasil
+//  SECTION 3a — LABORATORIUM ACCORDION + CLICK-TO-INPUT
+//  Tampilan accordion per sub_group biaya (mirip penunjang/tindakan).
+//  Klik item → aktif + muncul input hasil.
+//  Item aktif muncul di halaman Kunjungan sebagai chip lab_req_.
 //  Dikontrol dari halaman Biaya (kategori Laboratorium)
 // ══════════════════════════════════════════════════════
 
+// Ikon per nama lab
+const _LAB_ICONS = {
+    'GDS': '🍬', 'Glukosa': '🍬', 'GDP': '🍬', 'HbA1c': '🍬',
+    'Kolesterol': '💧', 'HDL': '💧', 'LDL': '💧', 'Trigliserida': '💧',
+    'HB': '🩸', 'Hemoglobin': '🩸', 'Hematokrit': '🩸',
+    'Trombosit': '🩸', 'Leukosit': '🩸', 'Eritrosit': '🩸', 'Darah Rutin': '🩸',
+    'SGOT': '🫀', 'SGPT': '🫀', 'Hati': '🫀',
+    'Ureum': '🫘', 'Creatinin': '🫘', 'Ginjal': '🫘',
+    'HIV': '🧬', 'Sifilis': '🧬', 'Hepatitis': '🧬',
+    'Asam Urat': '🔬', 'Urin': '🔬', 'Urine': '🔬',
+};
+
+// Map nama tarif lab → field id di kunjungan DB
+const _LAB_NAMA_TO_FIELD = {
+    'GDS'             : 'lab_gds',
+    'Kolesterol'      : 'lab_chol',
+    'Asam Urat'       : 'lab_ua',
+    'Hemoglobin (HB)' : 'lab_hb',
+    'Trombosit'       : 'lab_trombosit',
+    'Leukosit'        : 'lab_leukosit',
+    'Eritrosit'       : 'lab_eritrosit',
+    'Hematokrit'      : 'lab_hematokrit',
+    'HIV'             : 'lab_hiv',
+    'Sifilis'         : 'lab_sifilis',
+    'Hepatitis B'     : 'lab_hepatitis',
+    'HDL'             : 'lab_hdl',
+    'LDL'             : 'lab_ldl',
+    'Trigliserida'    : 'lab_tg',
+    'GDP'             : 'lab_gdp',
+    'HbA1c'           : 'lab_hba1c',
+    'SGOT'            : 'lab_sgot',
+    'SGPT'            : 'lab_sgpt',
+    'Ureum'           : 'lab_ureum',
+    'Creatinin'       : 'lab_creatinin',
+};
+
+// Unit per field id
+const _LAB_FIELD_META = {
+    lab_gds:       { unit: 'mg/dL', step: '1',    type: 'number' },
+    lab_chol:      { unit: 'mg/dL', step: '1',    type: 'number' },
+    lab_ua:        { unit: 'mg/dL', step: '0.1',  type: 'number' },
+    lab_hb:        { unit: 'g/dL',  step: '0.1',  type: 'number' },
+    lab_trombosit: { unit: 'ribu/µL', step: '1',  type: 'number' },
+    lab_leukosit:  { unit: 'ribu/µL', step: '0.1',type: 'number' },
+    lab_eritrosit: { unit: 'juta/µL', step: '0.01',type: 'number'},
+    lab_hematokrit:{ unit: '%',      step: '0.1',  type: 'number' },
+    lab_hiv:       { unit: '',       step: null,   type: 'select', opts: ['—','Non-Reaktif','Reaktif'] },
+    lab_sifilis:   { unit: '',       step: null,   type: 'select', opts: ['—','Non-Reaktif','Reaktif'] },
+    lab_hepatitis: { unit: '',       step: null,   type: 'select', opts: ['—','Non-Reaktif','Reaktif'] },
+    lab_hdl:       { unit: 'mg/dL', step: '1',    type: 'number' },
+    lab_ldl:       { unit: 'mg/dL', step: '1',    type: 'number' },
+    lab_tg:        { unit: 'mg/dL', step: '1',    type: 'number' },
+    lab_gdp:       { unit: 'mg/dL', step: '1',    type: 'number' },
+    lab_hba1c:     { unit: '%',     step: '0.1',  type: 'number' },
+    lab_sgot:      { unit: 'U/L',   step: '1',    type: 'number' },
+    lab_sgpt:      { unit: 'U/L',   step: '1',    type: 'number' },
+    lab_ureum:     { unit: 'mg/dL', step: '1',    type: 'number' },
+    lab_creatinin: { unit: 'mg/dL', step: '0.01', type: 'number' },
+};
+
+// State aktif lab (item yang diklik = permintaan + siap isi hasil)
+// Disimpan di window._reqLab dengan prefix 'lab_req_'
+// State nilai hasil disimpan di DOM langsung (field data-save="true")
+
+/** Render section Lab sebagai accordion per sub_group */
 function _renderChipPermintaanLab() {
-    const container = document.getElementById('chipsPermintaanLab');
+    const section   = document.getElementById('sectionLab');
+    if (!section) return;
+
+    // Sembunyikan static row lama (GDS/Kol/AU hardcoded di HTML)
+    const staticRow = section.querySelector('.row.g-2.mb-3');
+    if (staticRow) staticRow.style.display = 'none';
+
     const wrapper   = document.getElementById('sectionPermintaanLabRequest');
-    if (!container || !wrapper) return;
+    if (wrapper) wrapper.style.display = 'none'; // sembunyikan chip lama
 
     const labItems = _pm_getTarif('Laboratorium', []);
-    if (labItems.length === 0) { wrapper.style.display = 'none'; return; }
-    wrapper.style.display = '';
+    if (labItems.length === 0) return;
 
-    container.innerHTML = labItems.map(t => {
-        const id     = _pm_slug('lab_req', t.nama);
-        const active = !!window._reqLab[id];
-        return `<button id="chip_${id}" class="lab-req-chip${active ? ' active' : ''}"
-            onclick="_toggleLabReqChip('${id}')"
-            title="Buat permintaan: ${_pm_escHtml(t.nama)}">
-            🔬 ${_pm_escHtml(t.nama)}
+    // Kelompokkan per sub_group
+    const groups  = {};
+    const noGroup = [];
+    labItems.forEach(t => {
+        const sg = (t.sub_group || '').trim();
+        if (sg) {
+            if (!groups[sg]) groups[sg] = [];
+            groups[sg].push(t);
+        } else {
+            noGroup.push(t);
+        }
+    });
+    const hasGroups = Object.keys(groups).length > 0;
+
+    // Render container (insert sebelum labAlert)
+    let wrap = document.getElementById('_labAccordionWrap');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = '_labAccordionWrap';
+        const alertEl = document.getElementById('labAlert');
+        if (alertEl) section.insertBefore(wrap, alertEl);
+        else section.appendChild(wrap);
+    }
+
+    function _chipLabHtml(t) {
+        const chipId  = _pm_slug('lab_req', t.nama);
+        const active  = !!window._reqLab[chipId];
+        const icon    = _pm_icon(t.nama, _LAB_ICONS, '🔬');
+        return `<button id="chip_${chipId}"
+            onclick="_toggleLabItem('${chipId}','${_pm_escHtml(t.nama)}')"
+            style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;
+                font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;margin:3px 3px 0 0;
+                border:1.5px solid ${active?'#2563eb':'#e2e8f0'};
+                background:${active?'#2563eb':'#fff'};
+                color:${active?'#fff':'var(--text,#334155)'};">
+            ${icon} ${_pm_escHtml(t.nama)}
         </button>`;
-    }).join('');
+    }
+
+    function _accordionLabHtml(sg, items) {
+        const sgId   = 'lab_acc_' + _pm_slug('sg', sg);
+        const isOpen = window._accordionState && window._accordionState[sgId] === true;
+        const hasAny = items.some(t => !!window._reqLab[_pm_slug('lab_req', t.nama)]);
+        return `
+        <div style="border:1px solid #e2e8f0;border-radius:11px;margin-bottom:7px;overflow:hidden;">
+            <div onclick="_labAccToggle('${sgId}')"
+                style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;cursor:pointer;background:${hasAny?'#eff6ff':'#f8fafc'};user-select:none;">
+                <span style="font-size:11.5px;font-weight:700;color:${hasAny?'#2563eb':'#475569'};">
+                    🔬 ${_pm_escHtml(sg)}${hasAny?' <span style=\'color:#2563eb;font-size:10px;\'>●</span>':''}
+                </span>
+                <span id="${sgId}_arrow" style="font-size:11px;color:#94a3b8;transition:transform .2s;">${isOpen?'▼':'▶'}</span>
+            </div>
+            <div id="${sgId}_body" style="display:${isOpen?'block':'none'};padding:10px 12px 8px;">
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">
+                    Klik item untuk memilih & mengisi hasil pemeriksaan
+                </div>
+                <div id="${sgId}_chips" style="display:flex;flex-wrap:wrap;margin-bottom:4px;">
+                    ${items.map(_chipLabHtml).join('')}
+                </div>
+                <div id="${sgId}_inputs"></div>
+            </div>
+        </div>`;
+    }
+
+    let html = `
+        <div style="font-size:11.5px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#2563eb;display:inline-block;flex-shrink:0;"></span>
+            Pemeriksaan Laboratorium
+        </div>`;
+
+    if (hasGroups) {
+        Object.keys(groups).sort().forEach(sg => { html += _accordionLabHtml(sg, groups[sg]); });
+        if (noGroup.length > 0) {
+            html += `<div id="lab_nogroup_chips" style="display:flex;flex-wrap:wrap;margin-bottom:4px;">
+                ${noGroup.map(_chipLabHtml).join('')}
+            </div>
+            <div id="lab_nogroup_inputs"></div>`;
+        }
+    } else {
+        // Flat tanpa accordion
+        html += `<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">Klik item untuk memilih & mengisi hasil pemeriksaan</div>`;
+        html += `<div id="lab_flat_chips" style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${labItems.map(_chipLabHtml).join('')}</div>`;
+        html += `<div id="lab_flat_inputs"></div>`;
+    }
+
+    wrap.innerHTML = html;
+
+    // Re-render input untuk item yang sudah aktif
+    labItems.forEach(t => {
+        const chipId = _pm_slug('lab_req', t.nama);
+        if (window._reqLab[chipId]) {
+            _renderLabInput(chipId, t.nama);
+        }
+    });
 }
 
-function _toggleLabReqChip(id) {
-    window._reqLab[id] = !window._reqLab[id];
-    const btn = document.getElementById('chip_' + id);
-    if (!btn) return;
-    btn.classList.toggle('active', !!window._reqLab[id]);
+window._labAccToggle = function(sgId) {
+    if (!window._accordionState) window._accordionState = {};
+    const body  = document.getElementById(sgId + '_body');
+    const arrow = document.getElementById(sgId + '_arrow');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+    window._accordionState[sgId] = !isOpen;
+};
+
+/** Toggle item lab: aktif → tampilkan input; nonaktif → hapus input & clear field */
+function _toggleLabItem(chipId, nama) {
+    window._reqLab[chipId] = !window._reqLab[chipId];
+    const active = !!window._reqLab[chipId];
+    const btn = document.getElementById('chip_' + chipId);
+    if (btn) {
+        btn.style.background  = active ? '#2563eb' : '#fff';
+        btn.style.borderColor = active ? '#2563eb' : '#e2e8f0';
+        btn.style.color       = active ? '#fff'    : 'var(--text,#334155)';
+    }
+    if (active) {
+        _renderLabInput(chipId, nama);
+    } else {
+        // Hapus input & clear nilai
+        const inputWrap = document.getElementById('labinput_' + chipId);
+        if (inputWrap) inputWrap.remove();
+        // Clear nilai field DB
+        const fieldId = _LAB_NAMA_TO_FIELD[nama];
+        if (fieldId) {
+            const el = document.getElementById(fieldId);
+            if (el) { el.value = ''; localStorage.removeItem('rme_' + fieldId); }
+        }
+        // Update accordion header color
+        _updateLabAccordionHeader(chipId);
+    }
 }
+
+/** Render input field di bawah chip setelah diklik */
+function _renderLabInput(chipId, nama) {
+    // Cari container inputs terdekat dengan chip ini
+    let inputsWrap = null;
+    const chip = document.getElementById('chip_' + chipId);
+    if (chip) {
+        const accBody = chip.closest('[id$="_body"]');
+        if (accBody) {
+            inputsWrap = accBody.querySelector('[id$="_inputs"]');
+        }
+    }
+    if (!inputsWrap) inputsWrap = document.getElementById('lab_flat_inputs') || document.getElementById('lab_nogroup_inputs');
+    if (!inputsWrap) return;
+
+    // Jangan dobel render
+    if (document.getElementById('labinput_' + chipId)) return;
+
+    const fieldId = _LAB_NAMA_TO_FIELD[nama];
+    const meta    = (fieldId && _LAB_FIELD_META[fieldId]) || { unit: '', step: '1', type: 'number' };
+    const icon    = _pm_icon(nama, _LAB_ICONS, '🔬');
+    const ne      = _pm_escHtml(nama);
+
+    let inputHtml = '';
+    if (meta.type === 'select') {
+        inputHtml = `<select id="${fieldId || chipId}" data-save="true"
+            style="width:100%;font-size:13px;padding:7px 10px;border:1.5px solid #c7d9f5;border-radius:8px;background:#fff;color:#1e3a8a;outline:none;box-sizing:border-box;height:38px;"
+            onchange="_onLabFieldChange('${fieldId || chipId}')">
+            ${(meta.opts||['—','Non-Reaktif','Reaktif']).map(o => `<option value="${o==='—'?'':o}">${o}</option>`).join('')}
+        </select>`;
+    } else {
+        inputHtml = `<input type="number" id="${fieldId || chipId}" data-save="true"
+            placeholder="—" step="${meta.step||1}"
+            style="width:100%;font-size:14px;padding:7px 10px;border:1.5px solid #c7d9f5;border-radius:8px;background:#fff;color:#1e3a8a;outline:none;box-sizing:border-box;"
+            oninput="_onLabFieldChange('${fieldId || chipId}')">`;
+    }
+
+    const unitLabel = meta.unit ? `<span style="font-size:10px;font-weight:600;color:#64748b;margin-left:4px;">${_pm_escHtml(meta.unit)}</span>` : '';
+
+    const div = document.createElement('div');
+    div.id = 'labinput_' + chipId;
+    div.style.cssText = 'animation:_pnj_fadeIn .2s ease forwards;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:9px 12px;margin-top:6px;margin-bottom:4px;';
+    div.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:700;color:#2563eb;">${icon} ${ne} ${unitLabel}</span>
+            <button onclick="_toggleLabItem('${chipId}','${ne}')"
+                style="background:rgba(239,68,68,0.09);border:1px solid rgba(239,68,68,0.2);border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;color:#dc2626;display:flex;align-items:center;justify-content:center;padding:0;"
+                title="Batalkan">✕</button>
+        </div>
+        ${inputHtml}`;
+    inputsWrap.appendChild(div);
+
+    // Restore nilai tersimpan
+    const realFieldEl = document.getElementById(fieldId || chipId);
+    if (realFieldEl) {
+        const saved = localStorage.getItem('rme_' + (fieldId || chipId));
+        if (saved !== null && saved !== '') realFieldEl.value = saved;
+        realFieldEl.addEventListener('input', () => {
+            localStorage.setItem('rme_' + (fieldId || chipId), realFieldEl.value);
+            if (typeof checkLabAlert === 'function') checkLabAlert();
+        });
+        realFieldEl.addEventListener('change', () => {
+            localStorage.setItem('rme_' + (fieldId || chipId), realFieldEl.value);
+        });
+    }
+
+    // Update accordion header
+    _updateLabAccordionHeader(chipId);
+}
+
+function _onLabFieldChange(fieldId) {
+    const el = document.getElementById(fieldId);
+    if (el) localStorage.setItem('rme_' + fieldId, el.value);
+    if (typeof checkLabAlert === 'function') checkLabAlert();
+}
+
+/** Perbarui warna header accordion jika ada item aktif di dalamnya */
+function _updateLabAccordionHeader(chipId) {
+    const chip = document.getElementById('chip_' + chipId);
+    if (!chip) return;
+    const accBody = chip.closest('[id$="_body"]');
+    if (!accBody) return;
+    const sgId  = accBody.id.replace('_body', '');
+    const hasAny = accBody.querySelectorAll('button[style*="background: rgb(37, 99, 235)"], button[style*="background:#2563eb"]').length > 0;
+    const header = accBody.previousElementSibling;
+    if (!header) return;
+    const spanLabel = header.querySelector('span:first-child');
+    if (spanLabel) {
+        spanLabel.style.color = hasAny ? '#2563eb' : '#475569';
+        // Titik indikator
+        const dotSpan = spanLabel.querySelector('span');
+        if (hasAny && !dotSpan) {
+            spanLabel.insertAdjacentHTML('beforeend', ' <span style=\'color:#2563eb;font-size:10px;\'>●</span>');
+        } else if (!hasAny && dotSpan) {
+            dotSpan.remove();
+        }
+    }
+    header.style.background = hasAny ? '#eff6ff' : '#f8fafc';
+}
+
+// Backward compat: fungsi lama masih dipanggil oleh renderMedisDinamis
+function _toggleLabReqChip(id) { _toggleLabItem(id, id.replace('lab_req_','').replace(/_/g,' ')); }
 
 // ══════════════════════════════════════════════════════
 //  SECTION 3b — CHIP PEMERIKSAAN PENUNJANG
@@ -942,6 +1232,16 @@ function getReqLabPayload() {
         if (fotos && fotos.length) payload['foto_' + k] = fotos;
     });
 
+    // Lab accordion: simpan nama asli dari tarif untuk tampilan di kunjungan
+    const labTarif = _pm_getTarif('Laboratorium', []);
+    labTarif.forEach(t => {
+        const chipId = _pm_slug('lab_req', t.nama);
+        if (window._reqLab[chipId]) {
+            // Simpan nama asli agar kunjungan bisa tampilkan nama yang benar
+            payload['_labname_' + chipId] = t.nama;
+        }
+    });
+
     // Tindakan
     Object.entries(window._reqTindakan || {}).forEach(([k, v]) => {
         if (v) payload[k] = true;
@@ -995,7 +1295,7 @@ function loadReqLabFromKunjungan(reqLabJson) {
         if (k.startsWith('tindakan_'))  window._reqTindakan[k] = true;
         if (k.startsWith('pemx_') && v) window._reqPemeriksaanExtra[k] = v;
         if (k.startsWith('adm_')  && v) window._reqAdminExtra[k] = true;
-        // Lab request chips
+        // Lab accordion items (chip aktif)
         if (k.startsWith('lab_req_'))   window._reqLab[k] = true;
     });
 
