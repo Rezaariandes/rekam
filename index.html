@@ -43,7 +43,8 @@
             jsUtils:              BASE_URL + '/js/utils.js',
             jsSupabase:           BASE_URL + '/js/supabase.js',
             jsAuth:               BASE_URL + '/js/auth-secure.js',
-            jsIcd10:              BASE_URL + '/js/icd10.js',
+            // ✅ DIGABUNG: icd10.js + ai-rekomendasi.js → icd10-ai.js
+            jsIcd10Ai:            BASE_URL + '/js/icd10-ai.js',
             jsPasien:             BASE_URL + '/js/pasien.js',
             jsKunj:               BASE_URL + '/js/kunjungan.js',
             jsModal:              BASE_URL + '/js/modal.js',
@@ -51,7 +52,6 @@
             jsSettings:           BASE_URL + '/js/settings.js',
             jsLaporan:            BASE_URL + '/js/laporan.js',
             jsApp:                BASE_URL + '/js/app.js',
-            jsAiRek:              BASE_URL + '/js/ai-rekomendasi.js',
             jsStok:               BASE_URL + '/js/stok.js',
             jsBiaya:              BASE_URL + '/js/biaya.js',
             jsInvoice:            BASE_URL + '/js/invoice.js',
@@ -64,6 +64,8 @@
             // modal-konfirmasi.js  → sudah digabung ke modal.js
             // modal-pasien-detail.js → sudah digabung ke modal.js
             // modal-dokumen.js     → sudah digabung ke modal.js
+            // icd10.js             → sudah digabung ke icd10-ai.js
+            // ai-rekomendasi.js    → sudah digabung ke icd10-ai.js
             jsPemeriksaanMedis:   BASE_URL + '/js/pemeriksaan-medis.js',
         };
     </script>
@@ -254,17 +256,17 @@
 
             // URUTAN LOAD (wajib diikuti):
             // supabase.js → kunjungan.js → modal.js → pemeriksaan-medis.js
-            // modal.js sudah mencakup: modal-resep, modal-riwayat,
-            //   modal-konfirmasi, modal-pasien-detail, modal-dokumen
+            // icd10-ai.js mencakup: icd10.js + ai-rekomendasi.js (DIGABUNG)
             const jsKeys = [
                 'jsUtils', 'jsSupabase',
                 'jsSettings', 'jsAuth',
-                'jsIcd10', 'jsPasien', 'jsKunj',
+                'jsIcd10Ai',           // ← menggantikan 'jsIcd10' dan 'jsAiRek'
+                'jsPasien', 'jsKunj',
                 'jsModal', 'jsUser',
                 'jsLaporan', 'jsStok', 'jsBiaya', 'jsInvoice',
                 'jsSuratTemplate',
                 'jsPemeriksaanMedis',
-                'jsApp', 'jsAiRek',
+                'jsApp',
             ];
 
             const jsTexts = await Promise.all(
