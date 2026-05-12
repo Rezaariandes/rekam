@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Klikpro RME V 2.0 — Praktek Dokter Reza Ariandes</title>
+    <title>Klikpro RME V 2.0 — Rekam Medis Praktik Dkter/Klinik</title>
 
     <script>
         const SUPABASE_URL = 'https://aqqlxytpryuwdggadjlt.supabase.co';
@@ -12,7 +12,7 @@
 
         const BASE_URL = 'https://raw.githubusercontent.com/Rezaariandes/rekam/main';
 
-        let KLINIK_NAMA   = 'Praktek Dokter Reza Ariandes';
+        let KLINIK_NAMA   = 'Klinik Klikpro';
         let KLINIK_TITLE  = 'Klikpro RME V 2.0';
         let JABATAN_MEDIS = ['Dokter', 'Admin', 'Paramedis', 'Apoteker', 'Kasir', 'ATLM'];
 
@@ -42,8 +42,7 @@
 
             jsUtils:              BASE_URL + '/js/utils.js',
             jsSupabase:           BASE_URL + '/js/supabase.js',
-            jsAuth:               BASE_URL + '/js/auth-secure.js',
-            // ✅ DIGABUNG: icd10.js + ai-rekomendasi.js → icd10-ai.js
+            jsAuth:               BASE_URL + '/js/auth.js',
             jsIcd10Ai:            BASE_URL + '/js/icd10-ai.js',
             jsPasien:             BASE_URL + '/js/pasien.js',
             jsKunj:               BASE_URL + '/js/kunjungan.js',
@@ -57,15 +56,16 @@
             jsInvoice:            BASE_URL + '/js/invoice.js',
             jsSuratTemplate:      BASE_URL + '/js/surat-template.js',
             // ─── KONSOLIDASI (sudah digabung ke file utama) ───
-            // supabase-patch.js    → sudah digabung ke supabase.js
-            // kunjungan-patch.js   → sudah digabung ke kunjungan.js
-            // medis-dinamis.js     → sudah digabung ke pemeriksaan-medis.js
-            // modal-resep.js       → sudah digabung ke modal.js
-            // modal-konfirmasi.js  → sudah digabung ke modal.js
+            // supabase-patch.js      → sudah digabung ke supabase.js
+            // kunjungan-patch.js     → sudah digabung ke kunjungan.js
+            // medis-dinamis.js       → sudah digabung ke pemeriksaan-medis.js
+            // modal-resep.js         → sudah digabung ke modal.js
+            // modal-konfirmasi.js    → sudah digabung ke modal.js
             // modal-pasien-detail.js → sudah digabung ke modal.js
-            // modal-dokumen.js     → sudah digabung ke modal.js
-            // icd10.js             → sudah digabung ke icd10-ai.js
-            // ai-rekomendasi.js    → sudah digabung ke icd10-ai.js
+            // modal-dokumen.js       → sudah digabung ke modal.js
+            // icd10.js               → sudah digabung ke icd10-ai.js
+            // ai-rekomendasi.js      → sudah digabung ke icd10-ai.js
+            // auth-secure.js         → sudah digabung ke auth.js
             jsPemeriksaanMedis:   BASE_URL + '/js/pemeriksaan-medis.js',
         };
     </script>
@@ -203,7 +203,7 @@
 
     async function bootstrap() {
         try {
-            // ── 0. Ambil anon key dari Edge Function (key tidak pernah ada di kode) ──
+            // ── 0. Ambil anon key dari Edge Function ──
             setLoadStep('Menghubungkan ke server...');
             try {
                 const cfgRes = await fetch(SUPABASE_URL + '/functions/v1/get-config');
@@ -255,12 +255,13 @@
             setLoadStep('Memuat modul aplikasi...');
 
             // URUTAN LOAD (wajib diikuti):
-            // supabase.js → kunjungan.js → modal.js → pemeriksaan-medis.js
+            // supabase.js → settings.js → auth.js → icd10-ai.js → ... → pemeriksaan-medis.js → app.js
+            // auth.js     mencakup: auth.js + auth-secure.js (DIGABUNG)
             // icd10-ai.js mencakup: icd10.js + ai-rekomendasi.js (DIGABUNG)
             const jsKeys = [
                 'jsUtils', 'jsSupabase',
                 'jsSettings', 'jsAuth',
-                'jsIcd10Ai',           // ← menggantikan 'jsIcd10' dan 'jsAiRek'
+                'jsIcd10Ai',
                 'jsPasien', 'jsKunj',
                 'jsModal', 'jsUser',
                 'jsLaporan', 'jsStok', 'jsBiaya', 'jsInvoice',
