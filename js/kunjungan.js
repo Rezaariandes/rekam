@@ -473,6 +473,13 @@ async function bukaRekamMedisHariIni(kId) {
     // null and the data appears "empty" even though the fetch succeeded.
     if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
 
+    // FIX-DEFAULT-DATA: Reset semua state penunjang/tindakan sebelum mengisi data kunjungan.
+    // Tanpa ini, state dari kunjungan sebelumnya (window._reqLab, _reqTindakan, dll)
+    // bisa terbawa ke kunjungan baru jika clearSession tidak dipanggil.
+    if (typeof loadReqLabFromKunjungan === 'function') {
+        loadReqLabFromKunjungan(null);  // Reset semua chip ke kosong dulu
+    }
+
     try {
         const kunjunganData = await sb_getKunjunganById(currentKunjunganId);
         if (kunjunganData && typeof _isiFormDariKunjungan === 'function') {
@@ -1263,12 +1270,28 @@ async function saveAll(showInvoice = true) {
 
         showToast('✅ Rekam medis berhasil disimpan!', 'success');
 
-        // Buka invoice riwayat (tampilan sama dengan klik 🧾 di chip riwayat)
+        // Buka modal tagihan setelah simpan rekam medis
+        // Gunakan openModalTagihan (bukan lihatTagihanKunjungan) agar:
+        // 1. Data req_lab diambil langsung dari DB (bukan dari form state)
+        // 2. Item baru dari rekam medis di-merge ke tagihan existing
         if (showInvoice && window._biayaAktif && currentKunjunganId && diag1) {
             try {
                 const namaPasienDisplay = $('infoPasienNama') ? $('infoPasienNama').innerText : namaPasien;
-                if (typeof lihatTagihanKunjungan === 'function') {
-                    lihatTagihanKunjungan(currentKunjunganId, namaPasienDisplay, localDate);
+                if (typeof openModalTagihan === 'function') {
+                    // Ambil data kunjungan fresh dari DB agar req_lab sudah tersimpan
+                    let kunjunganDataFresh = null;
+                    try {
+                        kunjunganDataFresh = await sb_getKunjunganById(currentKunjunganId);
+                    } catch(e) {
+                        console.warn('[Klikpro] Gagal ambil kunjungan fresh:', e.message);
+                    }
+                    openModalTagihan(
+                        currentKunjunganId,
+                        currentPasienId,
+                        namaPasienDisplay,
+                        localDate,
+                        kunjunganDataFresh || payload  // fallback ke payload form jika fetch gagal
+                    );
                 }
             } catch(e) {
                 console.warn('[Klikpro] Modal invoice gagal:', e.message);

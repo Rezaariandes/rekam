@@ -365,7 +365,7 @@ async function sb_checkAndUpsertPasien(payload) {
         // Fungsi ginjal
         lab_ureum: r.lab_ureum, lab_creatinin: r.lab_creatinin,
         keluhan: r.keluhan, fisik: r.fisik,
-        diag: r.diagnosa, diagnosa2: r.diagnosa2,
+        diag: r.diagnosa, diagnosa: r.diagnosa, diagnosa2: r.diagnosa2,
         terapi: r.terapi, surat_sakit: r.surat_sakit,
         req_lab: r.req_lab || null,
         status: r.status
