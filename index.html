@@ -12,6 +12,11 @@
 
         const BASE_URL = 'https://raw.githubusercontent.com/Rezaariandes/rekam/main';
 
+        // ── VERSI DEPLOY — ubah angka ini setiap kali push perubahan ──
+        // Browser akan selalu ambil file terbaru dari server (bukan dari cache).
+        // Format: YYYYMMDD-N  (N = urutan deploy hari itu)
+        const APP_VERSION = '20260513-1';
+
         let KLINIK_NAMA   = 'Klinik Klikpro';
         let KLINIK_TITLE  = 'Klikpro RME V 2.0';
         let JABATAN_MEDIS = ['Dokter', 'Admin', 'Paramedis', 'Apoteker', 'Kasir', 'ATLM'];
@@ -25,48 +30,38 @@
             cohere:     [''],
         };
 
+        const V = '?v=' + APP_VERSION;   // shorthand cache-buster
+
         const FRAGMENT_URLS = {
-            css:          BASE_URL + '/css/style.css',
-            modalRiwayat: BASE_URL + '/components/modal-riwayat.html',
-            modalUser:    BASE_URL + '/components/modal-user.html',
-            header:       BASE_URL + '/components/header.html',
-            nav:          BASE_URL + '/components/nav.html',
-            pageDaftar:   BASE_URL + '/pages/page-daftar.html',
-            pageMedis:    BASE_URL + '/pages/page-medis.html',
-            pageKunjungan:  BASE_URL + '/pages/page-kunjungan.html',
-            pageUser:     BASE_URL + '/pages/page-user.html',
-            pageSettings: BASE_URL + '/pages/page-settings.html',
-            pageLaporan:  BASE_URL + '/pages/page-laporan.html',
-            pageStok:     BASE_URL + '/pages/page-stok.html',
-            pageBiaya:    BASE_URL + '/pages/page-biaya.html',
+            css:            BASE_URL + '/css/style.css'                  + V,
+            modalRiwayat:   BASE_URL + '/components/modal-riwayat.html'  + V,
+            modalUser:      BASE_URL + '/components/modal-user.html'     + V,
+            header:         BASE_URL + '/components/header.html'         + V,
+            nav:            BASE_URL + '/components/nav.html'            + V,
+            pageDaftar:     BASE_URL + '/pages/page-daftar.html'         + V,
+            pageMedis:      BASE_URL + '/pages/page-medis.html'          + V,
+            pageKunjungan:  BASE_URL + '/pages/page-kunjungan.html'      + V,
+            pageUser:       BASE_URL + '/pages/page-user.html'           + V,
+            pageSettings:   BASE_URL + '/pages/page-settings.html'       + V,
+            pageLaporan:    BASE_URL + '/pages/page-laporan.html'         + V,
+            pageStok:       BASE_URL + '/pages/page-stok.html'           + V,
+            pageBiaya:      BASE_URL + '/pages/page-biaya.html'          + V,
 
-
-            jsSupabase:           BASE_URL + '/js/supabase.js',
-            jsAuth:               BASE_URL + '/js/auth.js',
-            jsIcd10Ai:            BASE_URL + '/js/icd10-ai.js',
-            jsPasien:             BASE_URL + '/js/pasien.js',
-            jsKunj:               BASE_URL + '/js/kunjungan.js',
-            jsModal:              BASE_URL + '/js/modal.js',
-            jsUser:               BASE_URL + '/js/user.js',
-            jsSettings:           BASE_URL + '/js/settings.js',
-            jsLaporan:            BASE_URL + '/js/laporan.js',
-            jsApp:                BASE_URL + '/js/app.js',
-            jsStok:               BASE_URL + '/js/stok.js',
-            jsBiaya:              BASE_URL + '/js/biaya.js',
-            jsInvoice:            BASE_URL + '/js/invoice.js',
-            jsSuratTemplate:      BASE_URL + '/js/surat-template.js',
-            // ─── KONSOLIDASI (sudah digabung ke file utama) ───
-            // supabase-patch.js      → sudah digabung ke supabase.js
-            // kunjungan-patch.js     → sudah digabung ke kunjungan.js
-            // medis-dinamis.js       → sudah digabung ke pemeriksaan-medis.js
-            // modal-resep.js         → sudah digabung ke modal.js
-            // modal-konfirmasi.js    → sudah digabung ke modal.js
-            // modal-pasien-detail.js → sudah digabung ke modal.js
-            // modal-dokumen.js       → sudah digabung ke modal.js
-            // icd10.js               → sudah digabung ke icd10-ai.js
-            // ai-rekomendasi.js      → sudah digabung ke icd10-ai.js
-            // auth-secure.js         → sudah digabung ke auth.js
-            jsPemeriksaanMedis:   BASE_URL + '/js/pemeriksaan-medis.js',
+            jsSupabase:         BASE_URL + '/js/supabase.js'             + V,
+            jsAuth:             BASE_URL + '/js/auth.js'                 + V,
+            jsIcd10Ai:          BASE_URL + '/js/icd10-ai.js'             + V,
+            jsPasien:           BASE_URL + '/js/pasien.js'               + V,
+            jsKunj:             BASE_URL + '/js/kunjungan.js'            + V,
+            jsModal:            BASE_URL + '/js/modal.js'                + V,
+            jsUser:             BASE_URL + '/js/user.js'                 + V,
+            jsSettings:         BASE_URL + '/js/settings.js'             + V,
+            jsLaporan:          BASE_URL + '/js/laporan.js'              + V,
+            jsApp:              BASE_URL + '/js/app.js'                  + V,
+            jsStok:             BASE_URL + '/js/stok.js'                 + V,
+            jsBiaya:            BASE_URL + '/js/biaya.js'                + V,
+            jsInvoice:          BASE_URL + '/js/invoice.js'              + V,
+            jsSuratTemplate:    BASE_URL + '/js/surat-template.js'       + V,
+            jsPemeriksaanMedis: BASE_URL + '/js/pemeriksaan-medis.js'    + V,
         };
     </script>
 
