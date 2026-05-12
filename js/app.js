@@ -131,6 +131,136 @@ function clearSession() {
     const diastol = $('diastol');
     if (sistol)  sistol.classList.remove('is-high');
     if (diastol) diastol.classList.remove('is-high');
+    _updateRecoverBanner(); // Sembunyikan banner setelah sesi bersih
+}
+
+// ── BANNER RECOVER: tampil di pageDaftar jika ada draft pasien belum selesai ──
+// Muncul otomatis saat ada data sesi (cP_id + cK_id) tapi user sedang di halaman lain.
+// User bisa klik "Lanjutkan" untuk kembali ke pageMedis, atau "Abaikan" untuk hapus draft.
+function _updateRecoverBanner() {
+    const cPId = localStorage.getItem('cP_id');
+    const cKId = localStorage.getItem('cK_id');
+    const activePage = localStorage.getItem('activePage') || 'pageDaftar';
+    const hasDraft = !!(cPId && cKId && cKId !== 'null');
+    const showBanner = hasDraft && activePage !== 'pageMedis';
+
+    // Buat atau ambil elemen banner
+    let banner = document.getElementById('recoverBanner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'recoverBanner';
+        banner.style.cssText = [
+            'position:fixed', 'bottom:80px', 'left:50%',
+            'transform:translateX(-50%)',
+            'z-index:8888',
+            'background:linear-gradient(135deg,#1e40af,#2563eb)',
+            'color:#fff',
+            'padding:12px 18px',
+            'border-radius:14px',
+            'box-shadow:0 8px 28px rgba(37,99,235,0.38)',
+            'display:flex', 'align-items:center', 'gap:12px',
+            'font-family:Sora,sans-serif',
+            'font-size:13px',
+            'max-width:420px',
+            'width:calc(100% - 40px)',
+            'transition:opacity .3s,transform .3s',
+        ].join(';');
+
+        const namaPasien = localStorage.getItem('cP_nama') || 'Pasien';
+        banner.innerHTML = `
+            <span style="font-size:20px">📋</span>
+            <div style="flex:1;line-height:1.4">
+                <div style="font-weight:700;font-size:13px">Pemeriksaan belum selesai</div>
+                <div style="opacity:.82;font-size:11px" id="recoverBannerNama">${namaPasien}</div>
+            </div>
+            <button id="recoverBannerBtn"
+                style="background:#fff;color:#1e40af;border:none;border-radius:8px;
+                       padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer;
+                       font-family:Sora,sans-serif;white-space:nowrap;"
+                onclick="_recoverLanjutkan()">Lanjutkan ▶</button>
+            <button
+                style="background:rgba(255,255,255,0.15);color:#fff;border:none;
+                       border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;
+                       font-family:Sora,sans-serif;"
+                onclick="_recoverAbaikan()" title="Abaikan & hapus draft">✕</button>
+        `;
+        document.body.appendChild(banner);
+    } else {
+        // Update nama pasien jika banner sudah ada
+        const namaEl = document.getElementById('recoverBannerNama');
+        if (namaEl) namaEl.textContent = localStorage.getItem('cP_nama') || 'Pasien';
+    }
+
+    banner.style.display = showBanner ? 'flex' : 'none';
+}
+
+// ── Lanjutkan ke pageMedis dari banner recover ──
+async function _recoverLanjutkan() {
+    const cPId = localStorage.getItem('cP_id');
+    const cKId = localStorage.getItem('cK_id');
+    if (!cPId) return;
+
+    currentPasienId    = cPId;
+    currentKunjunganId = (cKId === 'null') ? null : cKId;
+
+    if ($('infoPasienNama'))     $('infoPasienNama').innerText     = localStorage.getItem('cP_nama')  || '—';
+    if ($('infoPasienNik'))      $('infoPasienNik').innerText      = localStorage.getItem('cP_nik')   || 'NIK: —';
+    if ($('infoPasienUmur'))     $('infoPasienUmur').innerText     = localStorage.getItem('cP_umur')  || 'Umur: -';
+    if ($('infoTglPemeriksaan')) {
+        $('infoTglPemeriksaan').innerText     = localStorage.getItem('cTglEdit') || 'Tgl: -';
+        $('infoTglPemeriksaan').style.display = 'block';
+    }
+    const _savedTglLahir = localStorage.getItem('cP_tglLahir');
+    if ($('infoPasienTglLahir') && _savedTglLahir) {
+        $('infoPasienTglLahir').innerText     = _savedTglLahir;
+        $('infoPasienTglLahir').style.display = '';
+    }
+
+    try {
+        currentRiwayat = JSON.parse(localStorage.getItem('cP_riwayat') || '[]');
+        if (typeof renderRiwayatList === 'function')
+            renderRiwayatList(currentRiwayat, 'historyListMedis');
+    } catch(e) { currentRiwayat = []; }
+
+    if (currentKunjunganId) {
+        if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
+        try {
+            const kunjunganData = await sb_getKunjunganById(currentKunjunganId);
+            if (kunjunganData && typeof _isiFormDariKunjungan === 'function') {
+                _isiFormDariKunjungan(kunjunganData);
+                document.querySelectorAll('[data-save="true"]').forEach(el =>
+                    localStorage.setItem('rme_' + el.id, el.value)
+                );
+                if (typeof renderMedisDinamis === 'function')
+                    window._ensureTarifCacheThen(() => renderMedisDinamis());
+                if (window._stokAktif && typeof loadResepByKunjungan === 'function')
+                    loadResepByKunjungan(currentKunjunganId).catch(() => {});
+                if (kunjunganData.riwayat_penyakit && $('riwayat_penyakit'))
+                    $('riwayat_penyakit').value = kunjunganData.riwayat_penyakit;
+            } else {
+                if (typeof loadAutosave === 'function') loadAutosave();
+            }
+        } catch(e) {
+            console.warn('[Klikpro] Recover: gagal fetch kunjungan, fallback autosave:', e.message);
+            if (typeof loadAutosave === 'function') loadAutosave();
+        }
+    } else {
+        if (typeof loadAutosave === 'function') loadAutosave();
+    }
+
+    calculateIMT && calculateIMT();
+    checkTensi   && checkTensi();
+    checkLabAlert && checkLabAlert();
+
+    switchPage('pageMedis', null);
+    setTimeout(() => { if (typeof _applyLockUI === 'function') _applyLockUI(); }, 100);
+}
+
+// ── Abaikan draft, hapus sesi pasien ──
+function _recoverAbaikan() {
+    if (!confirm('Abaikan pemeriksaan yang belum selesai? Data yang belum disimpan ke database akan hilang.')) return;
+    if (typeof clearSession === 'function') clearSession();
+    showToast && showToast('🗑️ Draft pemeriksaan dihapus.', 'info');
 }
 
 // ── INPUT FORMAT TANGGAL LAHIR OTOMATIS ──
@@ -218,6 +348,13 @@ function switchPage(id, navEl) {
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active-nav'));
         navEl.classList.add('active-nav');
     }
+
+    // ── FIX: Selalu simpan halaman aktif agar refresh kembali ke halaman yang benar ──
+    // Data sesi pasien (cP_id, cK_id, dll.) SENGAJA tidak dihapus di sini agar
+    // banner "Lanjutkan Pasien" tetap bisa ditampilkan saat user di halaman lain.
+    // Sesi bersih setelah: simpan selesai, clearSession(), atau klik Abaikan di banner.
+    localStorage.setItem('activePage', id);
+    _updateRecoverBanner();
 
     const filterDate = document.getElementById('filterDate');
     if (id === 'pageKunjungan' && filterDate && filterDate.value) fetchByDate();
@@ -400,7 +537,14 @@ async function initApp() {
         catch(e) { console.warn('[Klikpro] Gagal pre-fetch tarif:', e.message); }
     }
 
-    if (localStorage.getItem('activePage') === 'pageMedis') {
+    // ── FIX: Restore ke halaman terakhir yang benar (bukan selalu pageMedis) ──
+    // Jika ada sesi pasien yang belum selesai (cP_id tersimpan), tampilkan banner
+    // "Lanjutkan Pasien" di pageDaftar — user yang memilih kapan mau kembali.
+    const _lastPage   = localStorage.getItem('activePage') || 'pageDaftar';
+    const _hasDraftPx = !!(localStorage.getItem('cP_id') && localStorage.getItem('cK_id'));
+
+    if (_lastPage === 'pageMedis' && _hasDraftPx) {
+        // ── KASUS: refresh SAAT sedang di pageMedis → restore langsung ──
         currentPasienId    = localStorage.getItem('cP_id');
         currentKunjunganId = localStorage.getItem('cK_id');
         if (currentKunjunganId === "null") currentKunjunganId = null;
@@ -412,7 +556,6 @@ async function initApp() {
             $('infoTglPemeriksaan').innerText     = localStorage.getItem('cTglEdit') || 'Tgl: -';
             $('infoTglPemeriksaan').style.display = 'block';
         }
-        // Restore tanggal lahir di banner
         const _savedTglLahir = localStorage.getItem('cP_tglLahir');
         if ($('infoPasienTglLahir') && _savedTglLahir) {
             $('infoPasienTglLahir').innerText     = _savedTglLahir;
@@ -428,9 +571,7 @@ async function initApp() {
         }
 
         if (currentKunjunganId) {
-            // Render section dinamis DULU agar field sudah ada di DOM sebelum diisi
             if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
-
             try {
                 const kunjunganData = await sb_getKunjunganById(currentKunjunganId);
                 if (kunjunganData && typeof _isiFormDariKunjungan === 'function') {
@@ -441,11 +582,9 @@ async function initApp() {
                     if (typeof renderMedisDinamis === 'function') {
                         window._ensureTarifCacheThen(() => renderMedisDinamis());
                     }
-                    // Restore resep dari DB (in-memory _resepItems kosong setelah refresh)
                     if (window._stokAktif && typeof loadResepByKunjungan === 'function') {
                         loadResepByKunjungan(currentKunjunganId).catch(() => {});
                     }
-                    // Restore riwayat_penyakit
                     if (kunjunganData.riwayat_penyakit && $('riwayat_penyakit')) {
                         $('riwayat_penyakit').value = kunjunganData.riwayat_penyakit;
                     }
@@ -456,8 +595,6 @@ async function initApp() {
                 console.warn('[Klikpro] Gagal fetch kunjungan saat reload, fallback autosave:', e.message);
                 if (typeof loadAutosave === 'function') loadAutosave();
             }
-
-            // Fetch alergi dari tabel pasien (data permanen)
             if (currentPasienId && currentPasienId !== 'null') {
                 try {
                     const pasienRows = await _sbFetch(`pasien?id=eq.${currentPasienId}&select=alergi&limit=1`);
@@ -472,7 +609,6 @@ async function initApp() {
                 }
             }
         } else {
-            // Kunjungan baru (belum disimpan) — pakai autosave
             if (typeof loadAutosave === 'function') loadAutosave();
         }
 
@@ -482,10 +618,32 @@ async function initApp() {
 
         switchPage('pageMedis', null);
         setTimeout(function(){ if (typeof _applyLockUI === 'function') _applyLockUI(); }, 100);
+
     } else {
-        if (typeof clearSession === 'function') clearSession();
-        // Render dynamic lab section untuk halaman non-pageMedis (normal flow)
+        // ── KASUS NORMAL: buka halaman terakhir yang bukan pageMedis ──
         if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
+
+        // Restore ke halaman terakhir (bukan pageMedis) jika valid
+        const validPages = ['pageDaftar','pageKunjungan','pageUser','pageSettings',
+                            'pageLaporan','pageStok','pageBiaya'];
+        if (validPages.includes(_lastPage)) {
+            const navMap = {
+                pageDaftar:    'navDaftar',
+                pageKunjungan: 'navKunjungan',
+                pageUser:      'navUser',
+                pageSettings:  'navSettings',
+                pageLaporan:   'navLaporan',
+                pageStok:      'navStok',
+                pageBiaya:     'navBiaya',
+            };
+            switchPage(_lastPage, document.getElementById(navMap[_lastPage]) || null);
+        }
+        // Jika ada draft pasien belum selesai, tampilkan banner recover di pageDaftar
+        if (_hasDraftPx) {
+            _updateRecoverBanner();
+        } else {
+            if (typeof clearSession === 'function') clearSession();
+        }
     }
 
     // Ambil data awal via sb_initData (Supabase)
