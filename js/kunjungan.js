@@ -290,6 +290,45 @@ function renderKunjunganHariIni() {
                     rowParts.push(`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${pnjChips}</div>`);
                 }
 
+                // ── Chip tindakan medis
+                const tidReqs = Object.entries(reqObj)
+                    .filter(([k, v]) => v === true && k.startsWith('tindakan_'))
+                    .map(([k]) => {
+                        const nameKey = '_tidname_' + k;
+                        return reqObj[nameKey] || k.replace('tindakan_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    });
+                if (tidReqs.length > 0) {
+                    const tidChips = tidReqs.map(r =>
+                        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;
+                            background:rgba(220,38,38,0.1);color:#b91c1c;font-size:9.5px;font-weight:700;
+                            border:1px solid rgba(220,38,38,0.25);">⚕️ ${r}</span>`
+                    ).join('');
+                    rowParts.push(
+                        `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;
+                            background:rgba(220,38,38,0.05);border:1px solid rgba(220,38,38,0.18);
+                            border-radius:8px;padding:4px 8px;margin-top:4px;">
+                            <span style="font-size:9.5px;font-weight:800;color:#b91c1c;white-space:nowrap;">🩺 Tindakan:</span>
+                            ${tidChips}
+                        </div>`
+                    );
+                }
+
+                // ── Chip pemeriksaan extra
+                const pemxReqs = Object.entries(reqObj)
+                    .filter(([k, v]) => v && typeof v === 'string' && k.startsWith('pemx_'))
+                    .map(([k]) => {
+                        const nameKey = '_pemxname_' + k;
+                        return reqObj[nameKey] || k.replace('pemx_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    });
+                if (pemxReqs.length > 0) {
+                    const pemxChips = pemxReqs.map(r =>
+                        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;
+                            background:rgba(124,58,237,0.08);color:#6d28d9;font-size:9.5px;font-weight:700;
+                            border:1px solid rgba(124,58,237,0.2);">🩺 ${r}</span>`
+                    ).join('');
+                    rowParts.push(`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${pemxChips}</div>`);
+                }
+
                 if (rowParts.length > 0) {
                     labReqRow = rowParts.join('');
                 }
@@ -713,87 +752,33 @@ function _renderSectionLabDinamic() {
         if (secManual) secManual.style.display = 'none';
     }
 
-    // ── Tentukan field lab aktif: prioritas _tarifCache, fallback _labAktif ──
-    let activeFields = [];
+    // ── Section lab lama (field group per baris) dihapus.
+    //    Semua input laboratorium kini dirender oleh accordion _renderChipPermintaanLab()
+    //    di pemeriksaan-medis.js. Fungsi ini hanya memastikan section terlihat dan
+    //    memicu render accordion + penunjang.
+    // ──
 
-    const tarifLab = (window._tarifCache || []).filter(
-        t => t.aktif && t.kategori === 'Laboratorium'
-    );
+    // Sembunyikan elemen HTML bawaan yang sudah tidak dipakai
+    const staticRow = section.querySelector('.row.g-2.mb-3');
+    if (staticRow) staticRow.style.display = 'none';
+    const labReqWrap = document.getElementById('sectionPermintaanLabRequest');
+    if (labReqWrap) labReqWrap.style.display = 'none';
 
-    if (tarifLab.length > 0) {
-        // Mode baru: baca dari tarif_layanan (Page Biaya)
-        tarifLab.forEach(t => {
-            const fieldId  = LAB_TARIF_TO_FIELD[t.nama];
-            if (!fieldId) return;
-            const fieldDef = ALL_LAB_FIELDS.find(f => f.id === fieldId);
-            if (fieldDef) activeFields.push(fieldDef);
-        });
-        // Hapus duplikat
-        activeFields = activeFields.filter(
-            (f, idx, arr) => arr.findIndex(x => x.id === f.id) === idx
-        );
-    } else {
-        // Fallback: _labAktif dari Settings (klinik belum pakai modul Biaya)
-        const labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
-        activeFields = ALL_LAB_FIELDS.filter(f => labAktif[f.id]);
-    }
+    const tarifLab = (window._tarifCache || []).filter(t => t.aktif && t.kategori === 'Laboratorium');
+    const labAktif = window._labAktif || {};
+    const hasLab   = tarifLab.length > 0 || Object.values(labAktif).some(Boolean);
 
-    if (activeFields.length === 0) {
+    if (!hasLab) {
         section.style.display = 'none';
         if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
         return;
     }
     section.style.display = '';
 
-    const grouped = {};
-    activeFields.forEach(f => {
-        if (!grouped[f.group]) grouped[f.group] = [];
-        grouped[f.group].push(f);
-    });
+    // Render accordion lab (dari pemeriksaan-medis.js)
+    if (typeof _renderChipPermintaanLab === 'function') _renderChipPermintaanLab();
 
-    let html = `<div class="section-divider"><span>🔬 Hasil Laboratorium</span></div>`;
-
-    Object.entries(grouped).forEach(([grp, fields]) => {
-        html += `<div style="margin-bottom:10px;">`;
-        if (Object.keys(grouped).length > 1) {
-            html += `<div style="font-size:10px;font-weight:700;color:var(--primary,#2563eb);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">${LAB_GROUP_LABELS[grp] || grp}</div>`;
-        }
-        html += `<div class="row g-2">`;
-        fields.forEach(f => {
-            const colClass = fields.length === 1 ? 'col-6' : 'col-4';
-            if (f.type === 'select') {
-                html += `<div class="${colClass}"><div class="ttv-item">
-                    <label>${f.label} <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(${f.unit})</span></label>
-                    <select id="${f.id}" class="form-control" data-save="true" style="font-size:12px;padding:4px 6px;height:36px;">
-                        ${(f.opts||[]).map(o => `<option value="${o === '—' ? '' : o}">${o}</option>`).join('')}
-                    </select>
-                </div></div>`;
-            } else {
-                html += `<div class="${colClass}"><div class="ttv-item">
-                    <label>${f.label} <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(${f.unit})</span></label>
-                    <input type="number" id="${f.id}" placeholder="—" data-save="true" step="${f.step || 1}">
-                </div></div>`;
-            }
-        });
-        html += `</div></div>`;
-    });
-
-    html += `<div id="labAlert" style="display:none;font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:rgba(239,68,68,0.09);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"></div>`;
-
-    section.innerHTML = html;
-
-    section.querySelectorAll('[data-save="true"]').forEach(el => {
-        el.addEventListener('input', () => {
-            localStorage.setItem('rme_' + el.id, el.value);
-            checkLabAlert();
-        });
-        const saved = localStorage.getItem('rme_' + el.id);
-        if (saved !== null) el.value = saved;
-    });
-
-    checkLabAlert();
-
-    // ── Render section permintaan penunjang setelah lab selesai ──
+    // Render section permintaan penunjang setelah lab
     if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
 }
 

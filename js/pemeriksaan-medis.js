@@ -1021,10 +1021,18 @@ function _refreshTindakanChipUI() {
 }
 
 // ══════════════════════════════════════════════════════
-//  SECTION 2 — PEMERIKSAAN EXTRA (dari tarif Pemeriksaan)
+//  SECTION 2 — PEMERIKSAAN EXTRA ACCORDION (dari tarif Pemeriksaan)
+//  Klik item → aktif + muncul textarea input
+//  Item aktif muncul sebagai chip di halaman Kunjungan
 // ══════════════════════════════════════════════════════
 
 const _PEMX_COLORS = ['#7c3aed','#0891b2','#059669','#d97706','#db2777','#6366f1'];
+
+const _PEMX_ICONS = {
+    'EKG': '🫀', 'Konsultasi': '💬', 'Edukasi': '📚', 'Gizi': '🥗',
+    'Fisik': '🩺', 'Fisioterapi': '🏃', 'Psikologi': '🧠',
+    'Mata': '👁️', 'THT': '👂', 'Gigi': '🦷', 'Kulit': '🧴',
+};
 
 function _renderSectionPemeriksaanExtra() {
     const container = document.getElementById('sectionPemeriksaanDinamis');
@@ -1032,36 +1040,175 @@ function _renderSectionPemeriksaanExtra() {
     const items = _pm_getTarif('Pemeriksaan', _PEMERIKSAAN_BAWAAN);
     if (items.length === 0) { container.innerHTML = ''; container.style.display = 'none'; return; }
     container.style.display = '';
-    container.innerHTML = items.map((t, idx) => {
-        const slug = _pm_slug('pemx', t.nama);
-        const dot  = _PEMX_COLORS[idx % _PEMX_COLORS.length];
-        return `<div class="rm-subsection" style="border-bottom:1px dashed var(--border);padding-bottom:14px;margin-bottom:14px;">
-            <div class="rm-subsection-label">
-                <span class="rm-subsection-dot" style="background:${dot};"></span>
-                ${_pm_escHtml(t.nama)}
+
+    // Kelompokkan per sub_group
+    const groups  = {};
+    const noGroup = [];
+    items.forEach(t => {
+        const sg = (t.sub_group || '').trim();
+        if (sg) { if (!groups[sg]) groups[sg] = []; groups[sg].push(t); }
+        else noGroup.push(t);
+    });
+    const hasGroups = Object.keys(groups).length > 0;
+
+    function _chipPemxHtml(t) {
+        const slug   = _pm_slug('pemx', t.nama);
+        const active = !!(window._reqPemeriksaanExtra[slug] && String(window._reqPemeriksaanExtra[slug]).trim());
+        const icon   = _pm_icon(t.nama, _PEMX_ICONS, '🩺');
+        return `<button id="chip_${slug}"
+            onclick="_togglePemx('${slug}','${_pm_escHtml(t.nama)}')"
+            style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;
+                font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;margin:3px 3px 0 0;
+                border:1.5px solid ${active?'#7c3aed':'#e2e8f0'};
+                background:${active?'#7c3aed':'#fff'};
+                color:${active?'#fff':'var(--text,#334155)'};">
+            ${icon} ${_pm_escHtml(t.nama)}
+        </button>`;
+    }
+
+    function _accordionPemxHtml(sg, sgItems) {
+        const sgId   = 'pemx_acc_' + _pm_slug('sg', sg);
+        const isOpen = window._accordionState && window._accordionState[sgId] === true;
+        const hasAny = sgItems.some(t => {
+            const s = _pm_slug('pemx', t.nama);
+            return !!(window._reqPemeriksaanExtra[s] && String(window._reqPemeriksaanExtra[s]).trim());
+        });
+        return `
+        <div style="border:1px solid #e2e8f0;border-radius:11px;margin-bottom:7px;overflow:hidden;">
+            <div onclick="_pemxAccToggle('${sgId}')"
+                style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;cursor:pointer;background:${hasAny?'#faf5ff':'#f8fafc'};user-select:none;">
+                <span style="font-size:11.5px;font-weight:700;color:${hasAny?'#7c3aed':'#475569'};">
+                    🩺 ${_pm_escHtml(sg)}${hasAny?' <span style=\'color:#7c3aed;font-size:10px;\'>●</span>':''}
+                </span>
+                <span id="${sgId}_arrow" style="font-size:11px;color:#94a3b8;">${isOpen?'▼':'▶'}</span>
             </div>
-            <div class="form-group" style="position:relative;">
-                <label class="form-label">${_pm_escHtml(t.keterangan || t.nama)}</label>
-                <textarea id="${slug}" class="form-control" data-save="true"
-                    placeholder="Isi ${_pm_escHtml(t.nama).toLowerCase()}..." rows="2"
-                    oninput="_onPemxInput('${slug}')"></textarea>
-                <button class="stt-btn" onclick="startSTT('${slug}')">🎙️</button>
+            <div id="${sgId}_body" style="display:${isOpen?'block':'none'};padding:10px 12px 8px;">
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">Klik item untuk memilih & mengisi catatan</div>
+                <div style="display:flex;flex-wrap:wrap;margin-bottom:4px;">
+                    ${sgItems.map(_chipPemxHtml).join('')}
+                </div>
+                <div id="${sgId}_inputs"></div>
             </div>
         </div>`;
-    }).join('');
+    }
 
+    let html = `
+        <div class="rm-subsection" style="border-bottom:1px dashed var(--border);padding-bottom:14px;margin-bottom:14px;">
+            <div class="rm-subsection-label">
+                <span class="rm-subsection-dot" style="background:#7c3aed;"></span>
+                Pemeriksaan Tambahan
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;">Klik item untuk memilih & mengisi catatan pemeriksaan</div>`;
+
+    if (hasGroups) {
+        Object.keys(groups).sort().forEach(sg => { html += _accordionPemxHtml(sg, groups[sg]); });
+        if (noGroup.length > 0) {
+            html += `<div style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${noGroup.map(_chipPemxHtml).join('')}</div>`;
+            html += `<div id="pemx_nogroup_inputs"></div>`;
+        }
+    } else {
+        html += `<div style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${items.map(_chipPemxHtml).join('')}</div>`;
+        html += `<div id="pemx_flat_inputs"></div>`;
+    }
+    html += `</div>`;
+    container.innerHTML = html;
+
+    // Re-render textarea untuk item yang sudah aktif
     items.forEach(t => {
         const slug = _pm_slug('pemx', t.nama);
-        const el   = document.getElementById(slug);
-        // BUG-FIX-1: Jangan restore dari localStorage jika data sedang dimuat dari DB
-        if (!window._kunjunganLoadingFromDB) {
-            const val  = window._reqPemeriksaanExtra[slug] || localStorage.getItem('rme_' + slug) || '';
-            if (el && val) { el.value = val; window._reqPemeriksaanExtra[slug] = val; }
-        } else {
-            const val = window._reqPemeriksaanExtra[slug] || '';
-            if (el && val) el.value = val;
+        if (window._reqPemeriksaanExtra[slug] && String(window._reqPemeriksaanExtra[slug]).trim()) {
+            _renderPemxInput(slug, t.nama);
         }
     });
+}
+
+window._pemxAccToggle = function(sgId) {
+    if (!window._accordionState) window._accordionState = {};
+    const body  = document.getElementById(sgId + '_body');
+    const arrow = document.getElementById(sgId + '_arrow');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+    window._accordionState[sgId] = !isOpen;
+};
+
+function _togglePemx(slug, nama) {
+    const isActive = !!(window._reqPemeriksaanExtra[slug] && String(window._reqPemeriksaanExtra[slug]).trim());
+    if (isActive) {
+        // Nonaktifkan: hapus nilai & input
+        window._reqPemeriksaanExtra[slug] = '';
+        localStorage.removeItem('rme_' + slug);
+        const inputWrap = document.getElementById('pemxinput_' + slug);
+        if (inputWrap) inputWrap.remove();
+        const btn = document.getElementById('chip_' + slug);
+        if (btn) { btn.style.background = '#fff'; btn.style.borderColor = '#e2e8f0'; btn.style.color = 'var(--text,#334155)'; }
+        _updatePemxAccordionHeader(slug);
+    } else {
+        // Aktifkan: beri nilai placeholder agar dianggap aktif, lalu render input
+        window._reqPemeriksaanExtra[slug] = window._reqPemeriksaanExtra[slug] || ' ';
+        const btn = document.getElementById('chip_' + slug);
+        if (btn) { btn.style.background = '#7c3aed'; btn.style.borderColor = '#7c3aed'; btn.style.color = '#fff'; }
+        _renderPemxInput(slug, nama);
+    }
+}
+
+function _renderPemxInput(slug, nama) {
+    // Cari wrap inputs terdekat
+    let inputsWrap = null;
+    const chip = document.getElementById('chip_' + slug);
+    if (chip) {
+        const accBody = chip.closest('[id$="_body"]');
+        if (accBody) inputsWrap = accBody.querySelector('[id$="_inputs"]');
+    }
+    if (!inputsWrap) inputsWrap = document.getElementById('pemx_flat_inputs') || document.getElementById('pemx_nogroup_inputs');
+    if (!inputsWrap || document.getElementById('pemxinput_' + slug)) return;
+
+    const icon   = _pm_icon(nama, _PEMX_ICONS, '🩺');
+    const ne     = _pm_escHtml(nama);
+    const valSaved = window._reqPemeriksaanExtra[slug];
+    const val    = (valSaved && valSaved.trim()) ? valSaved.trim() : '';
+
+    const div = document.createElement('div');
+    div.id = 'pemxinput_' + slug;
+    div.style.cssText = 'animation:_pnj_fadeIn .2s ease forwards;background:#faf5ff;border:1.5px solid #c4b5fd;border-radius:10px;padding:9px 12px;margin-top:6px;margin-bottom:4px;';
+    div.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:700;color:#7c3aed;">${icon} ${ne}</span>
+            <button onclick="_togglePemx('${slug}','${ne}')"
+                style="background:rgba(239,68,68,0.09);border:1px solid rgba(239,68,68,0.2);border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;color:#dc2626;display:flex;align-items:center;justify-content:center;padding:0;"
+                title="Batalkan">✕</button>
+        </div>
+        <div style="position:relative;">
+            <textarea id="${slug}" class="form-control" data-save="true"
+                placeholder="Catatan / hasil ${ne.toLowerCase()}..." rows="2"
+                style="font-size:12px;padding:7px 36px 7px 10px;border-color:#c4b5fd;"
+                oninput="_onPemxInput('${slug}')">${_pm_escHtml(val)}</textarea>
+            <button class="stt-btn" onclick="startSTT('${slug}')" style="border-color:#c4b5fd;">🎙️</button>
+        </div>`;
+    inputsWrap.appendChild(div);
+    // Sync nilai
+    if (val) { window._reqPemeriksaanExtra[slug] = val; }
+    _updatePemxAccordionHeader(slug);
+}
+
+function _updatePemxAccordionHeader(slug) {
+    const chip = document.getElementById('chip_' + slug);
+    if (!chip) return;
+    const accBody = chip.closest('[id$="_body"]');
+    if (!accBody) return;
+    const hasAny = Array.from(accBody.querySelectorAll('button[id^="chip_pemx_"]'))
+        .some(b => b.style.background === 'rgb(124, 58, 237)' || b.style.background === '#7c3aed');
+    const header = accBody.previousElementSibling;
+    if (!header) return;
+    const spanLabel = header.querySelector('span:first-child');
+    if (spanLabel) {
+        spanLabel.style.color = hasAny ? '#7c3aed' : '#475569';
+        const dotSpan = spanLabel.querySelector('span');
+        if (hasAny && !dotSpan) spanLabel.insertAdjacentHTML('beforeend', ' <span style=\'color:#7c3aed;font-size:10px;\'>●</span>');
+        else if (!hasAny && dotSpan) dotSpan.remove();
+    }
+    header.style.background = hasAny ? '#faf5ff' : '#f8fafc';
 }
 
 function _onPemxInput(slug) {
@@ -1069,6 +1216,14 @@ function _onPemxInput(slug) {
     if (!el) return;
     window._reqPemeriksaanExtra[slug] = el.value;
     localStorage.setItem('rme_' + slug, el.value);
+    // Update chip warna berdasarkan isi
+    const chip = document.getElementById('chip_' + slug);
+    if (chip) {
+        const hasVal = el.value.trim().length > 0;
+        chip.style.background  = hasVal ? '#7c3aed' : '#fff';
+        chip.style.borderColor = hasVal ? '#7c3aed' : '#e2e8f0';
+        chip.style.color       = hasVal ? '#fff'    : 'var(--text,#334155)';
+    }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1237,19 +1392,29 @@ function getReqLabPayload() {
     labTarif.forEach(t => {
         const chipId = _pm_slug('lab_req', t.nama);
         if (window._reqLab[chipId]) {
-            // Simpan nama asli agar kunjungan bisa tampilkan nama yang benar
             payload['_labname_' + chipId] = t.nama;
         }
     });
 
-    // Tindakan
+    // Tindakan: chip aktif + nama asli
+    const tidTarif = _pm_getTarif('Tindakan', []);
     Object.entries(window._reqTindakan || {}).forEach(([k, v]) => {
-        if (v) payload[k] = true;
+        if (!v) return;
+        payload[k] = true;
+        // Simpan nama asli tindakan
+        const tarif = tidTarif.find(t => _pm_slug('tindakan', t.nama) === k);
+        if (tarif) payload['_tidname_' + k] = tarif.nama;
     });
 
-    // Pemeriksaan extra
+    // Pemeriksaan extra: nilai + nama asli
+    const pemxTarif = _pm_getTarif('Pemeriksaan', _PEMERIKSAAN_BAWAAN);
     Object.entries(window._reqPemeriksaanExtra || {}).forEach(([k, v]) => {
-        if (v && String(v).trim()) payload[k] = String(v).trim();
+        if (v && String(v).trim()) {
+            payload[k] = String(v).trim();
+            // Simpan nama asli pemx
+            const tarif = pemxTarif.find(t => _pm_slug('pemx', t.nama) === k);
+            if (tarif) payload['_pemxname_' + k] = tarif.nama;
+        }
     });
 
     // Admin extra
@@ -1315,11 +1480,8 @@ function _refreshAllChipUI() {
         if (btnEl) btnEl.style.display = v ? 'inline-flex' : 'none';
     });
 
-    // Restore pemx textareas
-    Object.entries(window._reqPemeriksaanExtra || {}).forEach(([k, v]) => {
-        const el = document.getElementById(k);
-        if (el) el.value = v || '';
-    });
+    // Pemx chip warna sudah dihandle oleh _renderSectionPemeriksaanExtra (re-render input aktif)
+    // Nilai textarea akan di-restore saat _renderPemxInput dipanggil
 }
 
 // Alias _refreshChipUI lama
