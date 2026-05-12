@@ -256,12 +256,38 @@ function renderKunjunganHariIni() {
                 const pnjReqs = Object.entries(reqObj)
                     .filter(([k, v]) => v && k.startsWith('penunjang_'))
                     .map(([k]) => k.replace('penunjang_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
-                const allReqs = [...labReqs, ...pnjReqs];
-                if (allReqs.length > 0) {
-                    const chips = allReqs.map(r =>
-                        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;background:rgba(124,58,237,0.1);color:#6d28d9;font-size:9.5px;font-weight:700;border:1px solid rgba(124,58,237,0.25);">✔ ${r}</span>`
+
+                let rowParts = [];
+
+                // Badge permintaan labor yang menonjol
+                if (labReqs.length > 0) {
+                    const labChips = labReqs.map(r =>
+                        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;
+                            background:rgba(37,99,235,0.12);color:#1d4ed8;font-size:9.5px;font-weight:700;
+                            border:1px solid rgba(37,99,235,0.3);">🔬 ${r}</span>`
                     ).join('');
-                    labReqRow = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${chips}</div>`;
+                    rowParts.push(
+                        `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;
+                            background:rgba(37,99,235,0.06);border:1px solid rgba(37,99,235,0.2);
+                            border-radius:8px;padding:4px 8px;margin-top:4px;">
+                            <span style="font-size:9.5px;font-weight:800;color:#1d4ed8;white-space:nowrap;">🧪 Permintaan Lab:</span>
+                            ${labChips}
+                        </div>`
+                    );
+                }
+
+                // Chip penunjang seperti sebelumnya
+                if (pnjReqs.length > 0) {
+                    const pnjChips = pnjReqs.map(r =>
+                        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;
+                            background:rgba(124,58,237,0.1);color:#6d28d9;font-size:9.5px;font-weight:700;
+                            border:1px solid rgba(124,58,237,0.25);">✔ ${r}</span>`
+                    ).join('');
+                    rowParts.push(`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${pnjChips}</div>`);
+                }
+
+                if (rowParts.length > 0) {
+                    labReqRow = rowParts.join('');
                 }
             } catch(e) {}
         }
