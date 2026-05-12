@@ -1,9 +1,16 @@
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — MODUL INVOICE (invoice.js)
-//  • Modal lihat invoice dari riwayat
-//  • Edit invoice (item, diskon, catatan)
-//  • Print invoice profesional (A4)
+//  SATU-SATUNYA sumber semua modal & fungsi invoice:
+//
+//  openModalTagihan()        → modal INPUT tagihan baru
+//                              (dipanggil setelah simpan rekam medis)
+//                              sudah include cek tagihan existing di DB
+//  lihatTagihanKunjungan()   → modal LIHAT invoice tersimpan (dari riwayat)
+//  _showInvoiceModal()       → render modal view/edit invoice
+//  printInvoice()            → print invoice ke jendela baru
+//
 //  Dipisah dari biaya.js agar struktur lebih modular.
+//  biaya.js hanya mengurus tarif layanan & kalkulasi.
 // ════════════════════════════════════════════════════════
 
 /** Format angka ke Rupiah tanpa simbol, misal 15000 → "15.000" */
@@ -38,12 +45,34 @@ async function openModalTagihan(kunjunganId, pasienId, pasienNama, tgl, kunjunga
         try { await _refreshTarifCache(); } catch(e) {}
     }
 
-    // Auto-generate items dari kunjungan
-    try {
-        _tagihanItems = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData || {});
-    } catch(e) {
-        _tagihanItems = [];
+    // BUG-FIX: Cek dulu apakah tagihan sudah ada di DB untuk kunjungan ini.
+    // Jika sudah ada → tampilkan data dari DB (konsisten dengan invoice riwayat).
+    // Jika belum ada → generate otomatis dari data kunjungan.
+    let existingTagihan = null;
+    try { existingTagihan = await sb_getTagihan(kunjunganId); } catch(e) { /* ignore */ }
+
+    if (existingTagihan && existingTagihan.tagihan_item && existingTagihan.tagihan_item.length > 0) {
+        // Tagihan sudah tersimpan — pakai data dari DB
+        _tagihanItems = existingTagihan.tagihan_item.map(it => ({
+            nama_item:    it.nama_item,
+            kategori:     it.kategori,
+            jumlah:       Number(it.jumlah) || 1,
+            harga_satuan: Number(it.harga_satuan) || 0,
+            keterangan:   it.keterangan || null
+        }));
+        _tagihanDiskon = Number(existingTagihan.diskon) || 0;
+    } else {
+        // Tagihan belum ada — generate otomatis
+        try {
+            _tagihanItems = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData || {});
+        } catch(e) {
+            _tagihanItems = [];
+            showToast('⚠️ Gagal generate tagihan otomatis', 'error');
+        }
     }
+
+    // Isi catatan awal jika ada dari DB
+    window._tagihanCatatanInit = (existingTagihan && existingTagihan.catatan) ? existingTagihan.catatan : '';
 
     let modal = document.getElementById('modalTagihan');
     if (!modal) {
@@ -108,7 +137,7 @@ function _renderModalTagihanContent() {
             </div>
         </div>
         <textarea id="_mtCatatan" placeholder="Catatan (opsional)" rows="2"
-            style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;resize:none"></textarea>
+            style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;resize:none">${escHtml(window._tagihanCatatanInit || '')}</textarea>
         <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('modalTagihan').style.display='none'"
                 style="flex:1;padding:12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;cursor:pointer;background:#fff">
