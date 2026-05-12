@@ -326,6 +326,7 @@
 
     <!-- ══════════════════════════════════════════════════ -->
     <!--  SECTION 7 — AKSI AKHIR                           -->
+    <!--  Tombol simpan utama ada di floating button       -->
     <!-- ══════════════════════════════════════════════════ -->
     <div class="card rm-card">
         <div class="card-body" style="padding:12px 16px;">
@@ -713,17 +714,34 @@
         // ── Observe pageMedis visibility ──
         function _observePageMedis() {
             const page = document.getElementById('pageMedis');
-            if (!page) { setTimeout(_observePageMedis, 300); return; }
+            if (!page) { setTimeout(_observePageMedis, 150); return; }
             const obs = new MutationObserver(() => {
                 const visible = page.style.display !== 'none' && page.classList.contains('active');
                 visible ? _showFloatBtn() : _hideFloatBtn();
             });
             obs.observe(page, { attributes: true, attributeFilter: ['style','class'] });
+            // Cek status awal sekarang juga
             const visible = page.style.display !== 'none' && page.classList.contains('active');
             if (visible) _showFloatBtn();
             _attachDirtyListeners();
         }
-        document.addEventListener('DOMContentLoaded', _observePageMedis);
+
+        // Jangan pakai DOMContentLoaded — event sudah fired saat HTML di-inject via innerHTML.
+        // Jalankan langsung; jika DOM belum siap, _observePageMedis() akan retry via setTimeout.
+        _observePageMedis();
+
+        // Fallback: jika app memasukkan pageMedis ke DOM belakangan,
+        // pantau document.body sampai elemen tersedia.
+        (function() {
+            const bodyObs = new MutationObserver(function(_, obs) {
+                if (document.getElementById('pageMedis')) {
+                    obs.disconnect();
+                    _observePageMedis();
+                }
+            });
+            bodyObs.observe(document.body || document.documentElement,
+                { childList: true, subtree: true });
+        })();
 
         // ── Keyboard shortcut Ctrl+S / Cmd+S ──
         document.addEventListener('keydown', function(e) {
