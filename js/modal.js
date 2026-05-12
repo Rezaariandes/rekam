@@ -1136,6 +1136,30 @@ async function _lihatLengkapDariModal() {
                 showToast('🔒 ' + hakEdit.alasan, 'info');
             }
         }
+        // ── Scroll ke banner nama pasien (card paling atas pageMedis) ──
+        const pageMedis = document.getElementById('pageMedis');
+        const bannerCard = pageMedis
+            ? pageMedis.querySelector('.rm-card')
+            : document.querySelector('#pageMedis .rm-card');
+        if (bannerCard) {
+            bannerCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            // Fallback: scroll window ke atas
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        // Highlight singkat pada nama pasien agar mata langsung tertuju
+        const namaEl = document.getElementById('infoPasienNama');
+        if (namaEl) {
+            namaEl.style.transition = 'background .25s, border-radius .25s, padding .25s';
+            namaEl.style.background = 'rgba(37,99,235,0.13)';
+            namaEl.style.borderRadius = '6px';
+            namaEl.style.padding = '2px 6px';
+            setTimeout(() => {
+                namaEl.style.background = '';
+                namaEl.style.borderRadius = '';
+                namaEl.style.padding = '';
+            }, 1800);
+        }
     }, 150);
 }
 
