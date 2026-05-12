@@ -325,13 +325,15 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════ -->
-    <!--  SECTION 7 — SIMPAN REKAM MEDIS                   -->
+    <!--  SECTION 7 — AKSI AKHIR                           -->
     <!-- ══════════════════════════════════════════════════ -->
     <div class="card rm-card">
-        <div class="card-body" style="padding:14px 16px;">
-            <button onclick="saveAll()" id="btnSave"
-                class="btn-custom btn-success-custom w-100">
-                ✓ Simpan &amp; Tampilkan Invoice
+        <div class="card-body" style="padding:12px 16px;">
+            <button onclick="saveAll(true)" id="btnSave"
+                class="btn-custom btn-success-custom w-100"
+                style="display:flex;align-items:center;justify-content:center;gap:8px;">
+                <span style="font-size:15px;">🧾</span>
+                <span>Selesai &amp; Tampilkan Invoice</span>
             </button>
             <a href="#" onclick="resetSession(); return false;" class="cancel-link">
                 ✕ Batalkan &amp; Kembali
@@ -375,28 +377,61 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════ -->
-    <!--  FLOATING SAVE BUTTON                             -->
+    <!--  FLOATING SAVE BUTTON (Enhanced)                  -->
     <!-- ══════════════════════════════════════════════════ -->
     <div id="floatingSaveBtn"
-        style="position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:9000;display:none;flex-direction:column;align-items:center;gap:6px;">
-        <!-- Save button -->
+        style="position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:9000;display:none;flex-direction:column;align-items:center;gap:8px;">
+
+        <!-- Dirty pulse ring (tampil saat ada perubahan belum disimpan) -->
+        <div id="floatDirtyRing"
+            style="display:none;position:absolute;width:60px;height:60px;border-radius:50%;
+                   border:2.5px solid #f59e0b;animation:_dirtyPulse 1.6s ease-in-out infinite;
+                   pointer-events:none;top:50%;left:50%;transform:translate(-50%,-50%);">
+        </div>
+
+        <!-- Main save button -->
         <button id="floatSaveTrigger" onclick="_floatSave()"
-            title="Simpan semua data"
-            style="width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
-                   background:linear-gradient(135deg,#2563eb,#1d4ed8);
+            title="Simpan semua data (Ctrl+S)"
+            style="width:54px;height:54px;border-radius:50%;border:none;cursor:pointer;
+                   background:linear-gradient(145deg,#3b82f6,#1d4ed8);
                    color:#fff;font-size:22px;
-                   box-shadow:0 4px 16px rgba(37,99,235,0.45);
+                   box-shadow:0 4px 18px rgba(37,99,235,0.5),0 1px 3px rgba(0,0,0,0.2);
                    display:flex;align-items:center;justify-content:center;
-                   transition:all .2s;position:relative;">
-            💾
+                   transition:all .22s cubic-bezier(.34,1.56,.64,1);position:relative;">
+            <span id="floatSaveIcon">💾</span>
         </button>
+
+        <!-- Tooltip label -->
+        <div id="floatSaveLabel"
+            style="background:rgba(15,23,42,0.82);color:#fff;border-radius:10px;
+                   padding:3px 9px;font-size:10px;font-weight:700;white-space:nowrap;
+                   backdrop-filter:blur(4px);letter-spacing:0.3px;opacity:0.9;">
+            Simpan
+        </div>
+
         <!-- Saved checkmark indicator -->
         <div id="floatSavedMark"
-            style="display:none;background:#059669;color:#fff;border-radius:20px;
-                   padding:3px 9px;font-size:10px;font-weight:700;white-space:nowrap;
-                   box-shadow:0 2px 8px rgba(5,150,105,0.4);animation:_floatFadeIn .25s ease;">
-            ✓ Tersimpan
+            style="display:none;position:absolute;top:-36px;left:50%;transform:translateX(-50%);
+                   background:linear-gradient(135deg,#059669,#10b981);color:#fff;border-radius:20px;
+                   padding:5px 12px;font-size:10.5px;font-weight:800;white-space:nowrap;
+                   box-shadow:0 3px 12px rgba(5,150,105,0.45);
+                   animation:_savedPop .3s cubic-bezier(.34,1.56,.64,1);
+                   display:none;align-items:center;gap:4px;">
+            ✅ Tersimpan!
         </div>
+    </div>
+
+    <!-- Toast notifikasi simpan (muncul di atas layar) -->
+    <div id="floatSaveToast"
+        style="position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-80px);
+               z-index:9999;background:linear-gradient(135deg,#059669,#10b981);
+               color:#fff;border-radius:0 0 16px 16px;padding:10px 22px;
+               font-size:13px;font-weight:800;white-space:nowrap;
+               box-shadow:0 6px 24px rgba(5,150,105,0.4);
+               transition:transform .35s cubic-bezier(.34,1.56,.64,1);
+               display:flex;align-items:center;gap:8px;pointer-events:none;">
+        <span style="font-size:16px;">✅</span>
+        <span>Data berhasil disimpan!</span>
     </div>
 
     <!-- ══════════════════════════════════════════════════ -->
@@ -508,54 +543,37 @@
             padding-left:24px;
         }
 
-        /* Floating save button */
+        /* Floating save button — Enhanced */
         @keyframes _floatFadeIn {
-            from { opacity:0; transform:scale(0.8); }
-            to   { opacity:1; transform:scale(1); }
+            from { opacity:0; transform:scale(0.8) translateX(-50%); }
+            to   { opacity:1; transform:scale(1) translateX(-50%); }
         }
         @keyframes _floatPop {
             0%   { transform:scale(1); }
             40%  { transform:scale(1.18); }
             100% { transform:scale(1); }
         }
+        @keyframes _savedPop {
+            0%   { opacity:0; transform:translateX(-50%) scale(0.7); }
+            70%  { opacity:1; transform:translateX(-50%) scale(1.08); }
+            100% { opacity:1; transform:translateX(-50%) scale(1); }
+        }
+        @keyframes _dirtyPulse {
+            0%,100% { transform:translate(-50%,-50%) scale(1); opacity:0.7; }
+            50%      { transform:translate(-50%,-50%) scale(1.35); opacity:0; }
+        }
         #floatSaveTrigger:hover {
-            transform:scale(1.08);
-            box-shadow:0 6px 22px rgba(37,99,235,0.55) !important;
+            transform:scale(1.1) !important;
+            box-shadow:0 8px 28px rgba(37,99,235,0.6),0 2px 6px rgba(0,0,0,0.25) !important;
         }
-        #floatSaveTrigger:active { transform:scale(0.95); }
+        #floatSaveTrigger:active { transform:scale(0.93) !important; }
         #floatSaveTrigger.saving {
-            background:linear-gradient(135deg,#6366f1,#4f46e5) !important;
-            animation:_floatPop .35s ease;
-            pointer-events:none;
+            background:linear-gradient(145deg,#6366f1,#4f46e5) !important;
+            animation:_floatPop .4s ease;
         }
-
-        /* Tombol simpan mini di setiap section */
-        ._mini-save-btn {
-            width:100%;
-            padding:9px 14px;
-            background:transparent;
-            border:1.5px dashed var(--primary, #2563eb);
-            color:var(--primary, #2563eb);
-            border-radius:10px;
-            font-size:12px;
-            font-weight:700;
-            cursor:pointer;
-            font-family:inherit;
-            transition:all .18s;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            gap:6px;
-            opacity:0.82;
-        }
-        ._mini-save-btn:hover {
-            background:rgba(37,99,235,0.07);
-            opacity:1;
-            border-style:solid;
-        }
-        ._mini-save-btn:active {
-            background:rgba(37,99,235,0.14);
-            transform:scale(0.98);
+        #floatSaveTrigger.dirty {
+            background:linear-gradient(145deg,#f59e0b,#d97706) !important;
+            box-shadow:0 4px 18px rgba(245,158,11,0.55),0 1px 3px rgba(0,0,0,0.2) !important;
         }
 
         /* Modal surat overlay */
@@ -624,10 +642,13 @@
     </style>
 
     <script>
-    // ── Floating Save Button Logic ──
+    // ── Floating Save Button Logic (Enhanced) ──
     (function() {
         let _floatSavedTimer = null;
+        let _dirtyTimer      = null;
+        let _isDirty         = false;
 
+        // ── Helpers ──
         function _showFloatBtn() {
             const btn = document.getElementById('floatingSaveBtn');
             if (btn) btn.style.display = 'flex';
@@ -635,11 +656,61 @@
         function _hideFloatBtn() {
             const btn = document.getElementById('floatingSaveBtn');
             if (btn) btn.style.display = 'none';
-            const mark = document.getElementById('floatSavedMark');
-            if (mark) mark.style.display = 'none';
+            _setDirty(false);
         }
 
-        // Tampilkan tombol saat page medis aktif
+        // ── Dirty state (perubahan belum disimpan) ──
+        function _setDirty(dirty) {
+            _isDirty = dirty;
+            const trigger = document.getElementById('floatSaveTrigger');
+            const ring    = document.getElementById('floatDirtyRing');
+            const label   = document.getElementById('floatSaveLabel');
+            if (!trigger) return;
+            if (dirty) {
+                trigger.classList.add('dirty');
+                trigger.classList.remove('saving');
+                if (ring)  ring.style.display  = 'block';
+                if (label) label.textContent    = 'Ada perubahan';
+            } else {
+                trigger.classList.remove('dirty');
+                if (ring)  ring.style.display  = 'none';
+                if (label) label.textContent    = 'Simpan';
+            }
+        }
+
+        // ── Observe input/textarea changes to mark dirty ──
+        function _attachDirtyListeners() {
+            const page = document.getElementById('pageMedis');
+            if (!page) return;
+            page.addEventListener('input', function(e) {
+                if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
+                    if (e.target.id !== 'floatSaveTrigger') {
+                        clearTimeout(_dirtyTimer);
+                        _dirtyTimer = setTimeout(() => _setDirty(true), 400);
+                    }
+                }
+            }, true);
+            page.addEventListener('change', function(e) {
+                if (e.target && (e.target.type === 'checkbox' || e.target.tagName === 'SELECT')) {
+                    clearTimeout(_dirtyTimer);
+                    _dirtyTimer = setTimeout(() => _setDirty(true), 200);
+                }
+            }, true);
+        }
+
+        // ── Toast notifikasi ──
+        function _showToast() {
+            const toast = document.getElementById('floatSaveToast');
+            if (!toast) return;
+            // Show
+            toast.style.transform = 'translateX(-50%) translateY(0px)';
+            // Hide after 2.2s
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(-80px)';
+            }, 2200);
+        }
+
+        // ── Observe pageMedis visibility ──
         function _observePageMedis() {
             const page = document.getElementById('pageMedis');
             if (!page) { setTimeout(_observePageMedis, 300); return; }
@@ -648,44 +719,66 @@
                 visible ? _showFloatBtn() : _hideFloatBtn();
             });
             obs.observe(page, { attributes: true, attributeFilter: ['style','class'] });
-            // Cek kondisi awal
             const visible = page.style.display !== 'none' && page.classList.contains('active');
             if (visible) _showFloatBtn();
+            _attachDirtyListeners();
         }
         document.addEventListener('DOMContentLoaded', _observePageMedis);
 
-        // Fungsi simpan + feedback visual
+        // ── Keyboard shortcut Ctrl+S / Cmd+S ──
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                const page = document.getElementById('pageMedis');
+                if (page && page.classList.contains('active')) {
+                    e.preventDefault();
+                    window._floatSave();
+                }
+            }
+        });
+
+        // ── Fungsi simpan utama ──
         window._floatSave = function() {
             const trigger = document.getElementById('floatSaveTrigger');
-            const mark    = document.getElementById('floatSavedMark');
+            const icon    = document.getElementById('floatSaveIcon');
+            const ring    = document.getElementById('floatDirtyRing');
+            const label   = document.getElementById('floatSaveLabel');
+
             if (trigger) {
-                trigger.innerHTML = '⏳';
+                trigger.classList.remove('dirty');
                 trigger.classList.add('saving');
+                if (icon)  icon.textContent  = '⏳';
+                if (ring)  ring.style.display = 'none';
+                if (label) label.textContent  = 'Menyimpan...';
             }
-            // Panggil saveAll milik kunjungan.js (false = simpan tanpa tampilkan invoice)
+
             const done = () => {
                 if (trigger) {
-                    trigger.innerHTML = '💾';
                     trigger.classList.remove('saving');
+                    if (icon) icon.textContent = '✅';
                 }
-                if (mark) {
-                    mark.style.display = 'block';
-                    clearTimeout(_floatSavedTimer);
-                    _floatSavedTimer = setTimeout(() => {
-                        if (mark) mark.style.display = 'none';
-                    }, 2500);
-                }
+                if (label) label.textContent = 'Tersimpan!';
+
+                // Toast banner
+                _showToast();
+
+                _setDirty(false);
+                clearTimeout(_floatSavedTimer);
+                _floatSavedTimer = setTimeout(() => {
+                    if (icon)  icon.textContent  = '💾';
+                    if (label) label.textContent  = 'Simpan';
+                }, 2500);
             };
+
             try {
                 if (typeof saveAll === 'function') {
                     const result = saveAll(false);
                     if (result && typeof result.then === 'function') {
                         result.then(done).catch(done);
                     } else {
-                        setTimeout(done, 600);
+                        setTimeout(done, 500);
                     }
                 } else {
-                    done();
+                    setTimeout(done, 500);
                 }
             } catch(e) { done(); }
         };
