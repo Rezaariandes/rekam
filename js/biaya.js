@@ -728,20 +728,44 @@ async function bulkToggleTarif(aktifBaru) {
 async function showTagihanModal(kunjunganId, pasienId, kunjunganData) {
     if (!window._biayaAktif) return;
 
+    // BUG-FIX-2: Cek dulu apakah tagihan sudah ada di DB untuk kunjungan ini.
+    // Jika sudah ada, tampilkan data dari DB (konsisten dengan invoice riwayat).
+    // Jika belum ada, generate otomatis dari data kunjungan.
     let items = [];
+    let existingTagihan = null;
     try {
-        items = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData);
-    } catch(e) {
-        showToast('⚠️ Gagal generate tagihan otomatis', 'error');
+        existingTagihan = await sb_getTagihan(kunjunganId);
+    } catch(e) { /* ignore */ }
+
+    if (existingTagihan && existingTagihan.tagihan_item && existingTagihan.tagihan_item.length > 0) {
+        // Tagihan sudah tersimpan — gunakan data dari DB agar konsisten dengan riwayat
+        items = existingTagihan.tagihan_item.map(it => ({
+            nama_item:    it.nama_item,
+            kategori:     it.kategori,
+            jumlah:       Number(it.jumlah) || 1,
+            harga_satuan: Number(it.harga_satuan) || 0,
+            keterangan:   it.keterangan || null
+        }));
+    } else {
+        // Tagihan belum ada — generate otomatis
+        try {
+            items = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData);
+        } catch(e) {
+            showToast('⚠️ Gagal generate tagihan otomatis', 'error');
+        }
     }
 
-    _renderTagihanModal(kunjunganId, pasienId, items);
+    _renderTagihanModal(kunjunganId, pasienId, items,
+        existingTagihan ? Number(existingTagihan.diskon) || 0 : 0,
+        existingTagihan ? (existingTagihan.catatan || '') : '');
 }
 
-function _renderTagihanModal(kunjunganId, pasienId, items) {
+function _renderTagihanModal(kunjunganId, pasienId, items, initDiskon = 0, initCatatan = '') {
     document.getElementById('_tagihanModal')?.remove();
 
     const subtotal = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
+    const diskon   = Number(initDiskon) || 0;
+    const total    = Math.max(0, subtotal - diskon);
     const modal    = document.createElement('div');
     modal.id       = '_tagihanModal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
@@ -763,17 +787,17 @@ function _renderTagihanModal(kunjunganId, pasienId, items) {
                 </div>
                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:10px">
                     <span>Diskon (Rp)</span>
-                    <input id="_tagihanDiskon" type="number" value="0" min="0"
+                    <input id="_tagihanDiskon" type="number" value="${diskon}" min="0"
                         oninput="_recalcTagihan()"
                         style="width:120px;padding:5px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;text-align:right">
                 </div>
                 <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:var(--primary)">
                     <span>TOTAL</span>
-                    <span id="_tagihanTotal">Rp ${subtotal.toLocaleString('id-ID')}</span>
+                    <span id="_tagihanTotal">Rp ${total.toLocaleString('id-ID')}</span>
                 </div>
             </div>
             <textarea id="_tagihanCatatan" placeholder="Catatan (opsional)" rows="2"
-                style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;resize:none"></textarea>
+                style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;resize:none">${initCatatan ? _escHtmlBiaya(initCatatan) : ''}</textarea>
             <div style="display:flex;gap:8px">
                 <button onclick="document.getElementById('_tagihanModal').remove()"
                     style="flex:1;padding:12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;cursor:pointer;background:#fff">
@@ -831,6 +855,10 @@ function _recalcTagihan() {
     const totEl  = document.getElementById('_tagihanTotal');
     if (subEl) subEl.innerText = 'Rp ' + sub.toLocaleString('id-ID');
     if (totEl) totEl.innerText = 'Rp ' + total.toLocaleString('id-ID');
+}
+
+function _escHtmlBiaya(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 async function _simpanTagihan(kunjunganId, pasienId) {

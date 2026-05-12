@@ -441,6 +441,18 @@ async function bukaRekamMedisHariIni(kId) {
     localStorage.setItem('cTglEdit', tglKunjungan ? "Tgl: " + formatTglIndo(tglKunjungan) : '');
     localStorage.setItem('activePage', 'pageMedis');
 
+    // BUG-FIX-1: Hapus semua cache rme_* dari localStorage agar data pasien
+    // sebelumnya tidak bocor ke pasien yang baru dibuka. Data akan diisi ulang
+    // dari database oleh _isiFormDariKunjungan() di bawah.
+    (function _clearRmeCache() {
+        const toRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('rme_')) toRemove.push(key);
+        }
+        toRemove.forEach(k => localStorage.removeItem(k));
+    })();
+
     // BUG-3 FIX: Render dynamic lab section BEFORE _isiFormDariKunjungan so that
     // dynamically-created input fields (lab_hb, lab_trombosit, etc.) already
     // exist in the DOM when we try to fill them. Without this, those fields are
@@ -448,13 +460,16 @@ async function bukaRekamMedisHariIni(kId) {
     if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
 
     try {
+        window._kunjunganLoadingFromDB = true;
         const kunjunganData = await sb_getKunjunganById(currentKunjunganId);
         if (kunjunganData && typeof _isiFormDariKunjungan === 'function') {
             _isiFormDariKunjungan(kunjunganData);
         } else {
+            window._kunjunganLoadingFromDB = false;
             if (typeof loadAutosave === 'function') loadAutosave();
         }
     } catch(e) {
+        window._kunjunganLoadingFromDB = false;
         if (typeof loadAutosave === 'function') loadAutosave();
     }
 
@@ -750,8 +765,13 @@ function _renderSectionLabDinamic() {
             localStorage.setItem('rme_' + el.id, el.value);
             checkLabAlert();
         });
-        const saved = localStorage.getItem('rme_' + el.id);
-        if (saved !== null) el.value = saved;
+        // BUG-FIX-1: Jangan restore dari localStorage jika data akan diisi dari DB.
+        // _isiFormDariKunjungan() akan mengisi field ini secara langsung.
+        // Hanya restore dari localStorage saat loadAutosave (kunjungan BARU / belum di-DB).
+        if (!window._kunjunganLoadingFromDB) {
+            const saved = localStorage.getItem('rme_' + el.id);
+            if (saved !== null) el.value = saved;
+        }
     });
 
     checkLabAlert();
