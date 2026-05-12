@@ -12,10 +12,10 @@
 
         const BASE_URL = 'https://raw.githubusercontent.com/Rezaariandes/rekam/main';
 
-        // ── VERSI DEPLOY — ubah angka ini setiap kali push perubahan ──
-        // Browser akan selalu ambil file terbaru dari server (bukan dari cache).
-        // Format: YYYYMMDD-N  (N = urutan deploy hari itu)
-        const APP_VERSION = '20260513-1';
+        // ── CACHE BUSTER — timestamp otomatis, selalu ambil file terbaru ──
+        // Dibulatkan per 10 menit agar tidak refetch setiap detik,
+        // tapi selalu fresh setelah deploy baru.
+        const _CB = Math.floor(Date.now() / 600000);
 
         let KLINIK_NAMA   = 'Klinik Klikpro';
         let KLINIK_TITLE  = 'Klikpro RME V 2.0';
@@ -30,38 +30,37 @@
             cohere:     [''],
         };
 
-        const V = '?v=' + APP_VERSION;   // shorthand cache-buster
-
         const FRAGMENT_URLS = {
-            css:            BASE_URL + '/css/style.css'                  + V,
-            modalRiwayat:   BASE_URL + '/components/modal-riwayat.html'  + V,
-            modalUser:      BASE_URL + '/components/modal-user.html'     + V,
-            header:         BASE_URL + '/components/header.html'         + V,
-            nav:            BASE_URL + '/components/nav.html'            + V,
-            pageDaftar:     BASE_URL + '/pages/page-daftar.html'         + V,
-            pageMedis:      BASE_URL + '/pages/page-medis.html'          + V,
-            pageKunjungan:  BASE_URL + '/pages/page-kunjungan.html'      + V,
-            pageUser:       BASE_URL + '/pages/page-user.html'           + V,
-            pageSettings:   BASE_URL + '/pages/page-settings.html'       + V,
-            pageLaporan:    BASE_URL + '/pages/page-laporan.html'         + V,
-            pageStok:       BASE_URL + '/pages/page-stok.html'           + V,
-            pageBiaya:      BASE_URL + '/pages/page-biaya.html'          + V,
+            css:          BASE_URL + '/css/style.css' + '?v=' + _CB,
+            modalRiwayat: BASE_URL + '/components/modal-riwayat.html' + '?v=' + _CB,
+            modalUser:    BASE_URL + '/components/modal-user.html' + '?v=' + _CB,
+            header:       BASE_URL + '/components/header.html' + '?v=' + _CB,
+            nav:          BASE_URL + '/components/nav.html' + '?v=' + _CB,
+            pageDaftar:   BASE_URL + '/pages/page-daftar.html' + '?v=' + _CB,
+            pageMedis:    BASE_URL + '/pages/page-medis.html' + '?v=' + _CB,
+            pageKunjungan:  BASE_URL + '/pages/page-kunjungan.html' + '?v=' + _CB,
+            pageUser:     BASE_URL + '/pages/page-user.html' + '?v=' + _CB,
+            pageSettings: BASE_URL + '/pages/page-settings.html' + '?v=' + _CB,
+            pageLaporan:  BASE_URL + '/pages/page-laporan.html' + '?v=' + _CB,
+            pageStok:     BASE_URL + '/pages/page-stok.html' + '?v=' + _CB,
+            pageBiaya:    BASE_URL + '/pages/page-biaya.html' + '?v=' + _CB,
 
-            jsSupabase:         BASE_URL + '/js/supabase.js'             + V,
-            jsAuth:             BASE_URL + '/js/auth.js'                 + V,
-            jsIcd10Ai:          BASE_URL + '/js/icd10-ai.js'             + V,
-            jsPasien:           BASE_URL + '/js/pasien.js'               + V,
-            jsKunj:             BASE_URL + '/js/kunjungan.js'            + V,
-            jsModal:            BASE_URL + '/js/modal.js'                + V,
-            jsUser:             BASE_URL + '/js/user.js'                 + V,
-            jsSettings:         BASE_URL + '/js/settings.js'             + V,
-            jsLaporan:          BASE_URL + '/js/laporan.js'              + V,
-            jsApp:              BASE_URL + '/js/app.js'                  + V,
-            jsStok:             BASE_URL + '/js/stok.js'                 + V,
-            jsBiaya:            BASE_URL + '/js/biaya.js'                + V,
-            jsInvoice:          BASE_URL + '/js/invoice.js'              + V,
-            jsSuratTemplate:    BASE_URL + '/js/surat-template.js'       + V,
-            jsPemeriksaanMedis: BASE_URL + '/js/pemeriksaan-medis.js'    + V,
+
+            jsSupabase:           BASE_URL + '/js/supabase.js' + '?v=' + _CB,
+            jsAuth:               BASE_URL + '/js/auth.js' + '?v=' + _CB,
+            jsIcd10Ai:            BASE_URL + '/js/icd10-ai.js' + '?v=' + _CB,
+            jsPasien:             BASE_URL + '/js/pasien.js' + '?v=' + _CB,
+            jsKunj:               BASE_URL + '/js/kunjungan.js' + '?v=' + _CB,
+            jsModal:              BASE_URL + '/js/modal.js' + '?v=' + _CB,
+            jsUser:               BASE_URL + '/js/user.js' + '?v=' + _CB,
+            jsSettings:           BASE_URL + '/js/settings.js' + '?v=' + _CB,
+            jsLaporan:            BASE_URL + '/js/laporan.js' + '?v=' + _CB,
+            jsApp:                BASE_URL + '/js/app.js' + '?v=' + _CB,
+            jsStok:               BASE_URL + '/js/stok.js' + '?v=' + _CB,
+            jsBiaya:              BASE_URL + '/js/biaya.js' + '?v=' + _CB,
+            jsInvoice:            BASE_URL + '/js/invoice.js' + '?v=' + _CB,
+            jsSuratTemplate:      BASE_URL + '/js/surat-template.js' + '?v=' + _CB,
+            jsPemeriksaanMedis:   BASE_URL + '/js/pemeriksaan-medis.js' + '?v=' + _CB,
         };
     </script>
 
