@@ -3,13 +3,15 @@
 //  • Manajemen tarif layanan (data dari database)
 //  • Sub-group dibaca dari kolom `sub_group` di tarif_layanan
 //  • Auto-generate & simpan tagihan dari kunjungan
-//  • Modal tagihan (muncul setelah simpan rekam medis)
 //
 //  Data tarif disimpan di tabel tarif_layanan (Supabase).
 //  Untuk seed data awal → jalankan seed_tarif_layanan.sql
 //  di Supabase SQL Editor (cukup sekali).
 //
-//  Fungsi invoice (lihat, edit, print) → invoice.js
+//  Semua fungsi modal invoice (input tagihan baru, lihat,
+//  edit, print) → SEKARANG SEMUANYA di invoice.js
+//  Entry point: openModalTagihan()  → input tagihan baru
+//               lihatTagihanKunjungan() → lihat invoice tersimpan
 // ════════════════════════════════════════════════════════
 
 // ── State ──
@@ -721,155 +723,8 @@ async function bulkToggleTarif(aktifBaru) {
     }
 }
 
-
 // ════════════════════════════════════════
-//  MODAL TAGIHAN (setelah simpan rekam medis)
+//  MODAL TAGIHAN → dipindah ke invoice.js
+//  Fungsi entry point: openModalTagihan()
 // ════════════════════════════════════════
-async function showTagihanModal(kunjunganId, pasienId, kunjunganData) {
-    if (!window._biayaAktif) return;
-
-    // BUG-FIX-2: Cek dulu apakah tagihan sudah ada di DB untuk kunjungan ini.
-    // Jika sudah ada, tampilkan data dari DB (konsisten dengan invoice riwayat).
-    // Jika belum ada, generate otomatis dari data kunjungan.
-    let items = [];
-    let existingTagihan = null;
-    try {
-        existingTagihan = await sb_getTagihan(kunjunganId);
-    } catch(e) { /* ignore */ }
-
-    if (existingTagihan && existingTagihan.tagihan_item && existingTagihan.tagihan_item.length > 0) {
-        // Tagihan sudah tersimpan — gunakan data dari DB agar konsisten dengan riwayat
-        items = existingTagihan.tagihan_item.map(it => ({
-            nama_item:    it.nama_item,
-            kategori:     it.kategori,
-            jumlah:       Number(it.jumlah) || 1,
-            harga_satuan: Number(it.harga_satuan) || 0,
-            keterangan:   it.keterangan || null
-        }));
-    } else {
-        // Tagihan belum ada — generate otomatis
-        try {
-            items = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData);
-        } catch(e) {
-            showToast('⚠️ Gagal generate tagihan otomatis', 'error');
-        }
-    }
-
-    _renderTagihanModal(kunjunganId, pasienId, items,
-        existingTagihan ? Number(existingTagihan.diskon) || 0 : 0,
-        existingTagihan ? (existingTagihan.catatan || '') : '');
-}
-
-function _renderTagihanModal(kunjunganId, pasienId, items, initDiskon = 0, initCatatan = '') {
-    document.getElementById('_tagihanModal')?.remove();
-
-    const subtotal = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
-    const diskon   = Number(initDiskon) || 0;
-    const total    = Math.max(0, subtotal - diskon);
-    const modal    = document.createElement('div');
-    modal.id       = '_tagihanModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
-    modal.innerHTML = `
-        <div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 24px rgba(0,0,0,.15)">
-            <h3 style="margin:0 0 4px;font-size:16px">🧾 Rincian Tagihan</h3>
-            <p style="font-size:12px;color:#64748b;margin:0 0 14px">Periksa & sesuaikan sebelum menyimpan</p>
-            <div id="_tagihanItemList">
-                ${items.map((it, i) => _tagihanItemRow(it, i)).join('')}
-            </div>
-            <button onclick="_addTagihanItem()"
-                style="width:100%;padding:9px;border:1.5px dashed var(--primary);border-radius:10px;color:var(--primary);font-size:13px;cursor:pointer;background:#f8faff;margin:8px 0">
-                ➕ Tambah Item
-            </button>
-            <div style="border-top:1.5px solid #e2e8f0;margin:10px 0;padding-top:10px">
-                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
-                    <span>Subtotal</span>
-                    <span id="_tagihanSubtotal">Rp ${subtotal.toLocaleString('id-ID')}</span>
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:10px">
-                    <span>Diskon (Rp)</span>
-                    <input id="_tagihanDiskon" type="number" value="${diskon}" min="0"
-                        oninput="_recalcTagihan()"
-                        style="width:120px;padding:5px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;text-align:right">
-                </div>
-                <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:var(--primary)">
-                    <span>TOTAL</span>
-                    <span id="_tagihanTotal">Rp ${total.toLocaleString('id-ID')}</span>
-                </div>
-            </div>
-            <textarea id="_tagihanCatatan" placeholder="Catatan (opsional)" rows="2"
-                style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;resize:none">${initCatatan ? _escHtmlBiaya(initCatatan) : ''}</textarea>
-            <div style="display:flex;gap:8px">
-                <button onclick="document.getElementById('_tagihanModal').remove()"
-                    style="flex:1;padding:12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;cursor:pointer;background:#fff">
-                    Lewati
-                </button>
-                <button onclick="_simpanTagihan('${kunjunganId}','${pasienId}')"
-                    style="flex:2;padding:12px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;background:var(--primary);color:#fff">
-                    💾 Simpan Tagihan
-                </button>
-            </div>
-        </div>`;
-
-    document.body.appendChild(modal);
-    window._tagihanItems = items;
-}
-
-function _tagihanItemRow(it, idx) {
-    return `<div id="_trow_${idx}" style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #f1f5f9">
-        <div style="flex:1;font-size:12px;font-weight:600">${it.nama_item}</div>
-        <input type="number" value="${it.jumlah || 1}" min="1"
-            oninput="window._tagihanItems[${idx}].jumlah=this.value;_recalcTagihan()"
-            style="width:40px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-align:center">
-        <input type="number" value="${it.harga_satuan}" min="0"
-            oninput="window._tagihanItems[${idx}].harga_satuan=this.value;_recalcTagihan()"
-            style="width:90px;padding:3px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-align:right">
-        <button onclick="_removeTagihanItem(${idx})"
-            style="padding:3px 7px;border:1px solid #ef4444;border-radius:6px;color:#ef4444;font-size:11px;cursor:pointer;background:#fff">✕</button>
-    </div>`;
-}
-
-function _addTagihanItem() {
-    window._tagihanItems = window._tagihanItems || [];
-    window._tagihanItems.push({ nama_item: 'Item Baru', kategori: 'Lainnya', jumlah: 1, harga_satuan: 0 });
-    const list = document.getElementById('_tagihanItemList');
-    if (list) {
-        const idx = window._tagihanItems.length - 1;
-        list.insertAdjacentHTML('beforeend', _tagihanItemRow(window._tagihanItems[idx], idx));
-    }
-    _recalcTagihan();
-}
-
-function _removeTagihanItem(idx) {
-    window._tagihanItems.splice(idx, 1);
-    const list = document.getElementById('_tagihanItemList');
-    if (list) list.innerHTML = window._tagihanItems.map((it, i) => _tagihanItemRow(it, i)).join('');
-    _recalcTagihan();
-}
-
-function _recalcTagihan() {
-    const items  = window._tagihanItems || [];
-    const sub    = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
-    const diskon = Number(document.getElementById('_tagihanDiskon')?.value) || 0;
-    const total  = Math.max(0, sub - diskon);
-    const subEl  = document.getElementById('_tagihanSubtotal');
-    const totEl  = document.getElementById('_tagihanTotal');
-    if (subEl) subEl.innerText = 'Rp ' + sub.toLocaleString('id-ID');
-    if (totEl) totEl.innerText = 'Rp ' + total.toLocaleString('id-ID');
-}
-
-function _escHtmlBiaya(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-async function _simpanTagihan(kunjunganId, pasienId) {
-    const items   = window._tagihanItems || [];
-    const diskon  = Number(document.getElementById('_tagihanDiskon')?.value) || 0;
-    const catatan = document.getElementById('_tagihanCatatan')?.value || '';
-    try {
-        const result = await sb_saveTagihan(kunjunganId, pasienId, items, diskon, catatan);
-        document.getElementById('_tagihanModal')?.remove();
-        showToast(`✅ Tagihan Rp ${Number(result.total).toLocaleString('id-ID')} berhasil disimpan`, 'success');
-    } catch(e) {
-        showToast('❌ Gagal menyimpan tagihan', 'error');
-    }
-}
+// showTagihanModal() sudah dihapus — gunakan openModalTagihan() dari invoice.js
