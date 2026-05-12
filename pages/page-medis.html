@@ -141,13 +141,6 @@
             -->
             <div id="sectionPemeriksaanDinamis" style="display:none;"></div>
 
-            <!-- ── Mini Save Button ── -->
-            <div style="margin-top:4px;">
-                <button onclick="saveAll(false)" class="_mini-save-btn">
-                    💾 Simpan Data Pemeriksaan
-                </button>
-            </div>
-
         </div>
     </div>
 
@@ -208,13 +201,6 @@
                 <!-- renderSectionPermintaanLab() akan mengisi bagian ini -->
             </div>
 
-            <!-- ── Mini Save Button ── -->
-            <div style="margin-top:8px;">
-                <button onclick="saveAll(false)" class="_mini-save-btn">
-                    💾 Simpan Data Pemeriksaan Tambahan
-                </button>
-            </div>
-
         </div>
     </div>
 
@@ -253,13 +239,6 @@
                     <label class="form-label">Diagnosa 2</label>
                     <input list="list-icd" id="diagnosa2" class="form-control" data-save="true" placeholder="Sekunder...">
                 </div>
-            </div>
-
-            <!-- ── Mini Save Button ── -->
-            <div style="margin-top:12px;">
-                <button onclick="saveAll(false)" class="_mini-save-btn">
-                    💾 Simpan Diagnosa
-                </button>
             </div>
 
         </div>
@@ -302,13 +281,6 @@
                 <!-- Diisi oleh _renderSectionTindakan() dari tin-medis.js -->
             </div>
 
-            <!-- ── Mini Save Button ── -->
-            <div style="margin-top:8px;">
-                <button onclick="saveAll(false)" class="_mini-save-btn">
-                    💾 Simpan Tatalaksana
-                </button>
-            </div>
-
         </div>
     </div>
 
@@ -348,13 +320,6 @@
                  "Surat Keterangan Sakit" tidak dirender ulang (sudah hardcoded di atas).
             -->
             <div id="sectionAdministrasiDinamis" style="display:none;"></div>
-
-            <!-- ── Mini Save Button ── -->
-            <div style="margin-top:8px;">
-                <button onclick="saveAll(false)" class="_mini-save-btn">
-                    💾 Simpan Dokumen
-                </button>
-            </div>
 
         </div>
     </div>
@@ -406,6 +371,31 @@
                 <button onclick="document.getElementById('modalSuratSakit').style.display='none'"
                     class="modal-surat-btn-close">Tutup</button>
             </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  FLOATING SAVE BUTTON                             -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div id="floatingSaveBtn"
+        style="position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:9000;display:none;flex-direction:column;align-items:center;gap:6px;">
+        <!-- Save button -->
+        <button id="floatSaveTrigger" onclick="_floatSave()"
+            title="Simpan semua data"
+            style="width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
+                   background:linear-gradient(135deg,#2563eb,#1d4ed8);
+                   color:#fff;font-size:22px;
+                   box-shadow:0 4px 16px rgba(37,99,235,0.45);
+                   display:flex;align-items:center;justify-content:center;
+                   transition:all .2s;position:relative;">
+            💾
+        </button>
+        <!-- Saved checkmark indicator -->
+        <div id="floatSavedMark"
+            style="display:none;background:#059669;color:#fff;border-radius:20px;
+                   padding:3px 9px;font-size:10px;font-weight:700;white-space:nowrap;
+                   box-shadow:0 2px 8px rgba(5,150,105,0.4);animation:_floatFadeIn .25s ease;">
+            ✓ Tersimpan
         </div>
     </div>
 
@@ -518,6 +508,27 @@
             padding-left:24px;
         }
 
+        /* Floating save button */
+        @keyframes _floatFadeIn {
+            from { opacity:0; transform:scale(0.8); }
+            to   { opacity:1; transform:scale(1); }
+        }
+        @keyframes _floatPop {
+            0%   { transform:scale(1); }
+            40%  { transform:scale(1.18); }
+            100% { transform:scale(1); }
+        }
+        #floatSaveTrigger:hover {
+            transform:scale(1.08);
+            box-shadow:0 6px 22px rgba(37,99,235,0.55) !important;
+        }
+        #floatSaveTrigger:active { transform:scale(0.95); }
+        #floatSaveTrigger.saving {
+            background:linear-gradient(135deg,#6366f1,#4f46e5) !important;
+            animation:_floatPop .35s ease;
+            pointer-events:none;
+        }
+
         /* Tombol simpan mini di setiap section */
         ._mini-save-btn {
             width:100%;
@@ -608,7 +619,77 @@
             #modalSuratSakit { position:static!important;background:none!important;padding:0!important; }
             .modal-surat-box { box-shadow:none!important;border-radius:0!important;max-height:none!important;overflow:visible!important;width:100%!important; }
             .modal-surat-footer { display:none!important; }
+            #floatingSaveBtn { display:none !important; }
         }
     </style>
+
+    <script>
+    // ── Floating Save Button Logic ──
+    (function() {
+        let _floatSavedTimer = null;
+
+        function _showFloatBtn() {
+            const btn = document.getElementById('floatingSaveBtn');
+            if (btn) btn.style.display = 'flex';
+        }
+        function _hideFloatBtn() {
+            const btn = document.getElementById('floatingSaveBtn');
+            if (btn) btn.style.display = 'none';
+            const mark = document.getElementById('floatSavedMark');
+            if (mark) mark.style.display = 'none';
+        }
+
+        // Tampilkan tombol saat page medis aktif
+        function _observePageMedis() {
+            const page = document.getElementById('pageMedis');
+            if (!page) { setTimeout(_observePageMedis, 300); return; }
+            const obs = new MutationObserver(() => {
+                const visible = page.style.display !== 'none' && page.classList.contains('active');
+                visible ? _showFloatBtn() : _hideFloatBtn();
+            });
+            obs.observe(page, { attributes: true, attributeFilter: ['style','class'] });
+            // Cek kondisi awal
+            const visible = page.style.display !== 'none' && page.classList.contains('active');
+            if (visible) _showFloatBtn();
+        }
+        document.addEventListener('DOMContentLoaded', _observePageMedis);
+
+        // Fungsi simpan + feedback visual
+        window._floatSave = function() {
+            const trigger = document.getElementById('floatSaveTrigger');
+            const mark    = document.getElementById('floatSavedMark');
+            if (trigger) {
+                trigger.innerHTML = '⏳';
+                trigger.classList.add('saving');
+            }
+            // Panggil saveAll milik kunjungan.js (false = simpan tanpa tampilkan invoice)
+            const done = () => {
+                if (trigger) {
+                    trigger.innerHTML = '💾';
+                    trigger.classList.remove('saving');
+                }
+                if (mark) {
+                    mark.style.display = 'block';
+                    clearTimeout(_floatSavedTimer);
+                    _floatSavedTimer = setTimeout(() => {
+                        if (mark) mark.style.display = 'none';
+                    }, 2500);
+                }
+            };
+            try {
+                if (typeof saveAll === 'function') {
+                    const result = saveAll(false);
+                    if (result && typeof result.then === 'function') {
+                        result.then(done).catch(done);
+                    } else {
+                        setTimeout(done, 600);
+                    }
+                } else {
+                    done();
+                }
+            } catch(e) { done(); }
+        };
+    })();
+    </script>
 
 </div>
