@@ -45,34 +45,49 @@ async function openModalTagihan(kunjunganId, pasienId, pasienNama, tgl, kunjunga
         try { await _refreshTarifCache(); } catch(e) {}
     }
 
-    // BUG-FIX: Cek dulu apakah tagihan sudah ada di DB untuk kunjungan ini.
-    // Jika sudah ada → tampilkan data dari DB (konsisten dengan invoice riwayat).
-    // Jika belum ada → generate otomatis dari data kunjungan.
+    // Cek apakah tagihan sudah ada di DB
     let existingTagihan = null;
     try { existingTagihan = await sb_getTagihan(kunjunganId); } catch(e) { /* ignore */ }
 
     if (existingTagihan && existingTagihan.tagihan_item && existingTagihan.tagihan_item.length > 0) {
-        // Tagihan sudah tersimpan — pakai data dari DB
-        _tagihanItems = existingTagihan.tagihan_item.map(it => ({
+        // Tagihan sudah ada — generate item baru dari rekam medis terkini untuk merge
+        let generatedItems = [];
+        try {
+            generatedItems = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData || {});
+        } catch(e) { generatedItems = []; }
+
+        // Mulai dari item yang sudah tersimpan di DB
+        const dbItems = existingTagihan.tagihan_item.map(it => ({
             nama_item:    it.nama_item,
             kategori:     it.kategori,
             jumlah:       Number(it.jumlah) || 1,
             harga_satuan: Number(it.harga_satuan) || 0,
             keterangan:   it.keterangan || null
         }));
+
+        // Merge: tambahkan item dari rekam medis baru yang belum ada di tagihan
+        const existingNames = new Set(dbItems.map(i => i.nama_item.toLowerCase().trim()));
+        const newItems = generatedItems.filter(gi =>
+            !existingNames.has((gi.nama_item || '').toLowerCase().trim())
+        );
+
+        _tagihanItems = [...dbItems, ...newItems];
         _tagihanDiskon = Number(existingTagihan.diskon) || 0;
+        window._tagihanCatatanInit = existingTagihan.catatan || '';
+
+        if (newItems.length > 0) {
+            showToast(`ℹ️ ${newItems.length} item baru dari rekam medis ditambahkan ke tagihan`, 'info');
+        }
     } else {
-        // Tagihan belum ada — generate otomatis
+        // Tagihan belum ada — generate otomatis dari rekam medis
         try {
             _tagihanItems = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData || {});
         } catch(e) {
             _tagihanItems = [];
             showToast('⚠️ Gagal generate tagihan otomatis', 'error');
         }
+        window._tagihanCatatanInit = '';
     }
-
-    // Isi catatan awal jika ada dari DB
-    window._tagihanCatatanInit = (existingTagihan && existingTagihan.catatan) ? existingTagihan.catatan : '';
 
     let modal = document.getElementById('modalTagihan');
     if (!modal) {
@@ -97,76 +112,344 @@ function _buildModalTagihan() {
 }
 
 // ════════════════════════════════════════
-//  _renderModalTagihanContent — render/re-render isi modal tagihan
+//  _renderModalTagihanContent — render per section kategori
 // ════════════════════════════════════════
 function _renderModalTagihanContent() {
     const inner = document.getElementById('modalTagihanInner');
     if (!inner) return;
+
+    const KAT_ICON  = {'Pemeriksaan':'🩺','Laboratorium':'🔬','Penunjang':'🔭','Tindakan':'⚕️','Obat':'💊','Administrasi':'📋','Lainnya':'📌'};
+    const KAT_COLOR = {'Pemeriksaan':'#3b82f6','Laboratorium':'#7c3aed','Penunjang':'#0891b2','Tindakan':'#dc2626','Obat':'#059669','Administrasi':'#d97706','Lainnya':'#64748b'};
+    const KAT_ORDER = ['Pemeriksaan','Laboratorium','Penunjang','Tindakan','Obat','Administrasi','Lainnya'];
 
     const items    = _tagihanItems || [];
     const subtotal = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
     const diskon   = Number(_tagihanDiskon) || 0;
     const total    = Math.max(0, subtotal - diskon);
 
+    // Kelompokkan item per kategori
+    const grouped = {};
+    items.forEach((it, idx) => {
+        const k = it.kategori || 'Lainnya';
+        if (!grouped[k]) grouped[k] = [];
+        grouped[k].push({ ...it, _idx: idx });
+    });
+    const katUrut = [...KAT_ORDER.filter(k => grouped[k]), ...Object.keys(grouped).filter(k => !KAT_ORDER.includes(k))];
+
+    // Render section per kategori
+    const sectionsHtml = katUrut.length === 0
+        ? `<div style="text-align:center;color:#94a3b8;font-size:12px;padding:20px 0;">
+               Belum ada item tagihan.<br>
+               <span style="font-size:11px;">Klik "➕ Tambah Item" untuk menambahkan.</span>
+           </div>`
+        : katUrut.map(kat => {
+            const clr   = KAT_COLOR[kat] || '#64748b';
+            const icon  = KAT_ICON[kat]  || '📌';
+            const rows  = grouped[kat].map(it => _mtItemRow(it, it._idx, clr)).join('');
+            const katTotal = grouped[kat].reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
+            return `
+            <div style="border:1.5px solid ${clr}30;border-radius:12px;margin-bottom:8px;overflow:hidden;">
+                <div style="display:flex;align-items:center;justify-content:space-between;
+                            padding:7px 12px;background:${clr}10;border-bottom:1px solid ${clr}20;">
+                    <div style="display:flex;align-items:center;gap:5px;">
+                        <span style="font-size:13px;">${icon}</span>
+                        <span style="font-size:10px;font-weight:800;text-transform:uppercase;
+                                     letter-spacing:.6px;color:${clr};">${kat}</span>
+                    </div>
+                    <span style="font-size:11px;font-weight:700;color:${clr};">Rp ${_fmtRp(katTotal)}</span>
+                </div>
+                <div style="background:#fff;padding:4px 0;">${rows}</div>
+            </div>`;
+        }).join('');
+
     inner.innerHTML = `
-        <h3 style="margin:0 0 4px;font-size:16px">🧾 Rincian Tagihan</h3>
-        <p style="font-size:12px;color:#64748b;margin:0 0 14px">${_tagihanPasienNama} · ${_tagihanTgl ? formatTglIndo(_tagihanTgl) : ''}</p>
-        <div id="_mtItemList">
-            ${items.length === 0
-                ? '<div style="text-align:center;color:#94a3b8;font-size:12px;padding:14px">Belum ada item tagihan.</div>'
-                : items.map((it, i) => _mtItemRow(it, i)).join('')}
-        </div>
-        <button onclick="_mtTambahItem()"
-            style="width:100%;padding:9px;border:1.5px dashed var(--primary);border-radius:10px;color:var(--primary);font-size:13px;cursor:pointer;background:#f8faff;margin:8px 0">
-            ➕ Tambah Item
-        </button>
-        <div style="border-top:1.5px solid #e2e8f0;margin:10px 0;padding-top:10px">
-            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
-                <span>Subtotal</span>
-                <span id="_mtSubtotal">Rp ${_fmtRp(subtotal)}</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:10px">
-                <span>Diskon (Rp)</span>
-                <input id="_mtDiskon" type="number" value="${diskon}" min="0"
-                    oninput="_tagihanDiskon=Number(this.value)||0;_mtRecalc()"
-                    style="width:120px;padding:5px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;text-align:right">
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:var(--primary)">
-                <span>TOTAL</span>
-                <span id="_mtTotal">Rp ${_fmtRp(total)}</span>
-            </div>
-        </div>
-        <textarea id="_mtCatatan" placeholder="Catatan (opsional)" rows="2"
-            style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;resize:none">${escHtml(window._tagihanCatatanInit || '')}</textarea>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h3 style="margin:0;font-size:16px;">🧾 Rincian Tagihan</h3>
             <button onclick="document.getElementById('modalTagihan').style.display='none'"
-                style="flex:1;padding:12px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;cursor:pointer;background:#fff">
+                style="background:none;border:none;font-size:18px;cursor:pointer;color:#94a3b8;padding:0;">✕</button>
+        </div>
+        <p style="font-size:12px;color:#64748b;margin:0 0 12px;">
+            ${_tagihanPasienNama} · ${_tagihanTgl ? formatTglIndo(_tagihanTgl) : ''}
+        </p>
+
+        <!-- Item per kategori -->
+        <div id="_mtSectionList">${sectionsHtml}</div>
+
+        <!-- Tombol tambah item -->
+        <button onclick="_mtTambahItemPicker()"
+            style="width:100%;padding:9px;border:1.5px dashed var(--primary);border-radius:10px;
+                   color:var(--primary);font-size:13px;cursor:pointer;background:#f8faff;margin:6px 0 10px;">
+            ➕ Tambah Item dari Tarif
+        </button>
+
+        <!-- Ringkasan -->
+        <div style="border:1.5px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:10px;">
+            <div style="padding:8px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#059669;">
+                    💰 Ringkasan Pembayaran
+                </span>
+            </div>
+            <div style="padding:10px 12px;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:6px;">
+                    <span>Subtotal</span>
+                    <span id="_mtSubtotal" style="font-weight:700;color:#1e293b;">Rp ${_fmtRp(subtotal)}</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px;">
+                    <span>Diskon (Rp)</span>
+                    <input id="_mtDiskon" type="number" value="${diskon}" min="0"
+                        oninput="_tagihanDiskon=Number(this.value)||0;_mtRecalc()"
+                        style="width:110px;padding:4px 8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;text-align:right;">
+                </div>
+                <div style="display:flex;justify-content:space-between;border-top:2px solid #e2e8f0;padding-top:8px;margin-top:4px;">
+                    <span style="font-size:14px;font-weight:800;color:#0f172a;">TOTAL</span>
+                    <span id="_mtTotal" style="font-size:16px;font-weight:900;color:var(--primary);">Rp ${_fmtRp(total)}</span>
+                </div>
+            </div>
+        </div>
+
+        <textarea id="_mtCatatan" placeholder="Catatan (opsional)" rows="2"
+            style="width:100%;padding:8px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;
+                   box-sizing:border-box;margin-bottom:10px;resize:none;">${escHtml(window._tagihanCatatanInit || '')}</textarea>
+
+        <div style="display:flex;gap:8px;">
+            <button onclick="document.getElementById('modalTagihan').style.display='none'"
+                style="flex:1;padding:12px;border:1.5px solid #e2e8f0;border-radius:12px;
+                       font-size:13px;cursor:pointer;background:#fff;">
                 Lewati
             </button>
             <button onclick="_mtSimpan()"
-                style="flex:2;padding:12px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;background:var(--primary);color:#fff">
+                style="flex:2;padding:12px;border:none;border-radius:12px;font-size:14px;
+                       font-weight:700;cursor:pointer;background:var(--primary);color:#fff;">
                 💾 Simpan Tagihan
             </button>
         </div>`;
 }
 
-function _mtItemRow(it, idx) {
-    return `<div id="_mtrow_${idx}" style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #f1f5f9">
-        <div style="flex:1;font-size:12px;font-weight:600">${escHtml(it.nama_item)}</div>
-        <input type="number" value="${it.jumlah||1}" min="1"
+// ─── Row satu item dalam modal input tagihan ─────────────────
+function _mtItemRow(it, idx, clr) {
+    clr = clr || '#64748b';
+    const sub = Number(it.jumlah || 1) * Number(it.harga_satuan || 0);
+    return `
+    <div style="display:flex;align-items:center;gap:6px;padding:7px 12px;border-bottom:1px solid #f8fafc;">
+        <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:700;color:#1e293b;">${escHtml(it.nama_item)}</div>
+            <div style="font-size:10.5px;color:#94a3b8;">Rp ${_fmtRp(it.harga_satuan)}/item</div>
+        </div>
+        <input type="number" value="${it.jumlah || 1}" min="1"
             oninput="_tagihanItems[${idx}].jumlah=Number(this.value);_mtRecalc()"
-            style="width:40px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-align:center">
-        <input type="number" value="${it.harga_satuan}" min="0"
-            oninput="_tagihanItems[${idx}].harga_satuan=Number(this.value);_mtRecalc()"
-            style="width:90px;padding:3px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-align:right">
+            style="width:38px;padding:3px 4px;border:1px solid #e2e8f0;border-radius:6px;
+                   font-size:12px;text-align:center;">
+        <div style="font-size:11px;font-weight:700;color:${clr};min-width:70px;text-align:right;">
+            Rp ${_fmtRp(sub)}
+        </div>
         <button onclick="_mtHapusItem(${idx})"
-            style="padding:3px 7px;border:1px solid #ef4444;border-radius:6px;color:#ef4444;font-size:11px;cursor:pointer;background:#fff">✕</button>
+            style="padding:2px 7px;border:1px solid #ef4444;border-radius:6px;
+                   color:#ef4444;font-size:11px;cursor:pointer;background:#fff;flex-shrink:0;">✕</button>
     </div>`;
 }
 
-function _mtTambahItem() {
+// ─── Picker tambah item dari tarif ───────────────────────────
+function _mtTambahItemPicker() {
+    const KAT_ICON = {'Pemeriksaan':'🩺','Laboratorium':'🔬','Penunjang':'🔭','Tindakan':'⚕️','Obat':'💊','Administrasi':'📋','Lainnya':'📌'};
+
+    let picker = document.getElementById('_mtItemPicker');
+    if (!picker) {
+        picker = document.createElement('div');
+        picker.id = '_mtItemPicker';
+        picker.style.cssText = 'display:none;position:fixed;inset:0;z-index:10500;background:rgba(0,0,0,.55);align-items:flex-end;justify-content:center;';
+        picker.innerHTML = `
+        <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:520px;
+                    max-height:80vh;display:flex;flex-direction:column;box-shadow:0 -4px 24px rgba(0,0,0,.2);">
+            <div style="padding:14px 16px 10px;border-bottom:1px solid #f1f5f9;flex-shrink:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <span style="font-size:14px;font-weight:800;color:var(--primary-dark);">➕ Tambah Item Tagihan</span>
+                    <button onclick="document.getElementById('_mtItemPicker').style.display='none'"
+                        style="background:none;border:none;font-size:18px;cursor:pointer;color:#94a3b8;">✕</button>
+                </div>
+                <!-- Search -->
+                <input id="_mtPickerSearch" type="text" placeholder="🔍 Cari nama layanan..."
+                    oninput="_mtFilterPicker(this.value)"
+                    style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:10px;
+                           font-size:13px;box-sizing:border-box;">
+                <!-- Tab kategori -->
+                <div id="_mtPickerTabs" style="display:flex;gap:6px;overflow-x:auto;margin-top:8px;padding-bottom:2px;
+                                               scrollbar-width:none;-ms-overflow-style:none;"></div>
+            </div>
+            <!-- List tarif -->
+            <div id="_mtPickerList" style="overflow-y:auto;flex:1;padding:6px 0;"></div>
+            <!-- Input manual -->
+            <div id="_mtManualSection" style="display:none;padding:10px 16px;border-top:1px solid #f1f5f9;flex-shrink:0;">
+                <div style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:8px;">✏️ Input Manual</div>
+                <input id="_mtManNama" type="text" placeholder="Nama item"
+                    style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:6px;">
+                <div style="display:flex;gap:6px;margin-bottom:6px;">
+                    <select id="_mtManKat" style="flex:1;padding:7px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;">
+                        ${Object.keys(KAT_ICON).map(k => `<option value="${k}">${KAT_ICON[k]} ${k}</option>`).join('')}
+                    </select>
+                    <input id="_mtManHarga" type="number" placeholder="Harga (Rp)" min="0"
+                        style="flex:1;padding:7px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;">
+                    <input id="_mtManQty" type="number" value="1" min="1"
+                        style="width:50px;padding:7px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;text-align:center;">
+                </div>
+                <button onclick="_mtKonfirmasiManual()"
+                    style="width:100%;padding:9px;background:var(--primary);color:#fff;border:none;
+                           border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+                    ✅ Tambahkan
+                </button>
+            </div>
+        </div>`;
+        document.body.appendChild(picker);
+    }
+
+    // Reset state
+    window._mtPickerActiveTab = '';
+    const searchEl = document.getElementById('_mtPickerSearch');
+    if (searchEl) searchEl.value = '';
+
+    // Build tabs
+    const KAT_ORDER = ['Pemeriksaan','Laboratorium','Penunjang','Tindakan','Obat','Administrasi','Lainnya'];
+    const availableKats = [...new Set((window._tarifCache || []).filter(t => t.aktif).map(t => t.kategori))];
+    const tabsEl = document.getElementById('_mtPickerTabs');
+    if (tabsEl) {
+        tabsEl.innerHTML = ['', ...KAT_ORDER.filter(k => availableKats.includes(k))].map(k => {
+            const isAll = k === '';
+            return `<button onclick="_mtSetPickerTab('${k}')"
+                id="_mtTab_${k || 'all'}"
+                style="padding:4px 11px;border:1.5px solid ${isAll ? 'var(--primary)' : '#e2e8f0'};
+                       border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;
+                       background:${isAll ? 'var(--primary)' : '#fff'};
+                       color:${isAll ? '#fff' : 'var(--text)'};flex-shrink:0;">
+                ${isAll ? '🗂️ Semua' : (KAT_ICON[k] || '') + ' ' + k}
+            </button>`;
+        }).join('');
+    }
+
+    _mtRenderPickerList('', '');
+    const manEl = document.getElementById('_mtManualSection');
+    if (manEl) manEl.style.display = 'none';
+    picker.style.display = 'flex';
+}
+
+function _mtSetPickerTab(kat) {
+    window._mtPickerActiveTab = kat;
+    // Update tab styles
+    document.querySelectorAll('[id^="_mtTab_"]').forEach(btn => {
+        const isActive = btn.id === `_mtTab_${kat || 'all'}`;
+        btn.style.background = isActive ? 'var(--primary)' : '#fff';
+        btn.style.color      = isActive ? '#fff' : 'var(--text)';
+        btn.style.borderColor = isActive ? 'var(--primary)' : '#e2e8f0';
+    });
+    const q = document.getElementById('_mtPickerSearch')?.value || '';
+    _mtRenderPickerList(kat, q);
+}
+
+function _mtFilterPicker(q) {
+    _mtRenderPickerList(window._mtPickerActiveTab || '', q);
+}
+
+function _mtRenderPickerList(kat, q) {
+    const listEl = document.getElementById('_mtPickerList');
+    if (!listEl) return;
+    const KAT_COLOR = {'Pemeriksaan':'#3b82f6','Laboratorium':'#7c3aed','Penunjang':'#0891b2','Tindakan':'#dc2626','Obat':'#059669','Administrasi':'#d97706','Lainnya':'#64748b'};
+    const KAT_ICON  = {'Pemeriksaan':'🩺','Laboratorium':'🔬','Penunjang':'🔭','Tindakan':'⚕️','Obat':'💊','Administrasi':'📋','Lainnya':'📌'};
+
+    let tarifs = (window._tarifCache || []).filter(t => t.aktif);
+    if (kat) tarifs = tarifs.filter(t => t.kategori === kat);
+    if (q && q.trim()) {
+        const lq = q.trim().toLowerCase();
+        tarifs = tarifs.filter(t => (t.nama || '').toLowerCase().includes(lq));
+    }
+
+    if (tarifs.length === 0) {
+        listEl.innerHTML = `
+            <div style="text-align:center;color:#94a3b8;font-size:12px;padding:20px 0;">
+                Tidak ada layanan ditemukan.<br>
+                <button onclick="_mtToggleManual()" style="margin-top:8px;padding:6px 14px;border:1.5px solid var(--primary);
+                    border-radius:8px;color:var(--primary);font-size:12px;cursor:pointer;background:#fff;">
+                    ✏️ Input manual
+                </button>
+            </div>`;
+        return;
+    }
+
+    // Group by kategori untuk tampilan lebih rapi
+    const grouped = {};
+    tarifs.forEach(t => {
+        if (!grouped[t.kategori]) grouped[t.kategori] = [];
+        grouped[t.kategori].push(t);
+    });
+
+    const KAT_ORDER = ['Pemeriksaan','Laboratorium','Penunjang','Tindakan','Obat','Administrasi','Lainnya'];
+    const katUrut = [...KAT_ORDER.filter(k => grouped[k]), ...Object.keys(grouped).filter(k => !KAT_ORDER.includes(k))];
+
+    listEl.innerHTML = katUrut.map(k => {
+        const clr  = KAT_COLOR[k] || '#64748b';
+        const icon = KAT_ICON[k] || '📌';
+        // Hanya tampilkan header kategori jika mode "Semua"
+        const headerHtml = !kat ? `
+            <div style="padding:5px 14px 3px;font-size:9.5px;font-weight:800;text-transform:uppercase;
+                        letter-spacing:.6px;color:${clr};background:${clr}08;
+                        border-top:1px solid ${clr}20;border-bottom:1px solid ${clr}15;">
+                ${icon} ${k}
+            </div>` : '';
+        const rows = grouped[k].map(t => `
+            <button onclick="_mtPilihTarif('${t.id}')"
+                style="width:100%;display:flex;align-items:center;justify-content:space-between;
+                       padding:9px 14px;border:none;background:#fff;cursor:pointer;text-align:left;
+                       border-bottom:1px solid #f8fafc;transition:background .15s;"
+                onmouseover="this.style.background='${clr}06'"
+                onmouseout="this.style.background='#fff'">
+                <div>
+                    <div style="font-size:12px;font-weight:600;color:#1e293b;">${escHtml(t.nama)}</div>
+                    ${t.keterangan ? `<div style="font-size:10.5px;color:#94a3b8;">${escHtml(t.keterangan)}</div>` : ''}
+                </div>
+                <div style="font-size:12px;font-weight:700;color:${clr};white-space:nowrap;padding-left:8px;">
+                    Rp ${_fmtRp(t.harga)}
+                </div>
+            </button>`).join('');
+        return headerHtml + rows;
+    }).join('') +
+    `<div style="padding:10px 14px;border-top:1px solid #f1f5f9;text-align:center;">
+        <button onclick="_mtToggleManual()"
+            style="padding:6px 14px;border:1.5px dashed #94a3b8;border-radius:8px;
+                   color:#64748b;font-size:11px;cursor:pointer;background:#fff;">
+            ✏️ Tidak ada? Input manual
+        </button>
+    </div>`;
+}
+
+function _mtPilihTarif(tarifId) {
+    const t = (window._tarifCache || []).find(x => String(x.id) === String(tarifId));
+    if (!t) return;
     _tagihanItems = _tagihanItems || [];
-    _tagihanItems.push({ nama_item: 'Item Baru', kategori: 'Lainnya', jumlah: 1, harga_satuan: 0 });
+    // Cek apakah sudah ada — jika ya, tambah jumlahnya
+    const existing = _tagihanItems.find(i => i.nama_item === t.nama && i.harga_satuan === t.harga);
+    if (existing) {
+        existing.jumlah = (Number(existing.jumlah) || 1) + 1;
+    } else {
+        _tagihanItems.push({ nama_item: t.nama, kategori: t.kategori, jumlah: 1, harga_satuan: t.harga, keterangan: null });
+    }
+    document.getElementById('_mtItemPicker').style.display = 'none';
+    _renderModalTagihanContent();
+}
+
+function _mtToggleManual() {
+    const sec = document.getElementById('_mtManualSection');
+    if (!sec) return;
+    const showing = sec.style.display !== 'none';
+    sec.style.display = showing ? 'none' : 'block';
+    if (!showing) document.getElementById('_mtManNama')?.focus();
+}
+
+function _mtKonfirmasiManual() {
+    const nama  = (document.getElementById('_mtManNama')?.value || '').trim();
+    const kat   = document.getElementById('_mtManKat')?.value || 'Lainnya';
+    const harga = Number(document.getElementById('_mtManHarga')?.value) || 0;
+    const qty   = Number(document.getElementById('_mtManQty')?.value) || 1;
+    if (!nama) return showToast('⚠️ Nama item wajib diisi', 'error');
+    _tagihanItems = _tagihanItems || [];
+    _tagihanItems.push({ nama_item: nama, kategori: kat, jumlah: qty, harga_satuan: harga, keterangan: null });
+    document.getElementById('_mtItemPicker').style.display = 'none';
     _renderModalTagihanContent();
 }
 
@@ -187,8 +470,8 @@ function _mtRecalc() {
 }
 
 async function _mtSimpan() {
-    const diskon  = Number(document.getElementById('_mtDiskon')?.value)   || 0;
-    const catatan = document.getElementById('_mtCatatan')?.value           || '';
+    const diskon  = Number(document.getElementById('_mtDiskon')?.value) || 0;
+    const catatan = document.getElementById('_mtCatatan')?.value || '';
     if (!_tagihanKunjId) return showToast('⚠️ ID kunjungan tidak tersedia', 'error');
     try {
         const result = await sb_saveTagihan(_tagihanKunjId, _tagihanPasienId, _tagihanItems, diskon, catatan);
@@ -198,6 +481,7 @@ async function _mtSimpan() {
         showToast('❌ Gagal menyimpan tagihan: ' + (e.message || ''), 'error');
     }
 }
+
 
 // ════════════════════════════════════════
 //  LIHAT TAGIHAN DARI RIWAYAT / KUNJUNGAN
