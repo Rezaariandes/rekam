@@ -1,10 +1,21 @@
 // ════════════════════════════════════════════════════════
-//  KLIKPRO RME — AUTENTIKASI PIN
-//  Mengelola layar kunci PIN dan sesi login user (Expire: 3 Jam)
+//  KLIKPRO RME — AUTENTIKASI PIN (SECURE VERSION)
+//  Gabungan: auth.js + auth-secure.js
+//  Sesi login user (Expire: 3 Jam)
+//  ✅ Proxy token untuk verifikasi di Edge Function
 // ════════════════════════════════════════════════════════
+
+// Nilai ini harus sama dengan PROXY_SECRET di Supabase Edge Function
+const _LOCAL_TOKEN_SEED = 'Kp7mR2xN9vL4wQ8jT3bY6hF1eA5cZ0sD';
 
 let currentPinInput = "";
 let loggedInUser    = null; // { nama, jabatan }
+
+// ── Helper: Buat proxy token format "userId:expiry:hmac" ──
+async function _makeProxyToken(userId, expiry) {
+    const hmac = await _sha256(`${userId}:${expiry}:${_LOCAL_TOKEN_SEED}`);
+    return `${userId}:${expiry}:${hmac}`;
+}
 
 // ── INISIALISASI PIN LOCK (CEK SESI 3 JAM) ──
 // BUG-02 FIX: Sesi divalidasi dengan token HMAC (userId + expiry) yang disimpan
@@ -18,7 +29,6 @@ async function initPinLock() {
     const now           = Date.now();
 
     if (isUnlocked === 'true' && expiryTime && now < parseInt(expiryTime) && sessionToken && storedUser) {
-        // Verifikasi token — harus cocok dengan yang dibuat saat login
         let parsedUser = null;
         try { parsedUser = JSON.parse(storedUser); } catch(e) {}
 
@@ -29,7 +39,6 @@ async function initPinLock() {
         }
 
         if (!tokenValid) {
-            // Token tidak cocok — tolak sesi meski is_unlocked = true
             _clearSessionStorage();
         } else {
             // BUG-07 FIX: Re-validasi jabatan dari server agar sesi resign langsung dicabut
@@ -44,13 +53,11 @@ async function initPinLock() {
                             _tampilkanPinScreen();
                             return;
                         }
-                        // Sinkronkan jabatan terbaru ke loggedInUser & localStorage
                         parsedUser.jabatan = rows[0].jabatan;
                         localStorage.setItem('logged_user', JSON.stringify(parsedUser));
                     }
                 }
             } catch(e) {
-                // Jika fetch gagal (offline), tetap izinkan sesi yang sudah ada
                 console.warn('[Klikpro] Gagal re-validasi jabatan dari server:', e.message);
             }
 
@@ -69,7 +76,6 @@ async function initPinLock() {
         }
     }
 
-    // Sesi tidak valid / kedaluwarsa — bersihkan
     _clearSessionStorage();
     _tampilkanPinScreen();
 }
@@ -79,6 +85,7 @@ function _clearSessionStorage() {
     localStorage.removeItem('logged_user');
     localStorage.removeItem('session_expiry');
     localStorage.removeItem('session_token');
+    localStorage.removeItem('proxy_token');
 }
 
 function _tampilkanPinScreen() {
@@ -100,7 +107,6 @@ async function loadLoginUsers() {
         select.innerHTML = '';
 
         if (res.status === "success" && res.data && res.data.length > 0) {
-            // Hanya tampilkan user yang BUKAN resign
             const aktif = res.data.filter(u => (u.jabatan || '').toLowerCase() !== 'sudah resign');
             if (aktif.length === 0) {
                 select.innerHTML = '<option value="">Belum ada user aktif</option>';
@@ -179,14 +185,17 @@ async function checkPinServer() {
             // Sesi 3 jam
             const expiry = Date.now() + (3 * 60 * 60 * 1000);
 
-            // BUG-02 FIX: Buat session token dari user ID + expiry agar
-            // tidak bisa di-bypass hanya dengan set localStorage manual.
+            // BUG-02 FIX: Session token dari user ID + expiry
             const sessionToken = await _sha256(loggedInUser.id + String(expiry));
+
+            // Proxy token untuk verifikasi di Edge Function
+            const proxyToken = await _makeProxyToken(loggedInUser.id, String(expiry));
 
             localStorage.setItem('is_unlocked',    'true');
             localStorage.setItem('logged_user',    JSON.stringify(loggedInUser));
             localStorage.setItem('session_expiry', expiry);
             localStorage.setItem('session_token',  sessionToken);
+            localStorage.setItem('proxy_token',    proxyToken);
 
             if (res.user) {
                 const label = res.user.nama + " (" + res.user.jabatan + ")";
@@ -241,27 +250,23 @@ function applyRoleRestrictions() {
 
     const jabatan = loggedInUser.jabatan;
 
-    // ── Gunakan sistem hak akses per-modul dari settings.js ──
     if (typeof applyModuleAccess === 'function') {
         applyModuleAccess(jabatan);
         return;
     }
 
-    // ── FALLBACK LAMA: jika settings.js belum tersedia ──
+    // ── FALLBACK LAMA ──
     const bolehMedis  = (typeof JABATAN_MEDIS !== 'undefined')
                         ? JABATAN_MEDIS.includes(jabatan)
                         : true;
     const isParamedis = jabatan === 'Paramedis';
 
-    // Tombol lanjut periksa
     const btnNext = document.getElementById('btnNext');
     if (btnNext) btnNext.style.display = bolehMedis ? '' : 'none';
 
-    // Sub-seksi klinis
     const sectionKlinis = document.getElementById('sectionKlinis');
     if (sectionKlinis) sectionKlinis.style.display = isParamedis ? 'none' : '';
 
-    // Sembunyikan nav User untuk Paramedis
     document.querySelectorAll('.nav-item').forEach(navEl => {
         const onclick = navEl.getAttribute('onclick') || '';
         if (onclick.includes('pageUser')) {
@@ -281,6 +286,8 @@ function logout() {
     localStorage.removeItem('is_unlocked');
     localStorage.removeItem('logged_user');
     localStorage.removeItem('session_expiry');
+    localStorage.removeItem('session_token');
+    localStorage.removeItem('proxy_token');
     localStorage.removeItem('rme_drName');
     if (typeof clearSession === 'function') clearSession();
     location.reload();
@@ -292,9 +299,7 @@ function canAccessMedis() {
         if (typeof showToast === 'function') showToast("⛔ Anda belum login.", "error");
         return false;
     }
-    // Cek lewat currentAccess jika sudah load dari settings.js
     if (window._currentAccess) {
-        // Bug 4 Fix: ID yang benar adalah mod_medis_ttv, bukan mod_pemeriksaan_ttv
         if (!window._currentAccess.includes('mod_medis_ttv') &&
             !window._currentAccess.includes('mod_diagnosa')) {
             if (typeof showToast === 'function')
@@ -303,7 +308,6 @@ function canAccessMedis() {
         }
         return true;
     }
-    // Fallback lama
     if (typeof JABATAN_MEDIS !== 'undefined' && !JABATAN_MEDIS.includes(loggedInUser.jabatan)) {
         if (typeof showToast === 'function')
             showToast("⛔ Akses ditolak. Hanya Dokter, Admin & Paramedis.", "error");
