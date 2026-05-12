@@ -356,8 +356,9 @@ function _renderChipPermintaanLab() {
         const chipId  = _pm_slug('lab_req', t.nama);
         const active  = !!window._reqLab[chipId];
         const icon    = _pm_icon(t.nama, _LAB_ICONS, '🔬');
+        // Hanya kirim chipId; _toggleLabItem akan resolve nama dari tarif cache
         return `<button id="chip_${chipId}"
-            onclick="_toggleLabItem('${chipId}','${_pm_escHtml(t.nama)}')"
+            onclick="event.stopPropagation();_toggleLabItem('${chipId}')"
             style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;
                 font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;margin:3px 3px 0 0;
                 border:1.5px solid ${active?'#2563eb':'#e2e8f0'};
@@ -437,8 +438,17 @@ window._labAccToggle = function(sgId) {
 
 /** Toggle item lab: aktif → tampilkan input; nonaktif → hapus input & clear field */
 function _toggleLabItem(chipId, nama) {
-    window._reqLab[chipId] = !window._reqLab[chipId];
+    // Resolve nama dari tarif cache jika parameter nama mengandung HTML entity atau kosong
+    // Ini mencegah bug dimana nama yang di-escape di HTML tidak cocok dengan kunci _LAB_NAMA_TO_FIELD
+    const labTarifList = _pm_getTarif('Laboratorium', []);
+    const tarifItem = labTarifList.find(t => _pm_slug('lab_req', t.nama) === chipId);
+    const realNama  = tarifItem ? tarifItem.nama : (nama || '');
+
+    // Toggle state: gunakan truthy agar undefined → true (aktivasi pertama kali)
+    const wasActive = !!window._reqLab[chipId];
+    window._reqLab[chipId] = !wasActive;
     const active = !!window._reqLab[chipId];
+
     const btn = document.getElementById('chip_' + chipId);
     if (btn) {
         btn.style.background  = active ? '#2563eb' : '#fff';
@@ -446,13 +456,13 @@ function _toggleLabItem(chipId, nama) {
         btn.style.color       = active ? '#fff'    : 'var(--text,#334155)';
     }
     if (active) {
-        _renderLabInput(chipId, nama);
+        _renderLabInput(chipId, realNama);
     } else {
         // Hapus input & clear nilai
         const inputWrap = document.getElementById('labinput_' + chipId);
         if (inputWrap) inputWrap.remove();
-        // Clear nilai field DB
-        const fieldId = _LAB_NAMA_TO_FIELD[nama];
+        // Clear nilai field DB (gunakan realNama agar lookup benar)
+        const fieldId = _LAB_NAMA_TO_FIELD[realNama];
         if (fieldId) {
             const el = document.getElementById(fieldId);
             if (el) { el.value = ''; localStorage.removeItem('rme_' + fieldId); }
@@ -506,7 +516,7 @@ function _renderLabInput(chipId, nama) {
     div.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <span style="font-size:11px;font-weight:700;color:#2563eb;">${icon} ${ne} ${unitLabel}</span>
-            <button onclick="_toggleLabItem('${chipId}','${ne}')"
+            <button onclick="event.stopPropagation();_toggleLabItem('${chipId}')"
                 style="background:rgba(239,68,68,0.09);border:1px solid rgba(239,68,68,0.2);border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;color:#dc2626;display:flex;align-items:center;justify-content:center;padding:0;"
                 title="Batalkan">✕</button>
         </div>
@@ -562,7 +572,7 @@ function _updateLabAccordionHeader(chipId) {
 }
 
 // Backward compat: fungsi lama masih dipanggil oleh renderMedisDinamis
-function _toggleLabReqChip(id) { _toggleLabItem(id, id.replace('lab_req_','').replace(/_/g,' ')); }
+function _toggleLabReqChip(id) { _toggleLabItem(id); }
 
 // ══════════════════════════════════════════════════════
 //  SECTION 3b — CHIP PEMERIKSAAN PENUNJANG
@@ -626,7 +636,7 @@ function renderSectionPermintaanLab() {
             icon:  _pm_icon(t.nama, _PENUNJANG_ICONS, '🔬'),
         };
         const active = !!window._reqLab[p.id];
-        return `<button id="chip_${p.id}" onclick="_togglePenunjang('${p.id}')"
+        return `<button id="chip_${p.id}" onclick="event.stopPropagation();_togglePenunjang('${p.id}')"
             style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ${active?'#2563eb':'#e2e8f0'};background:${active?'#2563eb':'#fff'};color:${active?'#fff':'var(--text,#334155)'};transition:all .15s;margin:3px 3px 0 0;">
             ${p.icon} ${_pm_escHtml(p.label)}
         </button>`;

@@ -572,6 +572,24 @@ async function bukaRekamMedisHariIni(kId) {
                 lab_gds:   r.lab_gds,
                 lab_chol:  r.lab_chol,
                 lab_ua:    r.lab_ua,
+                lab_hb:         r.lab_hb,
+                lab_trombosit:  r.lab_trombosit,
+                lab_leukosit:   r.lab_leukosit,
+                lab_eritrosit:  r.lab_eritrosit,
+                lab_hematokrit: r.lab_hematokrit,
+                lab_hiv:        r.lab_hiv,
+                lab_sifilis:    r.lab_sifilis,
+                lab_hepatitis:  r.lab_hepatitis,
+                lab_hdl:        r.lab_hdl,
+                lab_ldl:        r.lab_ldl,
+                lab_tg:         r.lab_tg,
+                lab_gdp:        r.lab_gdp,
+                lab_hba1c:      r.lab_hba1c,
+                lab_sgot:       r.lab_sgot,
+                lab_sgpt:       r.lab_sgpt,
+                lab_ureum:      r.lab_ureum,
+                lab_creatinin:  r.lab_creatinin,
+                req_lab:   r.req_lab,
                 diag:      r.diagnosa,   // FIX: kolom di DB adalah 'diagnosa', bukan 'diag'
                 diagnosa2: r.diagnosa2,
                 terapi:    r.terapi,
@@ -603,6 +621,198 @@ async function bukaRekamMedisHariIni(kId) {
 // ── ESCAPE HTML ──
 function escHtml(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ════════════════════════════════════════════════════════
+//  MODAL DETAIL PASIEN (dari riwayat list)
+//  Urutan tampilan sesuai section pemeriksaan medis:
+//  1. Keluhan  2. Tanda Vital  3. Pemeriksaan Labor
+//  4. Penunjang  5. Diagnosa  6. Tindakan  7. Dokter
+// ════════════════════════════════════════════════════════
+
+function openModal(idx) {
+    const list = (typeof currentRiwayat !== 'undefined' ? currentRiwayat : []);
+    const r    = list[idx];
+    if (!r) return;
+
+    // Hapus modal lama jika ada
+    const old = document.getElementById('_modalDetailPasien');
+    if (old) old.remove();
+
+    // ── Helper row ──
+    function _row(label, val, color) {
+        if (!val || String(val).trim() === '' || String(val).trim() === '-') return '';
+        const c = color ? `color:${color};` : '';
+        return `<div style="padding:7px 0;border-bottom:1px dashed rgba(0,0,0,0.07);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#94a3b8;margin-bottom:3px;">${label}</div>
+            <div style="font-size:13px;${c}color:${color||'#1e293b'};">${escHtml(String(val))}</div>
+        </div>`;
+    }
+
+    // ── 1. Keluhan ──
+    let sectHtml = '';
+    sectHtml += _row('💬 Keluhan', r.keluhan);
+
+    // ── 2. Tanda Vital ──
+    const ttvParts = [
+        r.td    ? `TD ${r.td} mmHg`   : '',
+        r.nadi  ? `N ${r.nadi} x/mnt` : '',
+        r.suhu  ? `S ${r.suhu}°C`     : '',
+        r.rr    ? `RR ${r.rr} x/mnt`  : '',
+        r.bb    ? `BB ${r.bb} kg`     : '',
+        r.tb    ? `TB ${r.tb} cm`     : '',
+    ].filter(Boolean).join('  |  ');
+    if (ttvParts) {
+        sectHtml += `<div style="padding:7px 0;border-bottom:1px dashed rgba(0,0,0,0.07);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#94a3b8;margin-bottom:3px;">❤️ Tanda Vital</div>
+            <div style="font-size:12px;color:#1e293b;line-height:1.7;">${escHtml(ttvParts)}</div>
+        </div>`;
+    }
+
+    // ── 3. Pemeriksaan Labor ──
+    // Parse req_lab untuk cek apakah hasil sudah ada atau masih permintaan
+    let reqObj = {};
+    try { reqObj = r.req_lab ? (typeof r.req_lab === 'string' ? JSON.parse(r.req_lab) : r.req_lab) : {}; } catch(e) {}
+
+    // Lab dari field numerik kunjungan (GDS, Kol, AU, dll.)
+    const labFieldMap = {
+        'GDS': r.lab_gds, 'Kolesterol': r.lab_chol, 'Asam Urat': r.lab_ua,
+        'HB': r.lab_hb, 'Trombosit': r.lab_trombosit, 'Leukosit': r.lab_leukosit,
+        'Eritrosit': r.lab_eritrosit, 'Hematokrit': r.lab_hematokrit,
+        'HIV': r.lab_hiv, 'Sifilis': r.lab_sifilis, 'Hepatitis B': r.lab_hepatitis,
+        'HDL': r.lab_hdl, 'LDL': r.lab_ldl, 'Trigliserida': r.lab_tg,
+        'GDP': r.lab_gdp, 'HbA1c': r.lab_hba1c,
+        'SGOT': r.lab_sgot, 'SGPT': r.lab_sgpt,
+        'Ureum': r.lab_ureum, 'Kreatinin': r.lab_creatinin,
+    };
+    const labHasilItems = Object.entries(labFieldMap).filter(([, v]) => v && String(v).trim() && String(v).trim() !== '0');
+
+    // Lab dari req_lab accordion (lab_req_*)
+    const labReqItems  = []; // permintaan (belum ada hasil)
+    const labReqHasil  = []; // sudah ada nilai hasil di field
+    Object.entries(reqObj).forEach(([k, v]) => {
+        if (!v || !k.startsWith('lab_req_')) return;
+        const nameKey = '_labname_' + k;
+        const labNama = reqObj[nameKey] || k.replace('lab_req_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        // Cek apakah hasil sudah ada di labFieldMap (by name)
+        const sudahAda = labHasilItems.some(([n]) => n.toLowerCase() === labNama.toLowerCase());
+        if (sudahAda) labReqHasil.push(labNama);
+        else          labReqItems.push(labNama);
+    });
+
+    // Gabung semua lab: hasil dulu, permintaan belum ada hasil setelahnya
+    let laborHtml = '';
+    if (labHasilItems.length > 0) {
+        const rows = labHasilItems.map(([n, v]) => `<span style="display:inline-flex;align-items:center;gap:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:3px 9px;font-size:11px;margin:2px 3px 2px 0;"><b style="color:#1d4ed8;">${escHtml(n)}</b><span style="color:#334155;">${escHtml(String(v))}</span></span>`).join('');
+        laborHtml += `<div style="padding:7px 0;border-bottom:1px dashed rgba(0,0,0,0.07);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#94a3b8;margin-bottom:5px;">🔬 Hasil Labor</div>
+            <div style="display:flex;flex-wrap:wrap;">${rows}</div>
+        </div>`;
+    }
+    if (labReqItems.length > 0) {
+        const chips = labReqItems.map(n => `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(37,99,235,0.09);border:1px solid rgba(37,99,235,0.25);border-radius:8px;padding:3px 9px;font-size:11px;color:#1d4ed8;margin:2px 3px 2px 0;">🧪 ${escHtml(n)}</span>`).join('');
+        laborHtml += `<div style="padding:7px 0;border-bottom:1px dashed rgba(0,0,0,0.07);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#94a3b8;margin-bottom:5px;">🧪 Permintaan Labor</div>
+            <div style="display:flex;flex-wrap:wrap;">${chips}</div>
+        </div>`;
+    }
+    sectHtml += laborHtml;
+
+    // ── 4. Penunjang ──
+    // Cek apakah setiap penunjang sudah ada hasil (hasil_penunjang_*) atau masih permintaan
+    const pnjHasil   = []; // { nama, hasil }
+    const pnjReqOnly = []; // hanya permintaan
+    Object.entries(reqObj).forEach(([k, v]) => {
+        if (!v || !k.startsWith('penunjang_') || k.startsWith('hasil_') || k.startsWith('foto_')) return;
+        const namaRaw  = k.replace('penunjang_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const hasilKey = 'hasil_' + k;
+        const hasilVal = reqObj[hasilKey];
+        if (hasilVal && String(hasilVal).trim()) {
+            pnjHasil.push({ nama: namaRaw, hasil: String(hasilVal).trim() });
+        } else {
+            pnjReqOnly.push(namaRaw);
+        }
+    });
+
+    let pnjHtml = '';
+    if (pnjHasil.length > 0) {
+        const rows = pnjHasil.map(p => `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 10px;margin-bottom:5px;font-size:12px;"><b style="color:#15803d;">${escHtml(p.nama)}</b><div style="color:#1e293b;margin-top:3px;white-space:pre-wrap;">${escHtml(p.hasil)}</div></div>`).join('');
+        pnjHtml += `<div style="padding:7px 0;border-bottom:1px dashed rgba(0,0,0,0.07);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#94a3b8;margin-bottom:5px;">🔊 Hasil Penunjang</div>
+            ${rows}
+        </div>`;
+    }
+    if (pnjReqOnly.length > 0) {
+        const chips = pnjReqOnly.map(n => `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(124,58,237,0.09);border:1px solid rgba(124,58,237,0.25);border-radius:8px;padding:3px 9px;font-size:11px;color:#6d28d9;margin:2px 3px 2px 0;">🔬 ${escHtml(n)}</span>`).join('');
+        pnjHtml += `<div style="padding:7px 0;border-bottom:1px dashed rgba(0,0,0,0.07);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#94a3b8;margin-bottom:5px;">🔊 Permintaan Penunjang</div>
+            <div style="display:flex;flex-wrap:wrap;">${chips}</div>
+        </div>`;
+    }
+    sectHtml += pnjHtml;
+
+    // ── 5. Diagnosa ──
+    const diagStr = [r.diag, r.diagnosa2].filter(Boolean).join(' / ');
+    sectHtml += _row('🩺 Diagnosa', diagStr, '#7c3aed');
+
+    // ── 6. Tindakan ──
+    const tidItems = Object.entries(reqObj)
+        .filter(([k, v]) => v === true && k.startsWith('tindakan_'))
+        .map(([k]) => {
+            const nameKey = '_tidname_' + k;
+            return reqObj[nameKey] || k.replace('tindakan_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        });
+    if (tidItems.length > 0) {
+        const chips = tidItems.map(n => `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(220,38,38,0.09);border:1px solid rgba(220,38,38,0.22);border-radius:8px;padding:3px 9px;font-size:11px;color:#b91c1c;margin:2px 3px 2px 0;">⚕️ ${escHtml(n)}</span>`).join('');
+        sectHtml += `<div style="padding:7px 0;border-bottom:1px dashed rgba(0,0,0,0.07);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#94a3b8;margin-bottom:5px;">⚕️ Tindakan</div>
+            <div style="display:flex;flex-wrap:wrap;">${chips}</div>
+        </div>`;
+    }
+
+    // ── 7. Dokter Pemeriksa ──
+    if (r.dokterNama) {
+        sectHtml += `<div style="padding:7px 0;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#94a3b8;margin-bottom:3px;">👨‍⚕️ Dokter Pemeriksa</div>
+            <div style="font-size:13px;color:#059669;font-weight:600;">dr. ${escHtml(r.dokterNama)}</div>
+        </div>`;
+    }
+
+    // ── Bangun modal ──
+    const modal = document.createElement('div');
+    modal.id = '_modalDetailPasien';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.52);display:flex;align-items:flex-end;justify-content:center;animation:_dm_fadein .18s ease;';
+
+    modal.innerHTML = `
+    <style>
+        @keyframes _dm_fadein  { from{opacity:0} to{opacity:1} }
+        @keyframes _dm_slideup { from{transform:translateY(50px);opacity:0} to{transform:translateY(0);opacity:1} }
+    </style>
+    <div style="background:#fff;width:100%;max-width:520px;border-radius:22px 22px 0 0;
+        box-shadow:0 -8px 40px rgba(0,0,0,0.18);max-height:88vh;display:flex;flex-direction:column;
+        animation:_dm_slideup .22s cubic-bezier(.34,1.56,.64,1);">
+
+        <!-- Handle bar -->
+        <div style="flex-shrink:0;padding:12px 16px 0;">
+            <div style="width:36px;height:4px;background:#e2e8f0;border-radius:2px;margin:0 auto 12px;"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                    <div style="font-size:13px;font-weight:800;color:#1e293b;">📋 Detail Kunjungan</div>
+                    <div style="font-size:11px;color:#64748b;margin-top:2px;">📅 ${formatTglIndo(r.tgl)} &nbsp;·&nbsp; ${r.waktu || '00:00'}</div>
+                </div>
+                <button onclick="document.getElementById('_modalDetailPasien').remove()"
+                    style="background:#f1f5f9;border:none;border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;color:#64748b;display:flex;align-items:center;justify-content:center;">✕</button>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div style="overflow-y:auto;padding:10px 16px 20px;flex:1;">
+            ${sectHtml || '<div style="padding:20px;text-align:center;color:#94a3b8;">Belum ada data.</div>'}
+        </div>
+    </div>`;
+
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
 }
 
 // ════════════════════════════════════════════════════════
@@ -1306,6 +1516,14 @@ async function saveAll(showInvoice = true) {
                         td: r.td, nadi: r.nadi, suhu: r.suhu, rr: r.rr, bb: r.bb, tb: r.tb,
                         keluhan: r.keluhan, fisik: r.fisik,
                         lab_gds: r.lab_gds, lab_chol: r.lab_chol, lab_ua: r.lab_ua,
+                        lab_hb: r.lab_hb, lab_trombosit: r.lab_trombosit, lab_leukosit: r.lab_leukosit,
+                        lab_eritrosit: r.lab_eritrosit, lab_hematokrit: r.lab_hematokrit,
+                        lab_hiv: r.lab_hiv, lab_sifilis: r.lab_sifilis, lab_hepatitis: r.lab_hepatitis,
+                        lab_hdl: r.lab_hdl, lab_ldl: r.lab_ldl, lab_tg: r.lab_tg,
+                        lab_gdp: r.lab_gdp, lab_hba1c: r.lab_hba1c,
+                        lab_sgot: r.lab_sgot, lab_sgpt: r.lab_sgpt,
+                        lab_ureum: r.lab_ureum, lab_creatinin: r.lab_creatinin,
+                        req_lab: r.req_lab,
                         diag: r.diagnosa, diagnosa2: r.diagnosa2,
                         terapi: r.terapi, surat_sakit: r.surat_sakit,
                         status: r.status, user_id: r.user_id,
