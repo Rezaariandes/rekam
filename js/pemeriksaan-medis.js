@@ -608,8 +608,14 @@ function _renderSectionPemeriksaanExtra() {
     items.forEach(t => {
         const slug = _pm_slug('pemx', t.nama);
         const el   = document.getElementById(slug);
-        const val  = window._reqPemeriksaanExtra[slug] || localStorage.getItem('rme_' + slug) || '';
-        if (el && val) { el.value = val; window._reqPemeriksaanExtra[slug] = val; }
+        // BUG-FIX-1: Jangan restore dari localStorage jika data sedang dimuat dari DB
+        if (!window._kunjunganLoadingFromDB) {
+            const val  = window._reqPemeriksaanExtra[slug] || localStorage.getItem('rme_' + slug) || '';
+            if (el && val) { el.value = val; window._reqPemeriksaanExtra[slug] = val; }
+        } else {
+            const val = window._reqPemeriksaanExtra[slug] || '';
+            if (el && val) el.value = val;
+        }
     });
 }
 
@@ -917,11 +923,14 @@ window._refreshChipUI = _refreshAllChipUI;
                     // Restore surat sakit button
                     const ss = document.getElementById('suratSakit');
                     if (ss) { _onSuratSakitChange(); }
+
+                    // BUG-FIX-1: Reset flag setelah semua data dari DB selesai dimuat
+                    window._kunjunganLoadingFromDB = false;
                 };
                 if (typeof window._ensureTarifCacheThen === 'function') {
                     window._ensureTarifCacheThen(_doLoad);
                 } else { _doLoad(); }
-            } catch(e) { console.warn('[pemeriksaan-medis] gagal load:', e.message); }
+            } catch(e) { window._kunjunganLoadingFromDB = false; console.warn('[pemeriksaan-medis] gagal load:', e.message); }
         };
         window._isiFormDariKunjungan._pemMedisIsiHooked = true;
         return true;
