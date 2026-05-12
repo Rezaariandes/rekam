@@ -301,44 +301,110 @@ function _getPenunjangList() {
     }));
 }
 
-/** Render seluruh section penunjang ke #sectionPermintaanLab */
+/** Render seluruh section penunjang ke #sectionPermintaanLab — dengan accordion per sub_group */
 function renderSectionPermintaanLab() {
     const container = document.getElementById('sectionPermintaanLab');
     if (!container) return;
 
-    const items = _getPenunjangList();
-    if (items.length === 0) {
+    const tarifRaw = _pm_getTarif('Penunjang', []);
+    if (tarifRaw.length === 0) {
         container.innerHTML = '';
         container.style.cssText = 'border-top:none;padding-top:0;margin-top:0;';
         return;
     }
     container.style.cssText = 'border-top:1px dashed var(--border);padding-top:14px;margin-top:4px;';
 
-    const chips = items.map(p => {
+    // Kelompokkan tarif per sub_group
+    const groups = {};   // sub_group || '' → items[]
+    const noGroup = [];
+    tarifRaw.forEach(t => {
+        const sg = (t.sub_group || '').trim();
+        if (sg) {
+            if (!groups[sg]) groups[sg] = [];
+            groups[sg].push(t);
+        } else {
+            noGroup.push(t);
+        }
+    });
+
+    const hasGroups = Object.keys(groups).length > 0;
+
+    function _chipHtml(t) {
+        const p = {
+            id:    _pm_slug('penunjang', t.nama),
+            label: t.nama,
+            icon:  _pm_icon(t.nama, _PENUNJANG_ICONS, '🔬'),
+        };
         const active = !!window._reqLab[p.id];
-        return `<button id="chip_${p.id}"
-            onclick="_togglePenunjang('${p.id}')"
+        return `<button id="chip_${p.id}" onclick="_togglePenunjang('${p.id}')"
             style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ${active?'#2563eb':'#e2e8f0'};background:${active?'#2563eb':'#fff'};color:${active?'#fff':'var(--text,#334155)'};transition:all .15s;margin:3px 3px 0 0;">
             ${p.icon} ${_pm_escHtml(p.label)}
         </button>`;
-    }).join('');
+    }
 
-    container.innerHTML = `
+    function _accordionPnj(sg, items) {
+        const sgId   = 'pnj_acc_' + _pm_slug('sg', sg);
+        const isOpen = window._accordionState && window._accordionState[sgId] === true;
+        const hasAny = items.some(t => !!window._reqLab[_pm_slug('penunjang', t.nama)]);
+        return `
+        <div style="border:1px solid #e2e8f0;border-radius:11px;margin-bottom:7px;overflow:hidden;">
+            <div onclick="_pnjAccToggle('${sgId}')"
+                style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;cursor:pointer;background:${hasAny?'#eff6ff':'#f8fafc'};user-select:none;">
+                <span style="font-size:11.5px;font-weight:700;color:${hasAny?'#2563eb':'#475569'};">
+                    🔬 ${_pm_escHtml(sg)}${hasAny?' <span style=\'color:#2563eb;font-size:10px;\'>●</span>':''}
+                </span>
+                <span id="${sgId}_arrow" style="font-size:11px;color:#94a3b8;transition:transform .2s;">${isOpen?'▼':'▶'}</span>
+            </div>
+            <div id="${sgId}_body" style="display:${isOpen?'block':'none'};padding:10px 12px 8px;">
+                <div id="${sgId}_chips" style="display:flex;flex-wrap:wrap;margin-bottom:4px;">
+                    ${items.map(_chipHtml).join('')}
+                </div>
+                <div id="${sgId}_panels"></div>
+            </div>
+        </div>`;
+    }
+
+    let html = `
         <div style="font-size:11.5px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
             <span style="width:6px;height:6px;border-radius:50%;background:#2563eb;display:inline-block;flex-shrink:0;"></span>
             Pemeriksaan Penunjang
         </div>
-        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:8px;">
+        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:10px;">
             Tandai pemeriksaan penunjang. Petugas akan melihat permintaan ini.
-        </div>
-        <div id="pnj-chips-wrap" style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${chips}</div>
-        <div id="pnj-panels-wrap"></div>`;
+        </div>`;
+
+    if (hasGroups) {
+        Object.keys(groups).sort().forEach(sg => {
+            html += _accordionPnj(sg, groups[sg]);
+        });
+        // Item tanpa group di luar accordion
+        if (noGroup.length > 0) {
+            html += `<div id="pnj-chips-wrap" style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${noGroup.map(_chipHtml).join('')}</div>`;
+        }
+    } else {
+        // Tidak ada sub_group → flat chips seperti semula
+        html += `<div id="pnj-chips-wrap" style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${tarifRaw.map(_chipHtml).join('')}</div>`;
+    }
+    html += `<div id="pnj-panels-wrap"></div>`;
+    container.innerHTML = html;
 
     // Re-render panel yang sudah aktif
-    items.forEach(p => {
+    const allItems = _getPenunjangList();
+    allItems.forEach(p => {
         if (window._reqLab[p.id]) _renderPenunjangPanel(p.id, p.label, p.icon);
     });
 }
+
+window._pnjAccToggle = function(sgId) {
+    if (!window._accordionState) window._accordionState = {};
+    const body  = document.getElementById(sgId + '_body');
+    const arrow = document.getElementById(sgId + '_arrow');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+    window._accordionState[sgId] = !isOpen;
+};
 
 function _togglePenunjang(id) {
     window._reqLab[id] = !window._reqLab[id];
@@ -363,7 +429,27 @@ function _togglePenunjang(id) {
 }
 
 function _renderPenunjangPanel(id, label, icon) {
-    const wrap = document.getElementById('pnj-panels-wrap');
+    // Cari wrap: cek accordion sub_group dulu, fallback ke global pnj-panels-wrap
+    let wrap = null;
+    // Cari di dalam accordion yang terbuka (sgId_panels)
+    const allAccPanels = document.querySelectorAll('[id$="_panels"]');
+    for (const ap of allAccPanels) {
+        if (ap.closest('[style*="display:block"]') || ap.closest('[id$="_body"][style*="display:block"]')) {
+            // Cek apakah chip ada di dalam accordion ini
+            const chipInAcc = ap.closest('[id$="_body"]')?.querySelector('#chip_' + id);
+            if (chipInAcc) { wrap = ap; break; }
+        }
+    }
+    // Fallback ke accordion body yang berisi chip ini
+    if (!wrap) {
+        const chip = document.getElementById('chip_' + id);
+        if (chip) {
+            const accBody = chip.closest('[id$="_body"]');
+            if (accBody) wrap = accBody.querySelector('[id$="_panels"]');
+        }
+    }
+    // Final fallback ke global wrap
+    if (!wrap) wrap = document.getElementById('pnj-panels-wrap');
     if (!wrap || document.getElementById('panel_' + id)) return;
 
     const hasilVal = window._reqLabHasil[id] || '';
@@ -515,36 +601,105 @@ function _renderSectionTindakan() {
     const old = document.getElementById('sectionTindakanMedis');
     if (old) old.remove();
 
-    const list = _getTindakanList();
-    if (list.length === 0) {
+    const tarifRaw = _pm_getTarif('Tindakan', []);
+    if (tarifRaw.length === 0) {
         container.innerHTML = '';
         container.style.cssText = 'border-top:none;padding-top:0;margin-top:0;';
         return;
     }
     container.style.cssText = 'border-top:1px dashed var(--border);padding-top:14px;margin-top:8px;';
 
-    const chips = list.map(t => {
-        const active = !!window._reqTindakan[t.id];
-        return `<button id="chip_${t.id}" onclick="_toggleTindakan('${t.id}')"
+    // Kelompokkan per sub_group
+    const groups  = {};
+    const noGroup = [];
+    tarifRaw.forEach(t => {
+        const sg = (t.sub_group || '').trim();
+        if (sg) {
+            if (!groups[sg]) groups[sg] = [];
+            groups[sg].push(t);
+        } else {
+            noGroup.push(t);
+        }
+    });
+    const hasGroups = Object.keys(groups).length > 0;
+
+    function _chipTid(t) {
+        const id     = _pm_slug('tindakan', t.nama);
+        const icon   = _pm_icon(t.nama, _TINDAKAN_ICONS, '⚕️');
+        const active = !!window._reqTindakan[id];
+        return `<button id="chip_${id}" onclick="_toggleTindakan('${id}')"
             style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ${active?'#dc2626':'#e2e8f0'};background:${active?'#dc2626':'#fff'};color:${active?'#fff':'var(--text,#334155)'};transition:all .15s;margin:3px 3px 0 0;">
-            ${t.icon} ${_pm_escHtml(t.label)}
+            ${icon} ${_pm_escHtml(t.nama)}
         </button>`;
-    }).join('');
+    }
+
+    function _accordionTid(sg, items) {
+        const sgId   = 'tid_acc_' + _pm_slug('sg', sg);
+        const isOpen = window._accordionState && window._accordionState[sgId] === true;
+        const hasAny = items.some(t => !!window._reqTindakan[_pm_slug('tindakan', t.nama)]);
+        return `
+        <div style="border:1px solid #e2e8f0;border-radius:11px;margin-bottom:7px;overflow:hidden;">
+            <div onclick="_tidAccToggle('${sgId}')"
+                style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;cursor:pointer;background:${hasAny?'#fff5f5':'#f8fafc'};user-select:none;">
+                <span style="font-size:11.5px;font-weight:700;color:${hasAny?'#dc2626':'#475569'};">
+                    ⚕️ ${_pm_escHtml(sg)}${hasAny?' <span style=\'color:#dc2626;font-size:10px;\'>●</span>':''}
+                </span>
+                <span id="${sgId}_arrow" style="font-size:11px;color:#94a3b8;">${isOpen?'▼':'▶'}</span>
+            </div>
+            <div id="${sgId}_body" style="display:${isOpen?'block':'none'};padding:10px 12px 8px;">
+                <div style="display:flex;flex-wrap:wrap;margin-bottom:4px;">
+                    ${items.map(_chipTid).join('')}
+                </div>
+            </div>
+        </div>`;
+    }
 
     const div = document.createElement('div');
     div.id    = 'sectionTindakanMedis';
-    div.innerHTML = `
+
+    let html = `
         <div style="font-size:11.5px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
             <span style="width:6px;height:6px;border-radius:50%;background:#dc2626;display:inline-block;flex-shrink:0;"></span>
             Tindakan Medis
         </div>
-        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:8px;">
+        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:10px;">
             Tandai tindakan yang dilakukan. Item terpilih masuk ke tagihan otomatis.
-        </div>
-        <div style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${chips}</div>`;
+        </div>`;
+
+    if (hasGroups) {
+        Object.keys(groups).sort().forEach(sg => {
+            html += _accordionTid(sg, groups[sg]);
+        });
+        if (noGroup.length > 0) {
+            html += `<div style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${noGroup.map(_chipTid).join('')}</div>`;
+        }
+    } else {
+        const allList = _getTindakanList();
+        const chips = allList.map(t => {
+            const active = !!window._reqTindakan[t.id];
+            return `<button id="chip_${t.id}" onclick="_toggleTindakan('${t.id}')"
+                style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ${active?'#dc2626':'#e2e8f0'};background:${active?'#dc2626':'#fff'};color:${active?'#fff':'var(--text,#334155)'};transition:all .15s;margin:3px 3px 0 0;">
+                ${t.icon} ${_pm_escHtml(t.label)}
+            </button>`;
+        }).join('');
+        html += `<div style="display:flex;flex-wrap:wrap;margin-bottom:4px;">${chips}</div>`;
+    }
+
+    div.innerHTML = html;
     container.innerHTML = '';
     container.appendChild(div);
 }
+
+window._tidAccToggle = function(sgId) {
+    if (!window._accordionState) window._accordionState = {};
+    const body  = document.getElementById(sgId + '_body');
+    const arrow = document.getElementById(sgId + '_arrow');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+    window._accordionState[sgId] = !isOpen;
+};
 
 function _toggleTindakan(id) {
     window._reqTindakan[id] = !window._reqTindakan[id];

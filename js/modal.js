@@ -1037,6 +1037,108 @@ function _viewInvoiceFromModal() {
     }
 }
 
+// ── LIHAT LENGKAP: buka kunjungan di pageMedis penuh ──
+// Membuka rekam medis riwayat yang dipilih di modal langsung ke pageMedis
+// dalam mode edit/view penuh — bukan modal ringkas.
+async function _lihatLengkapDariModal() {
+    const idx = parseInt(document.getElementById('modalIndex')?.value ?? '-1');
+    const r   = (typeof currentRiwayat !== 'undefined' ? currentRiwayat : [])[idx];
+    if (!r || !r.id) return showToast('⚠️ Data kunjungan tidak tersedia', 'error');
+
+    // Simpan state ke localStorage agar initApp / _recoverLanjutkan bisa restore
+    const pasienId = typeof currentPasienId !== 'undefined' ? currentPasienId : null;
+    const pasien   = (typeof allPatients !== 'undefined' ? allPatients : []).find(p => p.id === pasienId) || {};
+
+    localStorage.setItem('cP_id',       pasienId || '');
+    localStorage.setItem('cK_id',       r.id);
+    localStorage.setItem('cP_nama',     pasien.nama   || r.nama   || '—');
+    localStorage.setItem('cP_nik',      pasien.nik    || '');
+    localStorage.setItem('cP_umur',     pasien.tgl    ? (typeof hitungUmur === 'function' ? hitungUmur(pasien.tgl) : '') : '');
+    localStorage.setItem('cP_tglLahir', pasien.tgl    || '');
+    localStorage.setItem('cTglEdit',    r.tgl ? (typeof formatTglIndo === 'function' ? formatTglIndo(r.tgl) : r.tgl) : '');
+    localStorage.setItem('activePage',  'pageMedis');
+
+    closeModal();
+
+    // Populate banner info pasien
+    const $ = id => document.getElementById(id);
+    if ($('infoPasienNama'))     $('infoPasienNama').innerText     = pasien.nama   || r.nama   || '—';
+    if ($('infoPasienNik'))      $('infoPasienNik').innerText      = pasien.nik    || '';
+    if ($('infoPasienUmur'))     $('infoPasienUmur').innerText     = pasien.tgl && typeof hitungUmur === 'function' ? hitungUmur(pasien.tgl) : '';
+    if ($('infoTglPemeriksaan')) {
+        $('infoTglPemeriksaan').innerText     = localStorage.getItem('cTglEdit') || '';
+        $('infoTglPemeriksaan').style.display = 'block';
+    }
+    if ($('infoPasienTglLahir') && pasien.tgl) {
+        $('infoPasienTglLahir').innerText     = pasien.tgl;
+        $('infoPasienTglLahir').style.display = '';
+    }
+
+    // Set globals
+    if (typeof window !== 'undefined') {
+        window.currentPasienId    = pasienId;
+        window.currentKunjunganId = r.id;
+    }
+
+    // Render section dinamis
+    if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
+
+    // Fetch & isi form dari data kunjungan
+    try {
+        showToast('⏳ Memuat data pemeriksaan...', 'info');
+        const kunjunganData = await sb_getKunjunganById(r.id);
+        if (kunjunganData && typeof _isiFormDariKunjungan === 'function') {
+            _isiFormDariKunjungan(kunjunganData);
+            document.querySelectorAll('[data-save="true"]').forEach(el =>
+                localStorage.setItem('rme_' + el.id, el.value)
+            );
+            if (typeof renderMedisDinamis === 'function') {
+                window._ensureTarifCacheThen
+                    ? window._ensureTarifCacheThen(() => renderMedisDinamis())
+                    : renderMedisDinamis();
+            }
+            if (window._stokAktif && typeof loadResepByKunjungan === 'function') {
+                loadResepByKunjungan(r.id).catch(() => {});
+            }
+            if (kunjunganData.riwayat_penyakit && $('riwayat_penyakit')) {
+                $('riwayat_penyakit').value = kunjunganData.riwayat_penyakit;
+            }
+        }
+    } catch(e) {
+        console.warn('[Klikpro] _lihatLengkapDariModal: gagal fetch kunjungan:', e.message);
+        if (typeof loadAutosave === 'function') loadAutosave();
+    }
+
+    // Fetch alergi
+    if (pasienId && pasienId !== 'null') {
+        try {
+            const pr = await _sbFetch('pasien?id=eq.' + pasienId + '&select=alergi&limit=1');
+            if (pr && pr[0]) {
+                const av = pr[0].alergi || '';
+                if ($('alergi')) $('alergi').value = av;
+                localStorage.setItem('rme_alergi', av);
+            }
+        } catch(e) {}
+    }
+
+    if (typeof calculateIMT  === 'function') calculateIMT();
+    if (typeof checkTensi    === 'function') checkTensi();
+    if (typeof checkLabAlert === 'function') checkLabAlert();
+
+    // Navigasi ke pageMedis
+    if (typeof switchPage === 'function') switchPage('pageMedis', null);
+    setTimeout(() => {
+        if (typeof _applyLockUI === 'function') _applyLockUI();
+        // Tandai mode riwayat (readonly jika di luar batas edit)
+        if (typeof _cekHakAksesEdit === 'function') {
+            const hakEdit = _cekHakAksesEdit(r);
+            if (!hakEdit.boleh) {
+                showToast('🔒 ' + hakEdit.alasan, 'info');
+            }
+        }
+    }, 150);
+}
+
 
 // ════════════════════════════════════════════════════════
 //  § 3 — MODAL KONFIRMASI UNIVERSAL
