@@ -579,31 +579,10 @@ async function bukaRekamMedisHariIni(kId) {
                 tb:        r.tb,
                 keluhan:   r.keluhan,
                 fisik:     r.fisik,
-                lab_gds:   r.lab_gds,
-                lab_chol:  r.lab_chol,
-                lab_ua:    r.lab_ua,
-                lab_hb:         r.lab_hb,
-                lab_trombosit:  r.lab_trombosit,
-                lab_leukosit:   r.lab_leukosit,
-                lab_eritrosit:  r.lab_eritrosit,
-                lab_hematokrit: r.lab_hematokrit,
-                lab_hiv:        r.lab_hiv,
-                lab_sifilis:    r.lab_sifilis,
-                lab_hepatitis:  r.lab_hepatitis,
-                lab_hdl:        r.lab_hdl,
-                lab_ldl:        r.lab_ldl,
-                lab_tg:         r.lab_tg,
-                lab_gdp:        r.lab_gdp,
-                lab_hba1c:      r.lab_hba1c,
-                lab_sgot:       r.lab_sgot,
-                lab_sgpt:       r.lab_sgpt,
-                lab_ureum:      r.lab_ureum,
-                lab_creatinin:  r.lab_creatinin,
                 req_lab:   r.req_lab,
                 diag:      r.diagnosa,   // FIX: kolom di DB adalah 'diagnosa', bukan 'diag'
                 diagnosa2: r.diagnosa2,
                 terapi:    r.terapi,
-                surat_sakit: r.surat_sakit,
                 status:    r.status,
                 user_id:   r.user_id,
                 status_obat:  !!r.status_obat,
@@ -650,26 +629,6 @@ function _openDetailKunjungan(kId) {
         tb:        h.tb,
         keluhan:   h.keluhan,
         fisik:     h.fisik,
-        lab_gds:   h.lab_gds,
-        lab_chol:  h.lab_chol,
-        lab_ua:    h.lab_ua,
-        lab_hb:    h.lab_hb,
-        lab_trombosit: h.lab_trombosit,
-        lab_leukosit:  h.lab_leukosit,
-        lab_eritrosit: h.lab_eritrosit,
-        lab_hematokrit:h.lab_hematokrit,
-        lab_hiv:    h.lab_hiv,
-        lab_sifilis:h.lab_sifilis,
-        lab_hepatitis:h.lab_hepatitis,
-        lab_hdl:    h.lab_hdl,
-        lab_ldl:    h.lab_ldl,
-        lab_tg:     h.lab_tg,
-        lab_gdp:    h.lab_gdp,
-        lab_hba1c:  h.lab_hba1c,
-        lab_sgot:   h.lab_sgot,
-        lab_sgpt:   h.lab_sgpt,
-        lab_ureum:  h.lab_ureum,
-        lab_creatinin: h.lab_creatinin,
         req_lab:    h.req_lab,
         diag:       h.diag,
         diagnosa2:  h.diagnosa2,
@@ -734,18 +693,7 @@ function openModal(idx, dataObj) {
     let reqObj = {};
     try { reqObj = r.req_lab ? (typeof r.req_lab === 'string' ? JSON.parse(r.req_lab) : r.req_lab) : {}; } catch(e) {}
 
-    // Lab dari field numerik kunjungan (GDS, Kol, AU, dll.)
-    const labFieldMap = {
-        'GDS': r.lab_gds, 'Kolesterol': r.lab_chol, 'Asam Urat': r.lab_ua,
-        'HB': r.lab_hb, 'Trombosit': r.lab_trombosit, 'Leukosit': r.lab_leukosit,
-        'Eritrosit': r.lab_eritrosit, 'Hematokrit': r.lab_hematokrit,
-        'HIV': r.lab_hiv, 'Sifilis': r.lab_sifilis, 'Hepatitis B': r.lab_hepatitis,
-        'HDL': r.lab_hdl, 'LDL': r.lab_ldl, 'Trigliserida': r.lab_tg,
-        'GDP': r.lab_gdp, 'HbA1c': r.lab_hba1c,
-        'SGOT': r.lab_sgot, 'SGPT': r.lab_sgpt,
-        'Ureum': r.lab_ureum, 'Kreatinin': r.lab_creatinin,
-    };
-    const labHasilItems = Object.entries(labFieldMap).filter(([, v]) => v && String(v).trim() && String(v).trim() !== '0');
+    const labHasilItems = []; // semua hasil lab kini dari req_lab
 
     // Lab dari req_lab accordion (lab_req_*)
     const labReqItems  = []; // permintaan (belum ada hasil)
@@ -884,12 +832,6 @@ function renderRiwayatList(list, containerId) {
 
     if (list && list.length > 0) {
         c.innerHTML = list.map((r, i) => {
-            const labStr = [
-                r.lab_gds  ? `GDS ${r.lab_gds}`   : '',
-                r.lab_chol ? `Kol ${r.lab_chol}`  : '',
-                r.lab_ua   ? `AU ${r.lab_ua}`      : ''
-            ].filter(Boolean).join(' | ');
-
             const st       = r.id ? _getStatusKunjungan(r.id) : { obat: false, bayar: false };
             const obatDone = st.obat;
             const bayarDone= st.bayar;
@@ -927,7 +869,6 @@ function renderRiwayatList(list, containerId) {
                     <div style="font-size:11px; margin-bottom:6px; color:var(--text-muted); background:var(--surface-2); padding:4px 8px; border-radius:8px;">
                         <b>TTV:</b> TD ${r.td||'-'} | N ${r.nadi||'-'} | S ${r.suhu||'-'} | RR ${r.rr||'-'} | BB ${r.bb||'-'}
                     </div>
-                    ${labStr ? `<div style="font-size:11px;margin-bottom:6px;color:#7c3aed;background:rgba(124,58,237,0.07);padding:4px 8px;border-radius:8px;"><b>🔬 Lab:</b> ${labStr}</div>` : ''}
                     ${window._isParamedis ? '' : `<div class="riwayat-diag" style="margin-bottom:3px;">🩺 ${r.diag || 'Menunggu Diagnosa'}</div>`}
                     <div class="riwayat-keluhan" style="color:var(--text); border-top:1px dashed var(--border); padding-top:4px; margin-bottom:3px;"><b>Keluhan:</b> ${r.keluhan || '-'}</div>
                     <div class="riwayat-keluhan" style="color:var(--text);margin-bottom:6px;"><b>Terapi:</b> ${r.terapi || '-'}</div>
@@ -1422,9 +1363,6 @@ async function saveAll(showInvoice = true) {
         const diag1 = $('diagnosa')  ? $('diagnosa').value.trim()  : '';
         const diag2 = $('diagnosa2') ? $('diagnosa2').value.trim() : '';
 
-        // ── Surat sakit ──
-        const suratSakit = ($('suratSakit') && $('suratSakit').checked) ? 'YA' : null;
-
         // ── User ID (dokter yang login) ──
         const userId = (typeof loggedInUser !== 'undefined' && loggedInUser) ? loggedInUser.id : null;
 
@@ -1451,40 +1389,12 @@ async function saveAll(showInvoice = true) {
             rr:    $('rr')   ? $('rr').value   : '',
             bb:    $('bb')   ? $('bb').value   : '',
             tb:    $('tb')   ? $('tb').value   : '',
-            // Lab dasar
-            lab_gds:  $('lab_gds')  ? $('lab_gds').value  : '',
-            lab_chol: $('lab_chol') ? $('lab_chol').value : '',
-            lab_ua:   $('lab_ua')   ? $('lab_ua').value   : '',
-            // Darah rutin
-            lab_hb:         $('lab_hb')         ? $('lab_hb').value         : '',
-            lab_trombosit:  $('lab_trombosit')  ? $('lab_trombosit').value  : '',
-            lab_leukosit:   $('lab_leukosit')   ? $('lab_leukosit').value   : '',
-            lab_eritrosit:  $('lab_eritrosit')  ? $('lab_eritrosit').value  : '',
-            lab_hematokrit: $('lab_hematokrit') ? $('lab_hematokrit').value : '',
-            // Triple eliminasi
-            lab_hiv:      $('lab_hiv')      ? $('lab_hiv').value      : '',
-            lab_sifilis:  $('lab_sifilis')  ? $('lab_sifilis').value  : '',
-            lab_hepatitis:$('lab_hepatitis')? $('lab_hepatitis').value : '',
-            // Profil lemak
-            lab_hdl: $('lab_hdl') ? $('lab_hdl').value : '',
-            lab_ldl: $('lab_ldl') ? $('lab_ldl').value : '',
-            lab_tg:  $('lab_tg')  ? $('lab_tg').value  : '',
-            // Gula darah
-            lab_gdp:   $('lab_gdp')   ? $('lab_gdp').value   : '',
-            lab_hba1c: $('lab_hba1c') ? $('lab_hba1c').value : '',
-            // Fungsi hati
-            lab_sgot: $('lab_sgot') ? $('lab_sgot').value : '',
-            lab_sgpt: $('lab_sgpt') ? $('lab_sgpt').value : '',
-            // Fungsi ginjal
-            lab_ureum:    $('lab_ureum')    ? $('lab_ureum').value    : '',
-            lab_creatinin:$('lab_creatinin')? $('lab_creatinin').value : '',
             // Klinis
             keluhan:  $('keluhan') ? $('keluhan').value  : '',
             fisik:    $('fisik')   ? $('fisik').value    : '',
             diagnosa: diag1,
             diagnosa2: diag2,
             terapi:   $('terapi')  ? $('terapi').value   : '',
-            suratSakit,
             // ── Permintaan Lab ──
             req_lab: (typeof getReqLabPayload === 'function') ? getReqLabPayload() : null,
             // ── Riwayat Penyakit Dahulu ──
@@ -1575,17 +1485,9 @@ async function saveAll(showInvoice = true) {
                         id: r.id, tgl: r.tgl, waktu: r.waktu,
                         td: r.td, nadi: r.nadi, suhu: r.suhu, rr: r.rr, bb: r.bb, tb: r.tb,
                         keluhan: r.keluhan, fisik: r.fisik,
-                        lab_gds: r.lab_gds, lab_chol: r.lab_chol, lab_ua: r.lab_ua,
-                        lab_hb: r.lab_hb, lab_trombosit: r.lab_trombosit, lab_leukosit: r.lab_leukosit,
-                        lab_eritrosit: r.lab_eritrosit, lab_hematokrit: r.lab_hematokrit,
-                        lab_hiv: r.lab_hiv, lab_sifilis: r.lab_sifilis, lab_hepatitis: r.lab_hepatitis,
-                        lab_hdl: r.lab_hdl, lab_ldl: r.lab_ldl, lab_tg: r.lab_tg,
-                        lab_gdp: r.lab_gdp, lab_hba1c: r.lab_hba1c,
-                        lab_sgot: r.lab_sgot, lab_sgpt: r.lab_sgpt,
-                        lab_ureum: r.lab_ureum, lab_creatinin: r.lab_creatinin,
                         req_lab: r.req_lab,
                         diag: r.diagnosa, diagnosa2: r.diagnosa2,
-                        terapi: r.terapi, surat_sakit: r.surat_sakit,
+                        terapi: r.terapi,
                         status: r.status, user_id: r.user_id,
                         status_obat: !!r.status_obat, status_bayar: !!r.status_bayar,
                         dokterNama: dokterUser ? dokterUser.nama : ''
