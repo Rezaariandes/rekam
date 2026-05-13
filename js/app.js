@@ -362,6 +362,17 @@ function switchPage(id, navEl) {
     if (id === 'pageMedis' && typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
     // Selalu reset checkbox surat sakit ke unchecked saat masuk pageMedis
     if (id === 'pageMedis') { const ss = document.getElementById('suratSakit'); if (ss) ss.checked = false; }
+    // ── Floating save button: paksa tampil/sembunyikan sesuai halaman aktif ──
+    // MutationObserver di page-medis.html kadang tidak trigger saat class 'active'
+    // ditambahkan via JS, jadi kita trigger manual di sini.
+    const _floatBtn = document.getElementById('floatingSaveBtn');
+    if (_floatBtn) {
+        if (id === 'pageMedis') {
+            _floatBtn.style.display = 'flex';
+        } else {
+            _floatBtn.style.display = 'none';
+        }
+    }
     if (id === 'pageLaporan') {
         if (typeof loggedInUser !== 'undefined' && loggedInUser) {
             const jabatan = (loggedInUser.jabatan || '').toLowerCase();
