@@ -85,17 +85,8 @@
                     <label class="form-label">Stok Minimum ⚠️</label>
                     <input type="number" id="obat_stok_minimum" class="form-control" placeholder="5" min="0">
                 </div>
-                <div class="col-12">
-                    <label class="form-label">Frekuensi Default</label>
-                    <select id="obat_frekuensi_default" class="form-control">
-                        <option value="1x1">1x1 (sekali sehari)</option>
-                        <option value="2x1">2x1 (dua kali sehari)</option>
-                        <option value="3x1" selected>3x1 (tiga kali sehari)</option>
-                        <option value="3x2">3x2 (tiga kali sehari, 2 tablet)</option>
-                        <option value="4x1">4x1 (empat kali sehari)</option>
-                        <option value="1x1 malam">1x1 malam</option>
-                        <option value="prn">Prn (bila perlu)</option>
-                    </select>
+                <div class="col-12" id="frekuensiObatWrap">
+                    <!-- Diisi dinamis oleh _renderFrekuensiObatSelect() dari stok.js -->
                 </div>
                 <div class="col-6">
                     <label class="form-label">Exp. Date</label>
