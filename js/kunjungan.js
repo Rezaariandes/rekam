@@ -1240,10 +1240,10 @@ function _applyLockUI() {
     if (btnSave) {
         btnSave.disabled = terkunci;
         if (terkunci) {
-            btnSave.innerText = '🔒 Rekam Medis Terkunci (> 2 Hari)';
+            btnSave.innerHTML = '🔒 Rekam Medis Terkunci (> 2 Hari)';
             btnSave.style.cssText = 'width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:800;background:#e2e8f0;color:#94a3b8;border:none;cursor:not-allowed;';
         } else {
-            btnSave.innerText = '✓ Simpan Rekam Medis';
+            btnSave.innerHTML = '<span style="font-size:15px;">🧾</span><span>Selesai &amp; Tampilkan Invoice</span>';
             btnSave.style.cssText = '';
         }
     }
@@ -1280,7 +1280,7 @@ function _applyLockUI() {
 // ════════════════════════════════════════════════════════
 async function saveAll(showInvoice = true) {
     const btn = $('btnSave');
-    if (btn) { btn.disabled = true; btn.innerText = '⏳ Menyimpan...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Menyimpan...'; }
 
     try {
         // ── Cek edit lock (kunjungan > 2 hari) ──
@@ -1486,6 +1486,6 @@ async function saveAll(showInvoice = true) {
         console.error('[Klikpro] saveAll error:', e);
         showToast('❌ Gagal menyimpan: ' + (e.message || 'Cek koneksi internet'), 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerText = '✓ Simpan Rekam Medis'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span style="font-size:15px;">🧾</span><span>Selesai &amp; Tampilkan Invoice</span>'; }
     }
 }
