@@ -239,17 +239,8 @@ function _isiFormObat(o) {
 
 /** Render select frekuensi di form edit obat, dengan semua opsi unik dari cache + bawaan */
 function _renderFrekuensiObatSelect(currentVal) {
-    // Cari wrapper jika sudah ada, atau buat di sekitar elemen frekuensi existing
-    let wrap = document.getElementById('frekuensiObatWrap');
-    if (!wrap) {
-        // Cari select atau parent-nya dan inject wrapper
-        const existingSel = document.getElementById('obat_frekuensi_default');
-        if (!existingSel) return;
-        const parent = existingSel.closest('.col-12, .mb-3, div') || existingSel.parentElement;
-        wrap = document.createElement('div');
-        wrap.id = 'frekuensiObatWrap';
-        parent.replaceWith(wrap);
-    }
+    const wrap = document.getElementById('frekuensiObatWrap');
+    if (!wrap) return;
     const opts = [...new Set([..._FREKUENSI_DEFAULT, ..._obatCache.map(o => (o.frekuensi_default||'').trim()).filter(Boolean)])].sort();
     const isCustom = currentVal && !opts.includes(currentVal);
     if (isCustom) opts.push(currentVal);
