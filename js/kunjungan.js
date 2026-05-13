@@ -1258,10 +1258,10 @@ function _applyLockUI() {
     if (btnSave) {
         btnSave.disabled = terkunci;
         if (terkunci) {
-            btnSave.innerHTML = '🔒 Rekam Medis Terkunci (> 2 Hari)';
+            btnSave.innerText = '🔒 Rekam Medis Terkunci (> 2 Hari)';
             btnSave.style.cssText = 'width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:800;background:#e2e8f0;color:#94a3b8;border:none;cursor:not-allowed;';
         } else {
-            btnSave.innerHTML = '<span>🧾</span><span>Selesai & Tampilkan Invoice</span>';
+            btnSave.innerText = '✓ Simpan Rekam Medis';
             btnSave.style.cssText = '';
         }
     }
@@ -1298,7 +1298,7 @@ function _applyLockUI() {
 // ════════════════════════════════════════════════════════
 async function saveAll(showInvoice = true) {
     const btn = $('btnSave');
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Menyimpan...'; }
+    if (btn) { btn.disabled = true; btn.innerText = '⏳ Menyimpan...'; }
 
     try {
         // ── Cek edit lock (kunjungan > 2 hari) ──
@@ -1504,6 +1504,161 @@ async function saveAll(showInvoice = true) {
         console.error('[Klikpro] saveAll error:', e);
         showToast('❌ Gagal menyimpan: ' + (e.message || 'Cek koneksi internet'), 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = '<span>🧾</span><span>Selesai & Tampilkan Invoice</span>'; }
+        if (btn) { btn.disabled = false; btn.innerText = '✓ Simpan Rekam Medis'; }
     }
 }
+
+// ════════════════════════════════════════════════════════
+//  FLOATING SAVE BUTTON — dipindahkan dari page-medis.html
+//  karena <script> di dalam innerHTML tidak dieksekusi browser.
+// ════════════════════════════════════════════════════════
+(function() {
+    let _floatSavedTimer = null;
+    let _dirtyTimer      = null;
+    let _isDirty         = false;
+
+    function _showFloatBtn() {
+        const btn = document.getElementById('floatingSaveBtn');
+        if (btn) btn.style.display = 'flex';
+    }
+    function _hideFloatBtn() {
+        const btn = document.getElementById('floatingSaveBtn');
+        if (btn) btn.style.display = 'none';
+        _setDirty(false);
+    }
+
+    function _setDirty(dirty) {
+        _isDirty = dirty;
+        const trigger = document.getElementById('floatSaveTrigger');
+        const ring    = document.getElementById('floatDirtyRing');
+        const label   = document.getElementById('floatSaveLabel');
+        if (!trigger) return;
+        if (dirty) {
+            trigger.classList.add('dirty');
+            trigger.classList.remove('saving');
+            if (ring)  ring.style.display  = 'block';
+            if (label) label.textContent    = 'Ada perubahan';
+        } else {
+            trigger.classList.remove('dirty');
+            if (ring)  ring.style.display  = 'none';
+            if (label) label.textContent    = 'Simpan';
+        }
+    }
+
+    function _attachDirtyListeners() {
+        const page = document.getElementById('pageMedis');
+        if (!page) return;
+        page.addEventListener('input', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
+                if (e.target.id !== 'floatSaveTrigger') {
+                    clearTimeout(_dirtyTimer);
+                    _dirtyTimer = setTimeout(() => _setDirty(true), 400);
+                }
+            }
+        }, true);
+        page.addEventListener('change', function(e) {
+            if (e.target && (e.target.type === 'checkbox' || e.target.tagName === 'SELECT')) {
+                clearTimeout(_dirtyTimer);
+                _dirtyTimer = setTimeout(() => _setDirty(true), 200);
+            }
+        }, true);
+    }
+
+    function _showFloatToast() {
+        const toast = document.getElementById('floatSaveToast');
+        if (!toast) return;
+        toast.style.transform = 'translateX(-50%) translateY(0px)';
+        setTimeout(() => {
+            toast.style.transform = 'translateX(-50%) translateY(-80px)';
+        }, 2200);
+    }
+
+    function _observePageMedis() {
+        const page = document.getElementById('pageMedis');
+        if (!page) { setTimeout(_observePageMedis, 150); return; }
+        const obs = new MutationObserver(() => {
+            const visible = page.style.display !== 'none' && page.classList.contains('active');
+            visible ? _showFloatBtn() : _hideFloatBtn();
+        });
+        obs.observe(page, { attributes: true, attributeFilter: ['style','class'] });
+        const visible = page.style.display !== 'none' && page.classList.contains('active');
+        if (visible) _showFloatBtn();
+        _attachDirtyListeners();
+    }
+
+    // Jalankan setelah DOM siap
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _observePageMedis);
+    } else {
+        _observePageMedis();
+    }
+
+    // Fallback: pantau body jika pageMedis belum ada
+    (function() {
+        const bodyObs = new MutationObserver(function(_, obs) {
+            if (document.getElementById('pageMedis')) {
+                obs.disconnect();
+                _observePageMedis();
+            }
+        });
+        bodyObs.observe(document.body || document.documentElement,
+            { childList: true, subtree: true });
+    })();
+
+    // Ctrl+S / Cmd+S
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            const page = document.getElementById('pageMedis');
+            if (page && page.classList.contains('active')) {
+                e.preventDefault();
+                window._floatSave();
+            }
+        }
+    });
+
+    window._floatSave = function() {
+        const trigger = document.getElementById('floatSaveTrigger');
+        const icon    = document.getElementById('floatSaveIcon');
+        const ring    = document.getElementById('floatDirtyRing');
+        const label   = document.getElementById('floatSaveLabel');
+
+        if (trigger) {
+            trigger.classList.remove('dirty');
+            trigger.classList.add('saving');
+            if (icon)  icon.textContent  = '⏳';
+            if (ring)  ring.style.display = 'none';
+            if (label) label.textContent  = 'Menyimpan...';
+        }
+
+        const done = () => {
+            if (trigger) {
+                trigger.classList.remove('saving');
+                if (icon) icon.textContent = '✅';
+            }
+            if (label) label.textContent = 'Tersimpan!';
+            _showFloatToast();
+            _setDirty(false);
+            clearTimeout(_floatSavedTimer);
+            _floatSavedTimer = setTimeout(() => {
+                if (icon)  icon.textContent  = '💾';
+                if (label) label.textContent  = 'Simpan';
+            }, 2500);
+        };
+
+        try {
+            if (typeof saveAll === 'function') {
+                const result = saveAll(false);
+                if (result && typeof result.then === 'function') {
+                    result.then(done).catch(done);
+                } else {
+                    setTimeout(done, 500);
+                }
+            } else {
+                setTimeout(done, 500);
+            }
+        } catch(e) { done(); }
+    };
+
+    // Reset dirty flag saat pasien berganti
+    window._floatResetDirty = function() { _setDirty(false); };
+})();
