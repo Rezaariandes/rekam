@@ -690,4 +690,19 @@ async function initApp() {
     }
 }
 
+// ════════════════════════════════════════════════════════
+//  UTILITAS HTML — escHtml
+//  Dipindahkan dari kunjungan.js (global) dan
+//  menggantikan wrapper _pm_escHtml di pemeriksaan-medis.js.
+//  Satu definisi di sini; kedua file cukup memanggil escHtml().
+// ════════════════════════════════════════════════════════
+function escHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 console.log('[app] ✅ Loaded — utils + app controller gabungan');

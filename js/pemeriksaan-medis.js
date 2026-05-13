@@ -75,13 +75,13 @@ const _PNJ_BUCKET = 'penunjang-foto';
 //  SHARED HELPERS
 // ══════════════════════════════════════════════════════
 
+// escHtml() is now defined in app.js (global). This alias keeps any
+// internal calls inside this file working even if load order changes.
 function _pm_escHtml(str) {
     if (typeof escHtml === 'function') return escHtml(str);
     return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /** Buat slug id dari prefix + nama */
@@ -1545,24 +1545,51 @@ function _refreshAllChipUI() {
 window._refreshChipUI = _refreshAllChipUI;
 
 // ══════════════════════════════════════════════════════
-//  HOOK — _renderSectionLabDinamic (dari kunjungan.js)
-//  Wrap agar semua section dinamis ikut dirender
+//  _renderSectionLabDinamic  (PINDAHAN dari kunjungan.js)
+//  Canonical definition — kunjungan.js tidak lagi mendefinisikan ini.
 // ══════════════════════════════════════════════════════
 
-(function _hookRenderSectionLabDinamic() {
-    function _tryHook() {
-        const _orig = window._renderSectionLabDinamic;
-        if (typeof _orig !== 'function') { setTimeout(_tryHook, 100); return; }
-        if (_orig._pemMedisHooked) return;
+function _renderSectionLabDinamic() {
+    const section = document.getElementById('sectionLab');
+    if (!section) return;
 
-        window._renderSectionLabDinamic = function() {
-            _orig.apply(this, arguments);
-            try { renderMedisDinamis(); } catch(e) {}
-        };
-        window._renderSectionLabDinamic._pemMedisHooked = true;
+    // ── Tangani section resep / terapi (tidak berubah) ──
+    if (window._stokAktif && typeof renderSectionResep === 'function') {
+        renderSectionResep(
+            (typeof currentKunjunganId !== 'undefined' ? currentKunjunganId : null) || null
+        );
+        const secResep  = document.getElementById('sectionResep');
+        const secManual = document.getElementById('sectionTerapiManual');
+        if (secResep)  secResep.style.display  = '';
+        if (secManual) secManual.style.display = 'none';
     }
-    _tryHook();
-})();
+
+    // Sembunyikan elemen HTML bawaan yang sudah tidak dipakai
+    const staticRow = section.querySelector('.row.g-2.mb-3');
+    if (staticRow) staticRow.style.display = 'none';
+    const labReqWrap = document.getElementById('sectionPermintaanLabRequest');
+    if (labReqWrap) labReqWrap.style.display = 'none';
+
+    const tarifLab = (window._tarifCache || []).filter(t => t.aktif && t.kategori === 'Laboratorium');
+    const labAktif = window._labAktif || {};
+    const hasLab   = tarifLab.length > 0 || Object.values(labAktif).some(Boolean);
+
+    if (!hasLab) {
+        section.style.display = 'none';
+        if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
+        return;
+    }
+    section.style.display = '';
+
+    // Render accordion lab
+    if (typeof _renderChipPermintaanLab === 'function') _renderChipPermintaanLab();
+
+    // Render section permintaan penunjang setelah lab
+    if (typeof renderSectionPermintaanLab === 'function') renderSectionPermintaanLab();
+
+    // Render semua section dinamis lain (pemx, tindakan, adm)
+    try { renderMedisDinamis(); } catch(e) {}
+}
 
 // ══════════════════════════════════════════════════════
 //  HOOK — _isiFormDariKunjungan (kunjungan.js)
@@ -1597,6 +1624,14 @@ window._refreshChipUI = _refreshAllChipUI;
                     // Restore surat sakit button
                     const ss = document.getElementById('suratSakit');
                     if (ss) { _onSuratSakitChange(); }
+
+                    // Setelah semua field terisi, jalankan kalkulasi klinis
+                    // (sebelumnya dipanggil langsung di kunjungan.js — sekarang di sini)
+                    try { calculateIMT();  } catch(e) {}
+                    try { checkTensi();    } catch(e) {}
+                    try { checkLabAlert(); } catch(e) {}
+                    // Terapkan lock UI
+                    if (typeof _applyLockUI === 'function') setTimeout(_applyLockUI, 50);
 
                     // BUG-FIX-1: Reset flag setelah semua data dari DB selesai dimuat
                     window._kunjunganLoadingFromDB = false;
@@ -1752,6 +1787,525 @@ window._refreshChipUI = _refreshAllChipUI;
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _try);
     else setTimeout(_try, 0);
+})();
+
+// ══════════════════════════════════════════════════════
+//  VALIDASI NILAI TANDA VITAL  (PINDAHAN dari kunjungan.js)
+//  Rentang absolut yang masih physiologically possible
+// ══════════════════════════════════════════════════════
+
+const VITAL_RULES = {
+    sistol:        { min: 50,   max: 300,  label: 'Sistol',              unit: 'mmHg' },
+    diastol:       { min: 30,   max: 200,  label: 'Diastol',             unit: 'mmHg' },
+    nadi:          { min: 20,   max: 300,  label: 'Nadi',                unit: 'x/mnt' },
+    suhu:          { min: 30,   max: 45,   label: 'Suhu',                unit: '°C' },
+    rr:            { min: 5,    max: 60,   label: 'Laju Napas',          unit: 'x/mnt' },
+    bb:            { min: 1,    max: 300,  label: 'Berat Badan',         unit: 'kg' },
+    tb:            { min: 30,   max: 250,  label: 'Tinggi Badan',        unit: 'cm' },
+    lab_gds:       { min: 20,   max: 800,  label: 'GDS',                 unit: 'mg/dL' },
+    lab_chol:      { min: 50,   max: 800,  label: 'Kolesterol',          unit: 'mg/dL' },
+    lab_ua:        { min: 1,    max: 20,   label: 'Asam Urat',           unit: 'mg/dL' },
+    lab_hb:        { min: 2,    max: 25,   label: 'HB',                  unit: 'g/dL' },
+    lab_trombosit: { min: 10,   max: 1500, label: 'Trombosit',           unit: 'ribu/µL' },
+    lab_leukosit:  { min: 0.5,  max: 100,  label: 'Leukosit',            unit: 'ribu/µL' },
+    lab_eritrosit: { min: 0.5,  max: 10,   label: 'Eritrosit',           unit: 'juta/µL' },
+    lab_hematokrit:{ min: 5,    max: 70,   label: 'Hematokrit',          unit: '%' },
+    lab_hiv:       { min: 0,    max: 10,   label: 'HIV (index)',          unit: '' },
+    lab_sifilis:   { min: 0,    max: 10,   label: 'Sifilis (index)',      unit: '' },
+    lab_hepatitis: { min: 0,    max: 10,   label: 'Hepatitis B (index)', unit: '' },
+    lab_hdl:       { min: 5,    max: 200,  label: 'HDL',                 unit: 'mg/dL' },
+    lab_ldl:       { min: 10,   max: 500,  label: 'LDL',                 unit: 'mg/dL' },
+    lab_tg:        { min: 10,   max: 2000, label: 'Trigliserida',        unit: 'mg/dL' },
+    lab_gdp:       { min: 20,   max: 800,  label: 'GDP',                 unit: 'mg/dL' },
+    lab_hba1c:     { min: 2,    max: 20,   label: 'HbA1c',               unit: '%' },
+    lab_sgot:      { min: 5,    max: 5000, label: 'SGOT',                unit: 'U/L' },
+    lab_sgpt:      { min: 5,    max: 5000, label: 'SGPT',                unit: 'U/L' },
+    lab_ureum:     { min: 5,    max: 500,  label: 'Ureum',               unit: 'mg/dL' },
+    lab_creatinin: { min: 0.1,  max: 50,   label: 'Creatinin',           unit: 'mg/dL' },
+};
+
+function validasiNilaiVital() {
+    const errors = [];
+    Object.entries(VITAL_RULES).forEach(([id, rule]) => {
+        const el = document.getElementById(id);
+        if (!el || el.value === '') return;
+        const val = parseFloat(el.value);
+        if (isNaN(val)) { errors.push(`${rule.label}: bukan angka valid`); return; }
+        if (val < rule.min || val > rule.max) {
+            errors.push(`${rule.label}: ${val} ${rule.unit} (rentang valid: ${rule.min}–${rule.max})`);
+        }
+    });
+    const sis = parseFloat(document.getElementById('sistol')?.value  || '');
+    const dia = parseFloat(document.getElementById('diastol')?.value || '');
+    if (!isNaN(sis) && !isNaN(dia) && sis <= dia) {
+        errors.push(`Tekanan darah tidak valid: Sistol (${sis}) harus lebih besar dari Diastol (${dia})`);
+    }
+    return errors;
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER LIST RIWAYAT (PINDAHAN dari kunjungan.js)
+//  Selalu dipanggil dengan containerId="historyListMedis"
+//  yang merupakan elemen milik page-medis.html.
+// ══════════════════════════════════════════════════════
+
+function renderRiwayatList(list, containerId) {
+    const c = document.getElementById(containerId);
+    if (!c) return;
+
+    if (list && list.length > 0) {
+        c.innerHTML = list.map((r, i) => {
+            const st        = r.id ? _getStatusKunjungan(r.id) : { obat: false, bayar: false };
+            const obatDone  = st.obat;
+            const bayarDone = st.bayar;
+
+            const jabatan = ((typeof loggedInUser !== 'undefined' && loggedInUser)
+                ? (loggedInUser.jabatan || '') : '').toLowerCase();
+            const canToggleObat  = ['apoteker','admin','dokter'].includes(jabatan);
+            const canToggleBayar = ['kasir','admin','dokter'].includes(jabatan);
+
+            const badgeObat = r.id ? `
+            <span id="badge_obat_${r.id}"
+                onclick="${canToggleObat ? `event.stopPropagation();toggleStatusKunjungan(event,'${r.id}','obat')` : 'event.stopPropagation()'}"
+                style="${_badgeStyleAttr('obat', obatDone)}${canToggleObat ? '' : 'cursor:default;'}">
+                ${_badgeHtml('obat', obatDone)}
+            </span>` : '';
+
+            const badgeBayar = r.id ? `
+            <span id="badge_bayar_${r.id}"
+                onclick="${canToggleBayar ? `event.stopPropagation();toggleStatusKunjungan(event,'${r.id}','bayar')` : 'event.stopPropagation()'}"
+                style="${_badgeStyleAttr('bayar', bayarDone)}${canToggleBayar ? '' : 'cursor:default;'}">
+                ${_badgeHtml('bayar', bayarDone)}
+            </span>` : '';
+
+            return `
+                <div class="riwayat-item" onclick="openModal(${i})" style="cursor:pointer; padding:10px 12px; border-bottom:1px solid var(--border);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                        <div style="font-size:12px; font-weight:700; color:var(--primary);">
+                            📅 ${formatTglIndo(r.tgl)} (${r.waktu || '00:00'})
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <div style="font-size:10px; color:var(--primary); font-weight:700;">Lihat Detail 👁️</div>
+                            ${(r.id && window._biayaAktif) ? `<button onclick="event.stopPropagation();_bukaInvoiceRiwayat(this)" data-kunjid="${escHtml(String(r.id))}" data-tgl="${escHtml(r.tgl||'')}" style="padding:2px 7px;background:rgba(22,163,74,0.1);color:#166534;border:1px solid rgba(22,163,74,0.25);border-radius:6px;font-size:9.5px;font-weight:700;cursor:pointer;">🧾 Invoice</button>` : ''}
+                            ${(r.id && window._stokAktif) ? `<button onclick="event.stopPropagation();_bukaResepRiwayat(this)" data-kunjid="${escHtml(String(r.id))}" data-tgl="${escHtml(r.tgl||'')}" data-nama="${escHtml(r.namaPasien||'')}" style="padding:2px 7px;background:rgba(37,99,235,0.1);color:#1e40af;border:1px solid rgba(37,99,235,0.25);border-radius:6px;font-size:9.5px;font-weight:700;cursor:pointer;">💊 Resep</button>` : ''}
+                        </div>
+                    </div>
+                    <div style="font-size:11px; margin-bottom:6px; color:var(--text-muted); background:var(--surface-2); padding:4px 8px; border-radius:8px;">
+                        <b>TTV:</b> TD ${r.td||'-'} | N ${r.nadi||'-'} | S ${r.suhu||'-'} | RR ${r.rr||'-'} | BB ${r.bb||'-'}
+                    </div>
+                    ${window._isParamedis ? '' : `<div class="riwayat-diag" style="margin-bottom:3px;">🩺 ${r.diag || 'Menunggu Diagnosa'}</div>`}
+                    <div class="riwayat-keluhan" style="color:var(--text); border-top:1px dashed var(--border); padding-top:4px; margin-bottom:3px;"><b>Keluhan:</b> ${r.keluhan || '-'}</div>
+                    <div class="riwayat-keluhan" style="color:var(--text);margin-bottom:6px;"><b>Terapi:</b> ${r.terapi || '-'}</div>
+                    ${r.dokterNama ? `<div style="font-size:10px;color:#059669;font-weight:600;padding-top:4px;border-top:1px dashed var(--border);">👨‍⚕️ Diperiksa oleh: ${r.dokterNama}</div>` : ''}
+                    <div style="display:flex;gap:5px;align-items:center;margin-top:7px;padding-top:5px;border-top:1px dashed var(--border);" onclick="event.stopPropagation()">
+                        ${badgeObat}
+                        ${badgeBayar}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        c.innerHTML = `<div class="empty-state"><div class="empty-icon">📂</div>Belum ada riwayat.</div>`;
+    }
+}
+
+// ══════════════════════════════════════════════════════
+//  EDIT LOCK  (PINDAHAN dari kunjungan.js)
+//  Kunjungan > 2 hari tidak bisa disimpan
+// ══════════════════════════════════════════════════════
+
+/**
+ * Kembalikan true jika kunjungan yang sedang dibuka sudah lewat 2 hari.
+ * Kunjungan BARU (currentKunjunganId null) selalu false (tidak terkunci).
+ */
+function _isKunjunganTerkunci() {
+    const kId = (typeof currentKunjunganId !== 'undefined') ? currentKunjunganId : null;
+    if (!kId || kId === 'null') return false;
+
+    let tglStr = null;
+    const kCache = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : [])
+        .find(x => x.id === kId);
+    if (kCache && kCache.tgl) {
+        tglStr = kCache.tgl;
+    } else {
+        const raw = localStorage.getItem('cTglEdit') || '';
+        const m   = raw.replace('Tgl: ', '').trim();
+        if (m && m.includes('/')) {
+            const p = m.split('/');
+            if (p.length === 3) tglStr = `${p[2]}-${p[1]}-${p[0]}`;
+        }
+    }
+
+    if (!tglStr) return false;
+    const tglKunjungan = new Date(tglStr);
+    if (isNaN(tglKunjungan)) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    tglKunjungan.setHours(0, 0, 0, 0);
+    return Math.floor((today - tglKunjungan) / 86400000) > 2;
+}
+
+/**
+ * Terapkan visual lock ke semua tombol simpan di pageMedis.
+ * Dipanggil dari bukaRekamMedisHariIni (kunjungan.js) via setTimeout,
+ * dan dari _hookIsiformDariKunjungan setelah form terisi.
+ */
+function _applyLockUI() {
+    const terkunci = _isKunjunganTerkunci();
+
+    const btnSave = document.getElementById('btnSave');
+    if (btnSave) {
+        btnSave.disabled = terkunci;
+        if (terkunci) {
+            btnSave.innerText     = '🔒 Rekam Medis Terkunci (> 2 Hari)';
+            btnSave.style.cssText = 'width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:800;background:#e2e8f0;color:#94a3b8;border:none;cursor:not-allowed;';
+        } else {
+            btnSave.innerText     = '✓ Simpan Rekam Medis';
+            btnSave.style.cssText = '';
+        }
+    }
+
+    document.querySelectorAll('._mini-save-btn').forEach(b => {
+        b.disabled          = terkunci;
+        b.style.opacity     = terkunci ? '0.38' : '';
+        b.style.cursor      = terkunci ? 'not-allowed' : '';
+        b.style.borderStyle = terkunci ? 'dashed' : '';
+    });
+
+    const LOCK_ID = 'pageMedisLockBanner';
+    let banner = document.getElementById(LOCK_ID);
+    if (terkunci) {
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = LOCK_ID;
+            banner.style.cssText = 'position:sticky;top:0;z-index:200;padding:9px 16px;background:rgba(239,68,68,0.1);border-bottom:1.5px solid rgba(239,68,68,0.3);color:#dc2626;font-size:12px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:8px;border-radius:0 0 10px 10px;';
+            banner.innerHTML = '🔒 Rekam medis ini sudah lebih dari 2 hari dan tidak dapat diubah.';
+            const page = document.getElementById('pageMedis');
+            if (page) page.insertBefore(banner, page.firstChild);
+        }
+    } else {
+        if (banner) banner.remove();
+    }
+}
+
+// ══════════════════════════════════════════════════════
+//  SIMPAN REKAM MEDIS — saveAll()  (PINDAHAN dari kunjungan.js)
+//  Dipanggil dari tombol "✓ Simpan Rekam Medis" di page-medis.html
+// ══════════════════════════════════════════════════════
+
+async function saveAll(showInvoice = true) {
+    const btn = document.getElementById('btnSave');
+    if (btn) { btn.disabled = true; btn.innerText = '⏳ Menyimpan...'; }
+
+    try {
+        if (_isKunjunganTerkunci()) {
+            showToast('🔒 Rekam medis ini sudah lebih dari 2 hari dan tidak dapat diubah.', 'warning');
+            return;
+        }
+
+        const _cPasienId    = (typeof currentPasienId    !== 'undefined') ? currentPasienId    : null;
+        const _cKunjunganId = (typeof currentKunjunganId !== 'undefined') ? currentKunjunganId : null;
+
+        if (!_cPasienId || _cPasienId === 'null') {
+            showToast('⚠️ Data pasien tidak ditemukan. Daftar ulang dari halaman Daftar.', 'warning');
+            return;
+        }
+
+        const vitalErrors = validasiNilaiVital();
+        if (vitalErrors && vitalErrors.length > 0) {
+            showToast('⚠️ ' + vitalErrors[0], 'warning');
+            return;
+        }
+
+        const today      = new Date();
+        const tzOffset   = today.getTimezoneOffset() * 60000;
+        const _todayDate = (new Date(today.getTime() - tzOffset)).toISOString().slice(0, 10);
+        const _todayTime = String(today.getHours()).padStart(2,'0') + ':' + String(today.getMinutes()).padStart(2,'0');
+
+        let localDate = _todayDate;
+        let localTime = _todayTime;
+        if (_cKunjunganId) {
+            const _kCache = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : [])
+                .find(x => x.id === _cKunjunganId);
+            if (_kCache && _kCache.tgl) {
+                localDate = _kCache.tgl;
+                if (_kCache.waktu) localTime = _kCache.waktu;
+            } else {
+                const _cTgl      = localStorage.getItem('cTglEdit') || '';
+                const _tglMatch  = _cTgl.replace('Tgl: ', '').trim();
+                if (_tglMatch && _tglMatch.includes('/')) {
+                    const _p = _tglMatch.split('/');
+                    if (_p.length === 3) localDate = `${_p[2]}-${_p[1]}-${_p[0]}`;
+                }
+            }
+        }
+
+        const _$ = id => document.getElementById(id);
+        const sistol  = _$('sistol')  ? _$('sistol').value.trim()  : '';
+        const diastol = _$('diastol') ? _$('diastol').value.trim() : '';
+        const td      = (sistol && diastol) ? `${sistol}/${diastol}` : (sistol || diastol || '');
+
+        const diag1 = _$('diagnosa')  ? _$('diagnosa').value.trim()  : '';
+        const diag2 = _$('diagnosa2') ? _$('diagnosa2').value.trim() : '';
+
+        const userId = (typeof loggedInUser !== 'undefined' && loggedInUser) ? loggedInUser.id : null;
+
+        const _namaDariForm = _$('nama') ? _$('nama').value.trim() : '';
+        const namaPasien    = _namaDariForm || localStorage.getItem('cP_nama') || '';
+
+        const payload = {
+            pasienId:         _cPasienId,
+            kunjunganId:      _cKunjunganId,
+            localDate, localTime, userId,
+            nama:             namaPasien,
+            nik:              _$('nik')       ? _$('nik').value.trim()       : '',
+            tgl_lahir:        _$('tgl_lahir') ? _$('tgl_lahir').value.trim() : '',
+            jk:               _$('jk')        ? _$('jk').value               : 'L',
+            alamat:           _$('alamat')    ? _$('alamat').value.trim()    : '',
+            alergi:           _$('alergi')    ? _$('alergi').value.trim()    : '',
+            td,
+            nadi:             _$('nadi') ? _$('nadi').value : '',
+            suhu:             _$('suhu') ? _$('suhu').value : '',
+            rr:               _$('rr')   ? _$('rr').value   : '',
+            bb:               _$('bb')   ? _$('bb').value   : '',
+            tb:               _$('tb')   ? _$('tb').value   : '',
+            keluhan:          _$('keluhan') ? _$('keluhan').value : '',
+            fisik:            _$('fisik')   ? _$('fisik').value   : '',
+            diagnosa:         diag1,
+            diagnosa2:        diag2,
+            terapi:           _$('terapi')  ? _$('terapi').value  : '',
+            req_lab:          (typeof getReqLabPayload === 'function') ? getReqLabPayload() : null,
+            riwayat_penyakit: _$('riwayat_penyakit') ? (_$('riwayat_penyakit').value || null) : null
+        };
+
+        const result = await sb_saveKunjungan(payload);
+
+        if (result && result.kunjunganId) {
+            currentKunjunganId = result.kunjunganId;
+            localStorage.setItem('cK_id', currentKunjunganId);
+        }
+
+        if (window._stokAktif && currentKunjunganId && typeof _getResepItems === 'function') {
+            try {
+                const resepItems = _getResepItems();
+                if (resepItems && resepItems.length > 0) {
+                    await sb_saveResep(currentKunjunganId, resepItems);
+                }
+            } catch(e) { console.warn('[Klikpro] Resep gagal disimpan:', e.message); }
+        }
+
+        if (typeof kunjunganHariIni !== 'undefined' && currentKunjunganId) {
+            const isSelesai = !!(diag1 && payload.terapi);
+            const kIdx = kunjunganHariIni.findIndex(x => x.id === currentKunjunganId);
+            if (kIdx !== -1) {
+                kunjunganHariIni[kIdx].status  = isSelesai ? 'Selesai' : 'Menunggu';
+                kunjunganHariIni[kIdx].td      = td;
+                kunjunganHariIni[kIdx].suhu    = payload.suhu;
+                kunjunganHariIni[kIdx].nadi    = payload.nadi;
+                kunjunganHariIni[kIdx].keluhan = payload.keluhan;
+                kunjunganHariIni[kIdx].diag    = diag1;
+            }
+        }
+
+        showToast('✅ Rekam medis berhasil disimpan!', 'success');
+
+        if (showInvoice && window._biayaAktif && currentKunjunganId && diag1) {
+            try {
+                const namaPasienDisplay = _$('infoPasienNama') ? _$('infoPasienNama').innerText : namaPasien;
+                if (typeof openModalTagihan === 'function') {
+                    let kunjunganDataFresh = null;
+                    try {
+                        kunjunganDataFresh = await sb_getKunjunganById(currentKunjunganId);
+                    } catch(e) { console.warn('[Klikpro] Gagal ambil kunjungan fresh:', e.message); }
+                    openModalTagihan(
+                        currentKunjunganId, _cPasienId,
+                        namaPasienDisplay, localDate,
+                        kunjunganDataFresh || payload
+                    );
+                }
+            } catch(e) { console.warn('[Klikpro] Modal invoice gagal:', e.message); }
+        }
+
+        // Refresh riwayat pasien di pageMedis
+        try {
+            if (currentPasienId) {
+                const riwayatRows = await _sbFetch(
+                    `kunjungan?pasien_id=eq.${currentPasienId}&order=tgl.desc,waktu.desc&select=*`
+                );
+                if (!window._usersCache || window._usersCache.length === 0) {
+                    const users = await _sbFetch('users?select=id,nama,jabatan&order=nama.asc');
+                    window._usersCache = users || [];
+                }
+                currentRiwayat = riwayatRows.map(r => {
+                    const dokterUser = r.user_id
+                        ? (window._usersCache || []).find(u => u.id === r.user_id && u.jabatan?.toLowerCase() === 'dokter')
+                        : null;
+                    return {
+                        id: r.id, tgl: r.tgl, waktu: r.waktu,
+                        td: r.td, nadi: r.nadi, suhu: r.suhu, rr: r.rr, bb: r.bb, tb: r.tb,
+                        keluhan: r.keluhan, fisik: r.fisik, req_lab: r.req_lab,
+                        diag: r.diagnosa, diagnosa2: r.diagnosa2, terapi: r.terapi,
+                        status: r.status, user_id: r.user_id,
+                        status_obat: !!r.status_obat, status_bayar: !!r.status_bayar,
+                        dokterNama: dokterUser ? dokterUser.nama : ''
+                    };
+                });
+                localStorage.setItem('cP_riwayat', JSON.stringify(currentRiwayat));
+                renderRiwayatList(currentRiwayat, 'historyListMedis');
+            }
+        } catch(e) { console.warn('[Klikpro] Gagal refresh riwayat:', e.message); }
+
+    } catch (e) {
+        console.error('[Klikpro] saveAll error:', e);
+        showToast('❌ Gagal menyimpan: ' + (e.message || 'Cek koneksi internet'), 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = '✓ Simpan Rekam Medis'; }
+    }
+}
+
+// ══════════════════════════════════════════════════════
+//  FLOATING SAVE BUTTON  (PINDAHAN dari kunjungan.js)
+//  Seluruh DOM yang dioperasikan milik page-medis.html:
+//  floatingSaveBtn, floatSaveTrigger, floatDirtyRing, floatSaveLabel
+// ══════════════════════════════════════════════════════
+
+(function _floatingSaveModule() {
+    let _floatSavedTimer = null;
+    let _dirtyTimer      = null;
+    let _isDirty         = false;
+
+    function _showFloatBtn() {
+        const btn = document.getElementById('floatingSaveBtn');
+        if (btn) btn.style.display = 'flex';
+    }
+    function _hideFloatBtn() {
+        const btn = document.getElementById('floatingSaveBtn');
+        if (btn) btn.style.display = 'none';
+        _setDirty(false);
+    }
+
+    function _setDirty(dirty) {
+        _isDirty = dirty;
+        const trigger = document.getElementById('floatSaveTrigger');
+        const ring    = document.getElementById('floatDirtyRing');
+        const label   = document.getElementById('floatSaveLabel');
+        if (!trigger) return;
+        if (dirty) {
+            trigger.classList.add('dirty');
+            trigger.classList.remove('saving');
+            if (ring)  ring.style.display = 'block';
+            if (label) label.textContent  = 'Ada perubahan';
+        } else {
+            trigger.classList.remove('dirty');
+            if (ring)  ring.style.display = 'none';
+            if (label) label.textContent  = 'Simpan';
+        }
+    }
+
+    function _attachDirtyListeners() {
+        const page = document.getElementById('pageMedis');
+        if (!page) return;
+        page.addEventListener('input', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
+                if (e.target.id !== 'floatSaveTrigger') {
+                    clearTimeout(_dirtyTimer);
+                    _dirtyTimer = setTimeout(() => _setDirty(true), 400);
+                }
+            }
+        }, true);
+        page.addEventListener('change', function(e) {
+            if (e.target && (e.target.type === 'checkbox' || e.target.tagName === 'SELECT')) {
+                clearTimeout(_dirtyTimer);
+                _dirtyTimer = setTimeout(() => _setDirty(true), 200);
+            }
+        }, true);
+    }
+
+    function _showFloatToast() {
+        const toast = document.getElementById('floatSaveToast');
+        if (!toast) return;
+        toast.style.transform = 'translateX(-50%) translateY(0px)';
+        setTimeout(() => { toast.style.transform = 'translateX(-50%) translateY(-80px)'; }, 2200);
+    }
+
+    function _observePageMedis() {
+        const page = document.getElementById('pageMedis');
+        if (!page) { setTimeout(_observePageMedis, 150); return; }
+        const obs = new MutationObserver(() => {
+            const visible = page.style.display !== 'none' && page.classList.contains('active');
+            visible ? _showFloatBtn() : _hideFloatBtn();
+        });
+        obs.observe(page, { attributes: true, attributeFilter: ['style','class'] });
+        if (page.style.display !== 'none' && page.classList.contains('active')) _showFloatBtn();
+        _attachDirtyListeners();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _observePageMedis);
+    } else {
+        _observePageMedis();
+    }
+
+    // Fallback: pantau body jika pageMedis belum ada saat IIFE berjalan
+    (function() {
+        const bodyObs = new MutationObserver(function(_, obs) {
+            if (document.getElementById('pageMedis')) {
+                obs.disconnect();
+                _observePageMedis();
+            }
+        });
+        bodyObs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    })();
+
+    // Ctrl+S / Cmd+S shortcut
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            const page = document.getElementById('pageMedis');
+            if (page && page.classList.contains('active')) {
+                e.preventDefault();
+                window._floatSave();
+            }
+        }
+    });
+
+    window._floatSave = function() {
+        const trigger = document.getElementById('floatSaveTrigger');
+        const icon    = document.getElementById('floatSaveIcon');
+        const ring    = document.getElementById('floatDirtyRing');
+        const label   = document.getElementById('floatSaveLabel');
+
+        if (trigger) {
+            trigger.classList.remove('dirty');
+            trigger.classList.add('saving');
+            if (icon)  icon.textContent  = '⏳';
+            if (ring)  ring.style.display = 'none';
+            if (label) label.textContent  = 'Menyimpan...';
+        }
+
+        const done = () => {
+            if (trigger) { trigger.classList.remove('saving'); if (icon) icon.textContent = '✅'; }
+            if (label) label.textContent = 'Tersimpan!';
+            _showFloatToast();
+            _setDirty(false);
+            clearTimeout(_floatSavedTimer);
+            _floatSavedTimer = setTimeout(() => {
+                if (icon)  icon.textContent  = '💾';
+                if (label) label.textContent = 'Simpan';
+            }, 2500);
+        };
+
+        try {
+            const result = saveAll(false);
+            if (result && typeof result.then === 'function') {
+                result.then(done).catch(done);
+            } else {
+                setTimeout(done, 500);
+            }
+        } catch(e) { done(); }
+    };
+
+    window._floatResetDirty = function() { _setDirty(false); };
 })();
 
 console.log('[pemeriksaan-medis] ✅ Loaded — konsolidasi penunjang, tindakan, dokumen, pemx, lab chip');
