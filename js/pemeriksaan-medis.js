@@ -1387,7 +1387,7 @@ function renderMedisDinamis() {
 function getReqLabPayload() {
     const payload = {};
 
-    // Penunjang: chip aktif + hasil
+    // Penunjang: chip aktif + hasil teks
     Object.entries(window._reqLab || {}).forEach(([k, v]) => {
         if (!v) return;
         payload[k] = true;
@@ -1405,6 +1405,18 @@ function getReqLabPayload() {
         if (window._reqLab[chipId]) {
             payload['_labname_' + chipId] = t.nama;
         }
+    });
+
+    // ── PENTING: Kumpulkan nilai angka/teks hasil lab dari DOM input ──
+    // Field lab (lab_gds, lab_chol, dst.) dirender oleh _renderLabInput() dengan
+    // id sesuai _LAB_NAMA_TO_FIELD. Nilai ini HARUS ikut masuk ke req_lab JSON
+    // karena kolom lab_* TIDAK ADA di tabel kunjungan — semua data lab disimpan
+    // di kolom req_lab (JSON).
+    Object.entries(_LAB_NAMA_TO_FIELD).forEach(([_, fieldId]) => {
+        const el = document.getElementById(fieldId);
+        if (!el) return;
+        const val = (el.value || '').trim();
+        if (val && val !== '—') payload[fieldId] = val;
     });
 
     // Tindakan: chip aktif + nama asli
@@ -1473,6 +1485,14 @@ function loadReqLabFromKunjungan(reqLabJson) {
         if (k.startsWith('adm_')  && v) window._reqAdminExtra[k] = true;
         // Lab accordion items (chip aktif)
         if (k.startsWith('lab_req_'))   window._reqLab[k] = true;
+        // ── Nilai angka/teks hasil lab (lab_gds, lab_chol, dst.) ──
+        // Disimpan langsung di req_lab JSON (bukan kolom DB terpisah).
+        // Restore ke DOM setelah _refreshAllChipUI() merender field-nya.
+        if (_LAB_NAMA_TO_FIELD && Object.values(_LAB_NAMA_TO_FIELD).includes(k)) {
+            // Tandai untuk restore ke DOM setelah render
+            window._pendingLabValues = window._pendingLabValues || {};
+            window._pendingLabValues[k] = v;
+        }
     });
 
     _refreshAllChipUI();
@@ -1490,6 +1510,32 @@ function _refreshAllChipUI() {
         if (el) el.checked = !!v;
         if (btnEl) btnEl.style.display = v ? 'inline-flex' : 'none';
     });
+
+    // ── Restore nilai angka/teks hasil lab ke DOM field ──
+    // _pendingLabValues diisi oleh loadReqLabFromKunjungan() saat parsing req_lab.
+    // Chip lab (lab_req_*) harus aktif terlebih dahulu agar field DOM-nya dirender
+    // oleh _renderLabInput() — baru kita bisa set value-nya.
+    if (window._pendingLabValues && Object.keys(window._pendingLabValues).length > 0) {
+        // Aktifkan chip untuk setiap field yang punya nilai tersimpan
+        Object.entries(window._pendingLabValues).forEach(([fieldId, val]) => {
+            // Cari nama tarif dari fieldId via _LAB_NAMA_TO_FIELD (reverse lookup)
+            const nama = Object.entries(_LAB_NAMA_TO_FIELD).find(([n, f]) => f === fieldId)?.[0];
+            if (!nama) return;
+            const chipId = _pm_slug('lab_req', nama);
+            // Aktifkan chip jika belum aktif
+            if (!window._reqLab[chipId]) {
+                window._reqLab[chipId] = true;
+                _renderLabInput(chipId, nama);
+            }
+            // Set nilai ke DOM
+            const el = document.getElementById(fieldId);
+            if (el) {
+                el.value = val;
+                localStorage.setItem('rme_' + fieldId, String(val));
+            }
+        });
+        window._pendingLabValues = {};
+    }
 
     // Pemx chip warna sudah dihandle oleh _renderSectionPemeriksaanExtra (re-render input aktif)
     // Nilai textarea akan di-restore saat _renderPemxInput dipanggil
