@@ -226,7 +226,6 @@ async function sb_initData(filterDate) {
             id: k.id, pasienId: k.pasien_id,
             nama: p.nama || '', waktu: k.waktu, tgl: k.tgl,
             td: k.td, suhu: k.suhu, nadi: k.nadi, keluhan: k.keluhan,
-            lab_gds: k.lab_gds, lab_chol: k.lab_chol, lab_ua: k.lab_ua,
             diag: k.diagnosa, status: k.status || 'Menunggu',
             user_id: k.user_id || null,
             req_lab: k.req_lab || null,
@@ -348,26 +347,11 @@ async function sb_checkAndUpsertPasien(payload) {
         dokterNama: _resolveDokterNama(r.user_id),
         td: r.td, nadi: r.nadi, suhu: r.suhu, rr: r.rr,
         bb: r.bb, tb: r.tb,
-        // Lab dasar
-        lab_gds: r.lab_gds, lab_chol: r.lab_chol, lab_ua: r.lab_ua,
-        // Darah rutin
-        lab_hb: r.lab_hb, lab_trombosit: r.lab_trombosit,
-        lab_leukosit: r.lab_leukosit, lab_eritrosit: r.lab_eritrosit,
-        lab_hematokrit: r.lab_hematokrit,
-        // Triple eliminasi
-        lab_hiv: r.lab_hiv, lab_sifilis: r.lab_sifilis, lab_hepatitis: r.lab_hepatitis,
-        // Profil lemak
-        lab_hdl: r.lab_hdl, lab_ldl: r.lab_ldl, lab_tg: r.lab_tg,
-        // Gula darah
-        lab_gdp: r.lab_gdp, lab_hba1c: r.lab_hba1c,
-        // Fungsi hati
-        lab_sgot: r.lab_sgot, lab_sgpt: r.lab_sgpt,
-        // Fungsi ginjal
-        lab_ureum: r.lab_ureum, lab_creatinin: r.lab_creatinin,
         keluhan: r.keluhan, fisik: r.fisik,
         diag: r.diagnosa, diagnosa: r.diagnosa, diagnosa2: r.diagnosa2,
         terapi: r.terapi, surat_sakit: r.surat_sakit,
         req_lab: r.req_lab || null,
+        riwayat_penyakit: r.riwayat_penyakit || null,
         status: r.status
     });
 
@@ -423,22 +407,6 @@ async function sb_getKunjunganById(kunjunganId) {
         dokterNama: _resolveDokterNama(r.user_id),
         td: r.td, nadi: r.nadi, suhu: r.suhu, rr: r.rr,
         bb: r.bb, tb: r.tb,
-        // Lab dasar
-        lab_gds: r.lab_gds, lab_chol: r.lab_chol, lab_ua: r.lab_ua,
-        // Darah rutin
-        lab_hb: r.lab_hb, lab_trombosit: r.lab_trombosit,
-        lab_leukosit: r.lab_leukosit, lab_eritrosit: r.lab_eritrosit,
-        lab_hematokrit: r.lab_hematokrit,
-        // Triple eliminasi
-        lab_hiv: r.lab_hiv, lab_sifilis: r.lab_sifilis, lab_hepatitis: r.lab_hepatitis,
-        // Profil lemak
-        lab_hdl: r.lab_hdl, lab_ldl: r.lab_ldl, lab_tg: r.lab_tg,
-        // Gula darah
-        lab_gdp: r.lab_gdp, lab_hba1c: r.lab_hba1c,
-        // Fungsi hati
-        lab_sgot: r.lab_sgot, lab_sgpt: r.lab_sgpt,
-        // Fungsi ginjal
-        lab_ureum: r.lab_ureum, lab_creatinin: r.lab_creatinin,
         keluhan: r.keluhan, fisik: r.fisik,
         diag: r.diagnosa, diagnosa2: r.diagnosa2,
         terapi: r.terapi, surat_sakit: r.surat_sakit,
@@ -454,16 +422,14 @@ async function sb_saveKunjungan(payload) {
         userId,
         nama, nik, tgl_lahir, jk, alamat,
         td, nadi, rr, suhu, bb, tb,
-        lab_gds, lab_chol, lab_ua,
-        lab_hb, lab_trombosit, lab_leukosit, lab_eritrosit, lab_hematokrit,
-        lab_hiv, lab_sifilis, lab_hepatitis,
-        lab_hdl, lab_ldl, lab_tg,
-        lab_gdp, lab_hba1c,
-        lab_sgot, lab_sgpt,
-        lab_ureum, lab_creatinin,
         keluhan, fisik, diagnosa, diagnosa2, terapi, suratSakit,
         alergi, req_lab, riwayat_penyakit
     } = payload;
+    // Catatan: field lab_* individual (lab_gds, lab_chol, dst.) TIDAK lagi
+    // disimpan sebagai kolom terpisah di tabel kunjungan. Semua hasil lab
+    // dikemas ke dalam kolom req_lab (JSON) oleh getReqLabPayload() di
+    // pemeriksaan-medis.js. Ini menghindari error schema-cache Supabase
+    // dan konsisten dengan arsitektur dinamis lab.
 
     // BUG E FIX: Guard — jangan PATCH pasien jika pasienId tidak valid
     // BUG EXTRA: Jangan PATCH jika nama kosong — mencegah korupsi data pasien
@@ -513,38 +479,14 @@ async function sb_saveKunjungan(payload) {
         ..._insertFields,
         user_id: userId || null,
         td: td || null,
-        nadi:     _num(nadi),
-        rr:       _num(rr),
-        suhu:     _num(suhu),
-        bb:       _num(bb),
-        tb:       _num(tb),
-        // Lab dasar
-        lab_gds:  _num(lab_gds),
-        lab_chol: _num(lab_chol),
-        lab_ua:   _num(lab_ua),
-        // Darah rutin
-        lab_hb:          _num(lab_hb),
-        lab_trombosit:   _num(lab_trombosit),
-        lab_leukosit:    _num(lab_leukosit),
-        lab_eritrosit:   _num(lab_eritrosit),
-        lab_hematokrit:  _num(lab_hematokrit),
-        // Triple eliminasi (TEXT — non-reaktif/reaktif)
-        lab_hiv:      lab_hiv      || null,
-        lab_sifilis:  lab_sifilis  || null,
-        lab_hepatitis:lab_hepatitis|| null,
-        // Profil lemak
-        lab_hdl: _num(lab_hdl),
-        lab_ldl: _num(lab_ldl),
-        lab_tg:  _num(lab_tg),
-        // Gula darah
-        lab_gdp:   _num(lab_gdp),
-        lab_hba1c: _num(lab_hba1c),
-        // Fungsi hati
-        lab_sgot: _num(lab_sgot),
-        lab_sgpt: _num(lab_sgpt),
-        // Fungsi ginjal
-        lab_ureum:    _num(lab_ureum),
-        lab_creatinin:_num(lab_creatinin),
+        nadi:  _num(nadi),
+        rr:    _num(rr),
+        suhu:  _num(suhu),
+        bb:    _num(bb),
+        tb:    _num(tb),
+        // ── Lab: disimpan sepenuhnya dalam req_lab (JSON) ──
+        // Field lab_* individual sudah dihapus dari kolom tabel kunjungan.
+        // Semua hasil lab dikemas oleh getReqLabPayload() di pemeriksaan-medis.js.
         keluhan: keluhan || null,
         fisik:   fisik   || null,
         diagnosa:  diagnosa  || null,
@@ -990,34 +932,51 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
         if (t) addItem('Konsultasi / Visite Dokter', 'Pemeriksaan', t.harga);
     }
 
-    // 3. Tarif lab per item
+    // 3. Tarif lab per item — baca dari req_lab JSON (bukan kolom lab_* terpisah)
+    // Semua hasil lab dikemas dalam req_lab oleh getReqLabPayload() di pemeriksaan-medis.js.
+    // Format req_lab: { "lab_hasil_gds": "120", "lab_hasil_kolesterol": "200", ... }
+    // atau key hasil dinamis sesuai slug yang dibuat _pm_slug().
+    // Mapping: nama tarif → key yang mungkin ada di req_lab
     const labFields = [
-        { key: 'lab_gds',       nama: 'GDS' },
-        { key: 'lab_chol',      nama: 'Kolesterol' },
-        { key: 'lab_ua',        nama: 'Asam Urat' },
-        { key: 'lab_hb',        nama: 'Hemoglobin (HB)' },
-        { key: 'lab_trombosit', nama: 'Trombosit' },
-        { key: 'lab_leukosit',  nama: 'Leukosit' },
-        { key: 'lab_eritrosit', nama: 'Eritrosit' },
-        { key: 'lab_hematokrit',nama: 'Hematokrit' },
-        { key: 'lab_hiv',       nama: 'HIV' },
-        { key: 'lab_sifilis',   nama: 'Sifilis' },
-        { key: 'lab_hepatitis', nama: 'Hepatitis B' },
-        { key: 'lab_hdl',       nama: 'HDL' },
-        { key: 'lab_ldl',       nama: 'LDL' },
-        { key: 'lab_tg',        nama: 'Trigliserida' },
-        { key: 'lab_gdp',       nama: 'GDP' },
-        { key: 'lab_hba1c',     nama: 'HbA1c' },
-        { key: 'lab_sgot',      nama: 'SGOT' },
-        { key: 'lab_sgpt',      nama: 'SGPT' },
-        { key: 'lab_ureum',     nama: 'Ureum' },
-        { key: 'lab_creatinin', nama: 'Creatinin' }
+        { key: 'lab_gds',       slugs: ['lab_hasil_gds', 'lab_gds'],               nama: 'GDS' },
+        { key: 'lab_chol',      slugs: ['lab_hasil_kolesterol', 'lab_chol'],        nama: 'Kolesterol' },
+        { key: 'lab_ua',        slugs: ['lab_hasil_asam_urat', 'lab_ua'],           nama: 'Asam Urat' },
+        { key: 'lab_hb',        slugs: ['lab_hasil_hemoglobin_hb_', 'lab_hb'],      nama: 'Hemoglobin (HB)' },
+        { key: 'lab_trombosit', slugs: ['lab_hasil_trombosit', 'lab_trombosit'],    nama: 'Trombosit' },
+        { key: 'lab_leukosit',  slugs: ['lab_hasil_leukosit', 'lab_leukosit'],      nama: 'Leukosit' },
+        { key: 'lab_eritrosit', slugs: ['lab_hasil_eritrosit', 'lab_eritrosit'],    nama: 'Eritrosit' },
+        { key: 'lab_hematokrit',slugs: ['lab_hasil_hematokrit', 'lab_hematokrit'],  nama: 'Hematokrit' },
+        { key: 'lab_hiv',       slugs: ['lab_hasil_hiv', 'lab_hiv'],                nama: 'HIV' },
+        { key: 'lab_sifilis',   slugs: ['lab_hasil_sifilis', 'lab_sifilis'],        nama: 'Sifilis' },
+        { key: 'lab_hepatitis', slugs: ['lab_hasil_hepatitis_b', 'lab_hepatitis'],  nama: 'Hepatitis B' },
+        { key: 'lab_hdl',       slugs: ['lab_hasil_hdl', 'lab_hdl'],                nama: 'HDL' },
+        { key: 'lab_ldl',       slugs: ['lab_hasil_ldl', 'lab_ldl'],                nama: 'LDL' },
+        { key: 'lab_tg',        slugs: ['lab_hasil_trigliserida', 'lab_tg'],        nama: 'Trigliserida' },
+        { key: 'lab_gdp',       slugs: ['lab_hasil_gdp', 'lab_gdp'],                nama: 'GDP' },
+        { key: 'lab_hba1c',     slugs: ['lab_hasil_hba1c', 'lab_hba1c'],            nama: 'HbA1c' },
+        { key: 'lab_sgot',      slugs: ['lab_hasil_sgot', 'lab_sgot'],              nama: 'SGOT' },
+        { key: 'lab_sgpt',      slugs: ['lab_hasil_sgpt', 'lab_sgpt'],              nama: 'SGPT' },
+        { key: 'lab_ureum',     slugs: ['lab_hasil_ureum', 'lab_ureum'],            nama: 'Ureum' },
+        { key: 'lab_creatinin', slugs: ['lab_hasil_creatinin', 'lab_creatinin'],    nama: 'Creatinin' }
     ];
-    labFields.forEach(f => {
-        if (kunjunganData[f.key] && kunjunganData[f.key] !== '—') {
-            const t = tarifAktif.find(x => x.kategori === 'Laboratorium' && x.nama === f.nama);
-            if (t) addItem('Lab: ' + f.nama, 'Laboratorium', t.harga);
+
+    // Parse req_lab sekali saja
+    let reqLabObj = {};
+    try {
+        if (kunjunganData.req_lab) {
+            reqLabObj = typeof kunjunganData.req_lab === 'string'
+                ? JSON.parse(kunjunganData.req_lab)
+                : kunjunganData.req_lab;
         }
+    } catch(e) { reqLabObj = {}; }
+
+    labFields.forEach(f => {
+        // Cek: ada nilai di req_lab (lewat salah satu slug) atau di kunjunganData langsung (legacy)
+        const hasInReqLab = f.slugs.some(s => reqLabObj[s] && reqLabObj[s] !== '—' && String(reqLabObj[s]).trim() !== '');
+        const hasLegacy   = kunjunganData[f.key] && kunjunganData[f.key] !== '—';
+        if (!hasInReqLab && !hasLegacy) return;
+        const t = tarifAktif.find(x => x.kategori === 'Laboratorium' && x.nama === f.nama);
+        if (t) addItem('Lab: ' + f.nama, 'Laboratorium', t.harga);
     });
 
     // 4. ── PEMERIKSAAN PENUNJANG ──
