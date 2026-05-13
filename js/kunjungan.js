@@ -24,10 +24,28 @@ const VITAL_RULES = {
     rr:            { min: 5,    max: 60,   label: 'Laju Napas',    unit: 'x/mnt' },
     bb:            { min: 1,    max: 300,  label: 'Berat Badan',   unit: 'kg' },
     tb:            { min: 30,   max: 250,  label: 'Tinggi Badan',  unit: 'cm' },
-    // Catatan: field lab_* sudah dihapus dari VITAL_RULES karena hasil lab
-    // tidak lagi disimpan di kolom terpisah tabel kunjungan — melainkan
-    // dikemas dalam req_lab (JSON) oleh pemeriksaan-medis.js.
-    // Validasi rentang lab dilakukan di checkLabAlert() (pemeriksaan-medis.js).
+    // Lab dasar
+    lab_gds:       { min: 20,   max: 800,  label: 'GDS',           unit: 'mg/dL' },
+    lab_chol:      { min: 50,   max: 800,  label: 'Kolesterol',    unit: 'mg/dL' },
+    lab_ua:        { min: 1,    max: 20,   label: 'Asam Urat',     unit: 'mg/dL' },
+    // BUG-10 FIX: tambahkan rentang fisiologis untuk semua lab field yang ada di form
+    lab_hb:        { min: 2,    max: 25,   label: 'HB',            unit: 'g/dL' },
+    lab_trombosit: { min: 10,   max: 1500, label: 'Trombosit',     unit: 'ribu/µL' },
+    lab_leukosit:  { min: 0.5,  max: 100,  label: 'Leukosit',      unit: 'ribu/µL' },
+    lab_eritrosit: { min: 0.5,  max: 10,   label: 'Eritrosit',     unit: 'juta/µL' },
+    lab_hematokrit:{ min: 5,    max: 70,   label: 'Hematokrit',    unit: '%' },
+    lab_hiv:       { min: 0,    max: 10,   label: 'HIV (index)',   unit: '' },
+    lab_sifilis:   { min: 0,    max: 10,   label: 'Sifilis (index)',unit: '' },
+    lab_hepatitis: { min: 0,    max: 10,   label: 'Hepatitis B (index)', unit: '' },
+    lab_hdl:       { min: 5,    max: 200,  label: 'HDL',           unit: 'mg/dL' },
+    lab_ldl:       { min: 10,   max: 500,  label: 'LDL',           unit: 'mg/dL' },
+    lab_tg:        { min: 10,   max: 2000, label: 'Trigliserida',  unit: 'mg/dL' },
+    lab_gdp:       { min: 20,   max: 800,  label: 'GDP',           unit: 'mg/dL' },
+    lab_hba1c:     { min: 2,    max: 20,   label: 'HbA1c',         unit: '%' },
+    lab_sgot:      { min: 5,    max: 5000, label: 'SGOT',          unit: 'U/L' },
+    lab_sgpt:      { min: 5,    max: 5000, label: 'SGPT',          unit: 'U/L' },
+    lab_ureum:     { min: 5,    max: 500,  label: 'Ureum',         unit: 'mg/dL' },
+    lab_creatinin: { min: 0.1,  max: 50,   label: 'Creatinin',     unit: 'mg/dL' },
 };
 
 function validasiNilaiVital() {
@@ -1240,10 +1258,10 @@ function _applyLockUI() {
     if (btnSave) {
         btnSave.disabled = terkunci;
         if (terkunci) {
-            btnSave.innerText = '🔒 Rekam Medis Terkunci (> 2 Hari)';
+            btnSave.innerHTML = '🔒 Rekam Medis Terkunci (> 2 Hari)';
             btnSave.style.cssText = 'width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:800;background:#e2e8f0;color:#94a3b8;border:none;cursor:not-allowed;';
         } else {
-            btnSave.innerText = '✓ Simpan Rekam Medis';
+            btnSave.innerHTML = '<span>🧾</span><span>Selesai & Tampilkan Invoice</span>';
             btnSave.style.cssText = '';
         }
     }
@@ -1280,7 +1298,7 @@ function _applyLockUI() {
 // ════════════════════════════════════════════════════════
 async function saveAll(showInvoice = true) {
     const btn = $('btnSave');
-    if (btn) { btn.disabled = true; btn.innerText = '⏳ Menyimpan...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Menyimpan...'; }
 
     try {
         // ── Cek edit lock (kunjungan > 2 hari) ──
@@ -1486,6 +1504,6 @@ async function saveAll(showInvoice = true) {
         console.error('[Klikpro] saveAll error:', e);
         showToast('❌ Gagal menyimpan: ' + (e.message || 'Cek koneksi internet'), 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerText = '✓ Simpan Rekam Medis'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span>🧾</span><span>Selesai & Tampilkan Invoice</span>'; }
     }
 }
