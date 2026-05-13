@@ -160,39 +160,7 @@
             <!-- _renderSectionLabDinamic() akan mengisi bagian ini -->
             <!-- Item lab aktif/nonaktif dikontrol dari halaman Biaya (kategori Laboratorium) -->
             <div class="rm-subsection" id="sectionLab">
-                <div class="rm-subsection-label">
-                    <span class="rm-subsection-dot" style="background:#2563eb;"></span>
-                    Hasil Laboratorium
-                </div>
-                <!-- Permintaan lab: centang untuk minta pemeriksaan -->
-                <div id="sectionPermintaanLabRequest" style="margin-bottom:10px;display:none;">
-                    <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px;font-weight:600;">
-                        🔔 Centang untuk membuat permintaan pemeriksaan ke petugas lab:
-                    </div>
-                    <div id="chipsPermintaanLab" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
-                </div>
-                <!-- Input hasil lab (render dinamis) -->
-                <div class="row g-2 mb-3">
-                    <div class="col-4">
-                        <div class="ttv-item">
-                            <label>GDS <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
-                            <input type="number" id="lab_gds" placeholder="—" data-save="true" min="0" max="999">
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="ttv-item">
-                            <label>Kolesterol <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
-                            <input type="number" id="lab_chol" placeholder="—" data-save="true" min="0" max="999">
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="ttv-item">
-                            <label>Asam Urat <span style="font-size:9px;font-weight:500;color:var(--text-muted);">(mg/dL)</span></label>
-                            <input type="number" id="lab_ua" placeholder="—" step="0.1" data-save="true" min="0" max="30">
-                        </div>
-                    </div>
-                </div>
-                <div id="labAlert" style="display:none;font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:rgba(239,68,68,0.09);color:#dc2626;border:1px solid rgba(239,68,68,0.25);"></div>
+                           <!-- Input hasil lab: dirender dinamis oleh pemeriksaan-medis.js -->
             </div>
 
             <!-- ── 3b. Pemeriksaan Penunjang (chip button, dirender oleh pem-penunjang.js) ── -->
@@ -296,24 +264,8 @@
         </div>
         <div class="card-body">
 
-            <!-- ── 6a. Surat Keterangan Sakit ── -->
-            <!-- Centang → otomatis tampilkan tombol lihat surat -->
-            <div class="rm-doc-item" id="wrapSuratSakit">
-                <div class="rm-doc-check">
-                    <input type="checkbox" id="suratSakit"
-                        style="width:16px;height:16px;accent-color:var(--danger);"
-                        onchange="_onSuratSakitChange()">
-                    <label for="suratSakit" class="rm-doc-label" style="color:var(--danger);">
-                        Surat Keterangan Sakit
-                    </label>
-                    <button id="btnLihatSuratSakit"
-                        style="display:none;margin-left:8px;padding:3px 10px;border-radius:20px;border:1.5px solid var(--danger);background:rgba(239,68,68,0.07);color:var(--danger);font-size:11px;font-weight:700;cursor:pointer;"
-                        onclick="bukaModalSuratSakit()">
-                        🔗 Lihat Surat
-                    </button>
-                </div>
-                <div class="rm-doc-desc">Centang jika pasien memerlukan surat keterangan sakit</div>
-            </div>
+            <!-- ── 6a. Dokumen Administrasi (termasuk Surat Sakit) dirender dinamis -->
+            <!-- pemeriksaan-medis.js mengecualikan item bawaan dari render ulang -->
 
             <!-- ── 6b. Dokumen Administrasi Dinamis ──
                  Diisi oleh medis-dinamis.js dari tarif kategori "Administrasi".
@@ -621,17 +573,7 @@
             border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;
         }
 
-        /* Chip permintaan lab */
-        .lab-req-chip {
-            display:inline-flex;align-items:center;gap:4px;
-            padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;
-            cursor:pointer;border:1.5px solid #c7d9f5;
-            background:#fff;color:var(--text,#334155);
-            transition:all .15s;margin:2px 2px 0 0;
-        }
-        .lab-req-chip.active {
-            border-color:#2563eb;background:#2563eb;color:#fff;
-        }
+        /* Chip permintaan lab: CSS di-inject oleh pemeriksaan-medis.js (_pm_injectCSS) */
 
         @media print {
             body > *:not(#modalSuratSakit) { display:none !important; }
