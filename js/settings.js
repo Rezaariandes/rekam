@@ -44,6 +44,7 @@ const MODULE_DEFINITIONS = [
     { group: 'Halaman Kunjungan – Card Pasien', id: 'mod_kunjungan_identitas',       label: '👤 Kunjungan: Identitas Pasien',       desc: 'Tampilkan nama & info dasar pasien di card kunjungan' },
     { group: 'Halaman Kunjungan – Card Pasien', id: 'mod_kunjungan_ttv',             label: '🩺 Kunjungan: TTV Ringkas',            desc: 'Tampilkan TD, suhu, nadi di card kunjungan' },
     { group: 'Halaman Kunjungan – Card Pasien', id: 'mod_kunjungan_keluhan',         label: '🗣️ Kunjungan: Keluhan Pasien',        desc: 'Tampilkan keluhan singkat di card kunjungan' },
+    { group: 'Halaman Kunjungan – Card Pasien', id: 'mod_kunjungan_lab',             label: '🔬 Kunjungan: Lab Ringkas',            desc: 'Tampilkan GDS, Kolesterol, Asam Urat di card kunjungan' },
     { group: 'Halaman Kunjungan – Card Pasien', id: 'mod_kunjungan_diagnosa',        label: '📝 Kunjungan: Diagnosa',               desc: 'Tampilkan diagnosa di card kunjungan' },
     { group: 'Halaman Kunjungan – Card Pasien', id: 'mod_kunjungan_dokter',          label: '👨‍⚕️ Kunjungan: Diperiksa Oleh',     desc: 'Tampilkan nama dokter pemeriksa di card kunjungan' },
     { group: 'Halaman Kunjungan – Card Pasien', id: 'mod_kunjungan_status_kunjungan',label: '⏳ Kunjungan: Status (Menunggu/Selesai)', desc: 'Tampilkan badge status kunjungan di card' },
@@ -70,7 +71,9 @@ const MODULE_DEFINITIONS = [
     { group: 'Halaman Pemeriksaan Medis', id: 'mod_medis_ttv',         label: '🩺 Pemeriksaan: Tanda-Tanda Vital',    desc: 'Section TD, nadi, suhu, RR, BB, TB, alergi' },
     { group: 'Halaman Pemeriksaan Medis', id: 'mod_medis_anamnesa',    label: '🗣️ Pemeriksaan: Anamnesa (Keluhan)',   desc: 'Section keluhan utama & form anamnesa pasien' },
     { group: 'Halaman Pemeriksaan Medis', id: 'mod_medis_fisik',       label: '🩺 Pemeriksaan: Pemeriksaan Fisik',    desc: 'Section hasil pemeriksaan fisik umum' },
+    { group: 'Halaman Pemeriksaan Medis', id: 'mod_medis_lab',         label: '🔬 Pemeriksaan: Laboratorium',         desc: 'Section input hasil lab (GDS, kolesterol, dll)' },
     { group: 'Halaman Pemeriksaan Medis', id: 'mod_medis_diagnosa',    label: '📝 Pemeriksaan: Diagnosa & Terapi',    desc: 'Section diagnosa ICD-10 & rencana terapi / resep obat' },
+    { group: 'Halaman Pemeriksaan Medis', id: 'mod_medis_surat_sakit', label: '📄 Pemeriksaan: Surat Sakit / Sehat', desc: 'Checkbox permintaan surat keterangan sakit/sehat' },
     { group: 'Halaman Pemeriksaan Medis', id: 'mod_medis_riwayat',     label: '📂 Pemeriksaan: Riwayat Kunjungan',   desc: 'Section riwayat kunjungan sebelumnya di halaman pemeriksaan' },
 
     // ══ HALAMAN PEMERIKSAAN — tambahan ══
@@ -131,9 +134,9 @@ const DEFAULT_ACCESS = {
     'ATLM': [
         'mod_nav_daftar','mod_nav_kunjungan',
         // Kunjungan
-        'mod_kunjungan_identitas','mod_kunjungan_status_kunjungan',
+        'mod_kunjungan_identitas','mod_kunjungan_status_kunjungan','mod_kunjungan_lab',
         // Pemeriksaan
-        'mod_medis_identitas','mod_medis_riwayat',
+        'mod_medis_identitas','mod_medis_lab','mod_medis_riwayat',
         // Modal riwayat
         'mod_modal_identitas','mod_modal_lab','mod_modal_status_kunjungan',
     ],
@@ -537,6 +540,7 @@ async function memuatSettings() {
         _renderDokterList();
         _renderAiKeys(_settingsCache);
         _initModuleAccess();
+        _loadLabAktif(_settingsCache);
         _loadStokAktif(_settingsCache);
         _loadBiayaAktif(_settingsCache);
         _loadLogoKlinik(_settingsCache);
@@ -561,6 +565,7 @@ function _fallbackDariKonstanta() {
     _renderDokterList();
     _renderAiKeys({});
     _initModuleAccess();
+    _loadLabAktif({});
     _loadStokAktif(_settingsCache || {});
     _loadBiayaAktif(_settingsCache || {});
     // Lab & penunjang & tindakan dikelola di Page Biaya — tidak perlu fallback
@@ -584,7 +589,21 @@ function _isiFormDariSettings(s) {
     _setVal('cfg_ss_client_secret', '');
 }
 
-// ── Lab aktif dikelola di Page Biaya (tarif_layanan) — tidak ada toggle di Settings
+// ── Helper muat lab aktif dari settings ──
+function _loadLabAktif(s) {
+    // _labAktif hanya dipakai sebagai fallback di kunjungan.js
+    // Lab kini dikelola di Page Biaya (tarif_layanan) — tidak ada toggle di Settings lagi
+    let parsed = {};
+    if (s.lab_aktif) {
+        try { parsed = JSON.parse(s.lab_aktif); } catch(e) {}
+    }
+    if (Object.keys(parsed).length === 0) {
+        parsed = { lab_gds: true, lab_chol: true, lab_ua: true };
+    }
+    window._labAktif = parsed;
+    // _renderLabToggles() DIHAPUS — fungsi ini sudah tidak ada karena lab
+    // dikelola di halaman Tarif & Biaya sebagai single source of truth.
+}
 
 // ════════════════════════════════════════
 //  HAK AKSES MODUL PER JABATAN
@@ -786,10 +805,15 @@ function applyModuleAccess(jabatan) {
     _setElVis('sectionTTV',      has('mod_medis_ttv'));
     _setElVis('sectionKeluhan',  has('mod_medis_anamnesa'));
     _setElVis('sectionFisik',    has('mod_medis_fisik'));
+    _setElVis('sectionLab',        has('mod_medis_lab'));
     _setElVis('sectionPenunjang',  has('mod_medis_penunjang'));
     _setElVis('sectionTindakan',   has('mod_medis_tindakan'));
     _setElVis('sectionDiagnosa',   has('mod_medis_diagnosa'));
     _setElVis('sectionRiwayat',  has('mod_medis_riwayat'));
+
+    // Surat sakit (di dalam sectionDiagnosa)
+    const suratEl = document.querySelector('#sectionDiagnosa [for="suratSakit"]')?.closest('div');
+    if (suratEl) suratEl.style.display = has('mod_medis_surat_sakit') ? '' : 'none';
 
     // ══ TOMBOL LANJUT PERIKSA (pageDaftar → pageMedis) ══
     const btnNext = $('btnNext');
