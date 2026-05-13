@@ -224,39 +224,37 @@ function renderKunjunganHariIni() {
 
         // ── TTV ringkas
         const ttvRow = has('mod_kunjungan_ttv')
-            ? `<div style="font-size:11px;color:#64748b;margin-top:2px;display:flex;align-items:center;gap:4px;">
-                <span style="opacity:0.5;">💓</span>
-                <span>TTV: <b>${h.td||'—'}</b> mmHg &nbsp;|&nbsp; <b>${h.suhu||'—'}°C</b> &nbsp;|&nbsp; N: <b>${h.nadi||'—'}</b></span>
+            ? `<div style="font-size:11px;color:#64748b;margin-top:3px;display:flex;align-items:center;gap:5px;">
+                <span style="opacity:0.45;font-size:10px;">💓</span>
+                <span>TTV: <b>${h.td||'—'}</b> mmHg &nbsp;·&nbsp; <b>${h.suhu||'—'}°C</b> &nbsp;·&nbsp; N: <b>${h.nadi||'—'}</b></span>
                </div>`
             : '';
 
         // ── Keluhan
         const keluhanRow = has('mod_kunjungan_keluhan') && h.keluhan
-            ? `<div style="font-size:11.5px;color:#475569;margin-top:2px;display:flex;gap:5px;">
-                <span style="flex-shrink:0;opacity:0.6;">💬</span>
-                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(h.keluhan)}</span>
+            ? `<div style="font-size:11.5px;color:#475569;margin-top:3px;display:flex;gap:5px;align-items:flex-start;">
+                <span style="flex-shrink:0;opacity:0.5;font-size:10px;margin-top:1px;">💬</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escHtml(h.keluhan)}</span>
                </div>`
             : '';
 
-        // labRow (no.3) — DIHAPUS, tidak dipakai lagi
-
         // ── Diagnosa
         const diagRow = (has('mod_kunjungan_diagnosa') && h.diag)
-            ? `<div style="font-size:11px;color:#334155;margin-top:2px;display:flex;gap:5px;">
-                <span style="flex-shrink:0;opacity:0.6;">🩺</span>
+            ? `<div style="font-size:11px;color:#334155;margin-top:3px;display:flex;gap:5px;align-items:flex-start;">
+                <span style="flex-shrink:0;opacity:0.5;font-size:10px;">🩺</span>
                 <span>${escHtml(h.diag)}</span>
                </div>`
             : '';
 
         // ── Dokter pemeriksa
         const dokterRow = (has('mod_kunjungan_dokter') && h.dokterNama)
-            ? `<div style="font-size:10.5px;color:#059669;font-weight:700;margin-top:3px;display:flex;gap:4px;align-items:center;">
-                <span>👨‍⚕️</span><span>dr. ${escHtml(h.dokterNama)}</span>
+            ? `<div style="font-size:10.5px;color:#059669;font-weight:700;margin-top:4px;display:flex;gap:4px;align-items:center;">
+                <span style="font-size:10px;">👨‍⚕️</span><span>dr. ${escHtml(h.dokterNama)}</span>
                </div>`
             : '';
 
-        // ── Indikator permintaan lab + penunjang + tindakan + pemx
-        let labReqRow = '';
+        // ── Chips: lab, penunjang, tindakan, pemx
+        let chipsHtml = '';
         if (h.req_lab) {
             try {
                 const reqObj = typeof h.req_lab === 'string' ? JSON.parse(h.req_lab) : h.req_lab;
@@ -278,45 +276,43 @@ function renderKunjunganHariIni() {
                     .map(([k]) => reqObj['_pemxname_' + k] || k.replace('pemx_','').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()));
 
                 const _chip = (label, bg, color, border) =>
-                    `<span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;
-                        background:${bg};color:${color};font-size:9.5px;font-weight:700;
-                        border:1px solid ${border};white-space:nowrap;">${label}</span>`;
+                    `<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;
+                        background:${bg};color:${color};font-size:9px;font-weight:700;
+                        border:1px solid ${border};white-space:nowrap;line-height:1.5;">${label}</span>`;
 
-                const _row = (icon, label, items, bg, color, border, itemBg, itemColor, itemBorder) => {
+                const _chipRow = (icon, label, items, rowBg, labelColor, rowBorder, cBg, cColor, cBorder) => {
                     if (!items.length) return '';
-                    return `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;
-                                background:${bg};border:1px solid ${border};
-                                border-radius:10px;padding:5px 9px;margin-top:5px;">
-                        <span style="font-size:9.5px;font-weight:800;color:${color};white-space:nowrap;margin-right:2px;">${icon} ${label}:</span>
-                        ${items.map(r => _chip(r, itemBg, itemColor, itemBorder)).join('')}
+                    return `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px;
+                                background:${rowBg};border:1px solid ${rowBorder};
+                                border-radius:8px;padding:4px 8px;margin-top:4px;">
+                        <span style="font-size:9px;font-weight:800;color:${labelColor};white-space:nowrap;margin-right:1px;">${icon} ${label}:</span>
+                        ${items.map(r => _chip(r, cBg, cColor, cBorder)).join('')}
                     </div>`;
                 };
 
                 const parts = [
-                    _row('🧪','Permintaan Lab', labReqs,
-                        'rgba(37,99,235,0.05)','#1d4ed8','rgba(37,99,235,0.2)',
-                        'rgba(37,99,235,0.12)','#1d4ed8','rgba(37,99,235,0.3)'),
-                    // no.7: Penunjang — awalan "Penunjang:"
-                    _row('🔊','Penunjang', pnjReqs,
-                        'rgba(124,58,237,0.05)','#6d28d9','rgba(124,58,237,0.2)',
-                        'rgba(124,58,237,0.1)','#6d28d9','rgba(124,58,237,0.25)'),
-                    _row('⚕️','Tindakan', tidReqs,
-                        'rgba(220,38,38,0.05)','#b91c1c','rgba(220,38,38,0.18)',
-                        'rgba(220,38,38,0.1)','#b91c1c','rgba(220,38,38,0.25)'),
-                    _row('🩻','Pemeriksaan', pemxReqs,
-                        'rgba(8,145,178,0.05)','#0369a1','rgba(8,145,178,0.18)',
-                        'rgba(8,145,178,0.1)','#0369a1','rgba(8,145,178,0.25)'),
+                    _chipRow('🧪','Permintaan Lab', labReqs,
+                        'rgba(37,99,235,0.05)','#1d4ed8','rgba(37,99,235,0.18)',
+                        'rgba(37,99,235,0.12)','#1d4ed8','rgba(37,99,235,0.28)'),
+                    _chipRow('🔊','Penunjang', pnjReqs,
+                        'rgba(124,58,237,0.05)','#6d28d9','rgba(124,58,237,0.18)',
+                        'rgba(124,58,237,0.1)','#6d28d9','rgba(124,58,237,0.28)'),
+                    _chipRow('⚕️','Tindakan', tidReqs,
+                        'rgba(220,38,38,0.05)','#b91c1c','rgba(220,38,38,0.16)',
+                        'rgba(220,38,38,0.1)','#b91c1c','rgba(220,38,38,0.28)'),
+                    _chipRow('🩻','Pemeriksaan', pemxReqs,
+                        'rgba(8,145,178,0.05)','#0369a1','rgba(8,145,178,0.16)',
+                        'rgba(8,145,178,0.1)','#0369a1','rgba(8,145,178,0.28)'),
                 ].filter(Boolean).join('');
 
-                if (parts) labReqRow = parts;
+                if (parts) chipsHtml = parts;
             } catch(e) {}
         }
 
-        // ── Status badges
+        // ── Status badges obat & bayar
         const st        = _getStatusKunjungan(h.id);
         const obatDone  = st.obat;
         const bayarDone = st.bayar;
-
         const jabatan        = ((typeof loggedInUser !== 'undefined' && loggedInUser) ? (loggedInUser.jabatan || '') : '').toLowerCase();
         const canToggleObat  = has('mod_kunjungan_status_obat')  && ['apoteker','admin','dokter'].includes(jabatan);
         const canToggleBayar = has('mod_kunjungan_status_bayar') && ['kasir','admin','dokter'].includes(jabatan);
@@ -324,80 +320,95 @@ function renderKunjunganHariIni() {
         const badgeObat  = has('mod_kunjungan_status_obat')
             ? `<span id="badge_obat_${h.id}"
                 onclick="${canToggleObat ? `toggleStatusKunjungan(event,'${h.id}','obat')` : 'event.stopPropagation()'}"
-                style="${_badgeStyleAttr('obat', obatDone)}${canToggleObat ? '' : 'cursor:default;'}">
+                style="${_badgeStyleAttr('obat', obatDone)}${canToggleObat ? '' : 'cursor:default;'}width:100%;justify-content:center;">
                 ${_badgeHtml('obat', obatDone)}</span>`
             : '';
 
         const badgeBayar = has('mod_kunjungan_status_bayar')
             ? `<span id="badge_bayar_${h.id}"
                 onclick="${canToggleBayar ? `toggleStatusKunjungan(event,'${h.id}','bayar')` : 'event.stopPropagation()'}"
-                style="${_badgeStyleAttr('bayar', bayarDone)}${canToggleBayar ? '' : 'cursor:default;'}">
+                style="${_badgeStyleAttr('bayar', bayarDone)}${canToggleBayar ? '' : 'cursor:default;'}width:100%;justify-content:center;">
                 ${_badgeHtml('bayar', bayarDone)}</span>`
             : '';
 
-        // ── Action buttons — 3 tombol seragam (Dokumen dihapus)
-        const _btnStyle = (grad, shadow) =>
-            `display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-             width:48px;height:48px;border-radius:13px;border:none;cursor:pointer;flex-shrink:0;
-             background:${grad};color:#fff;font-size:19px;
-             box-shadow:0 2px 8px ${shadow};transition:opacity .15s;`;
+        // ── Tombol aksi (vertikal di kolom kanan) — Invoice, Resep, Dokumen
+        const _btn = (onclick, grad, shadow, emoji, label) =>
+            `<button onclick="event.stopPropagation();${onclick}" title="${label}"
+                style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+                    width:100%;padding:6px 4px;border-radius:10px;border:none;cursor:pointer;
+                    background:${grad};color:#fff;font-size:16px;
+                    box-shadow:0 2px 6px ${shadow};transition:opacity .15s;">
+                ${emoji}
+                <span style="font-size:7.5px;font-weight:800;letter-spacing:0.2px;line-height:1.2;opacity:0.92;">${label}</span>
+            </button>`;
 
         let actionBtns = '';
         if (has('mod_kunjungan_btn_invoice') && window._biayaAktif) {
-            actionBtns += `<button onclick="event.stopPropagation();_quickInvoice('${h.id}','${escHtml(tampilNama)}')" title="Invoice"
-                style="${_btnStyle('linear-gradient(135deg,#059669,#10b981)','rgba(5,150,105,0.28)')}">
-                🧾<span style="font-size:8px;font-weight:800;letter-spacing:0.2px;line-height:1;">Invoice</span>
-            </button>`;
+            actionBtns += _btn(`_quickInvoice('${h.id}','${escHtml(tampilNama)}')`,
+                'linear-gradient(135deg,#059669,#10b981)','rgba(5,150,105,0.3)','🧾','Invoice');
         }
         if (has('mod_kunjungan_btn_resep') && window._stokAktif) {
-            actionBtns += `<button onclick="event.stopPropagation();_quickResep('${h.id}','${escHtml(tampilNama)}')" title="Resep"
-                style="${_btnStyle('linear-gradient(135deg,#7c3aed,#a78bfa)','rgba(124,58,237,0.28)')}">
-                💊<span style="font-size:8px;font-weight:800;letter-spacing:0.2px;line-height:1;">Resep</span>
-            </button>`;
+            actionBtns += _btn(`_quickResep('${h.id}','${escHtml(tampilNama)}')`,
+                'linear-gradient(135deg,#7c3aed,#a78bfa)','rgba(124,58,237,0.3)','💊','Resep');
         }
-        // Tombol Dokumen DIHAPUS sesuai permintaan
+        // Tombol Dokumen — kembalikan sesuai permintaan
+        actionBtns += _btn(`_openDetailKunjungan('${h.id}')`,
+            'linear-gradient(135deg,#2563eb,#60a5fa)','rgba(37,99,235,0.3)','📄','Dokumen');
 
-        // ── Status kunjungan badge (menunggu/selesai)
-        const statusBadge = has('mod_kunjungan_status_kunjungan')
-            ? `<div class="status-badge ${isDone ? 'status-done' : 'status-wait'}" style="flex-shrink:0;font-size:10px;">${isDone ? '✅ Selesai' : '⏳ Menunggu'}</div>`
+        // ── Status kunjungan (Selesai / Menunggu)
+        const statusLabel = has('mod_kunjungan_status_kunjungan')
+            ? `<div style="text-align:center;padding:4px 6px;border-radius:8px;font-size:9px;font-weight:800;
+                letter-spacing:0.3px;
+                background:${isDone?'rgba(5,150,105,0.1)':'rgba(234,179,8,0.1)'};
+                color:${isDone?'#059669':'#b45309'};
+                border:1px solid ${isDone?'rgba(5,150,105,0.25)':'rgba(234,179,8,0.25)'};">
+                ${isDone?'✅ Selesai':'⏳ Menunggu'}
+              </div>`
             : '';
-
-        const hasActionRow = badgeObat || badgeBayar || actionBtns;
 
         return `
         <div class="visit-card" onclick="bukaRekamMedisHariIni('${h.id}')"
-            style="opacity:${isDone?'0.75':'1'};flex-direction:column;gap:0;padding:11px 13px;
-                border-radius:14px;border:1px solid ${isDone?'#e2e8f0':'rgba(37,99,235,0.1)'};
-                background:${isDone?'#f8fafc':'#fff'};
-                box-shadow:${isDone?'none':'0 1px 6px rgba(37,99,235,0.07)'};">
+            style="opacity:${isDone?'0.78':'1'};display:flex;flex-direction:row;gap:0;padding:0;
+                border-radius:14px;border:1px solid ${isDone?'#e2e8f0':'rgba(99,102,241,0.12)'};
+                background:${isDone?'#f8fafc':'#fff'};overflow:hidden;
+                box-shadow:${isDone?'none':'0 1px 8px rgba(99,102,241,0.08)'};">
 
-            <!-- Header: waktu + nama + status -->
-            <div style="display:flex;align-items:flex-start;gap:10px;width:100%;">
-                <div class="visit-time-badge" style="flex-shrink:0;font-size:11px;font-weight:800;">${h.waktu||'—'}</div>
-                <div style="flex:1;min-width:0;">
-                    ${has('mod_kunjungan_identitas') ? `<div style="font-weight:800;font-size:14px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.1px;">${escHtml(tampilNama)}</div>` : ''}
-                    ${keluhanRow}
-                    ${ttvRow}
-                    ${diagRow}
-                    ${dokterRow}
+            <!-- KIRI: waktu + info pasien + chips (3/4) -->
+            <div style="flex:3;min-width:0;padding:11px 12px;border-right:1px solid #f1f5f9;">
+
+                <!-- Baris 1: waktu + nama -->
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="visit-time-badge" style="flex-shrink:0;font-size:11px;font-weight:800;">${h.waktu||'—'}</div>
+                    ${has('mod_kunjungan_identitas') ? `<div style="font-weight:800;font-size:13.5px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.1px;">${escHtml(tampilNama)}</div>` : ''}
                 </div>
-                ${statusBadge}
+
+                <!-- Baris 2: keluhan, TTV, diagnosa, dokter -->
+                <div style="margin-top:5px;">
+                    ${keluhanRow}${ttvRow}${diagRow}${dokterRow}
+                </div>
+
+                <!-- Baris 3: chips permintaan -->
+                ${chipsHtml ? `<div style="margin-top:5px;">${chipsHtml}</div>` : ''}
             </div>
 
-            <!-- Chips: lab, penunjang, tindakan, pemx -->
-            ${labReqRow ? `<div style="margin-top:2px;">${labReqRow}</div>` : ''}
+            <!-- KANAN: status + badges + tombol aksi (1/4) -->
+            <div style="flex:1;min-width:80px;max-width:96px;padding:10px 8px;
+                display:flex;flex-direction:column;align-items:stretch;gap:5px;
+                background:${isDone?'rgba(248,250,252,0.8)':'rgba(248,250,255,0.6)'};"
+                onclick="event.stopPropagation()">
 
-            <!-- Action row: badge kiri, tombol kanan -->
-            ${hasActionRow ? `
-            <div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:8px;
-                border-top:1px solid #f1f5f9;" onclick="event.stopPropagation()">
-                <div style="display:flex;gap:5px;align-items:center;flex:1;">
-                    ${badgeObat}${badgeBayar}
-                </div>
-                <div style="display:flex;gap:6px;align-items:center;">
-                    ${actionBtns}
-                </div>
-            </div>` : ''}
+                <!-- Status menunggu/selesai -->
+                ${statusLabel}
+
+                <!-- Badge obat & bayar -->
+                ${badgeObat}${badgeBayar}
+
+                <!-- Spacer -->
+                <div style="flex:1;min-height:4px;"></div>
+
+                <!-- Tombol aksi -->
+                ${actionBtns}
+            </div>
         </div>`;
     }).join('');
 }
