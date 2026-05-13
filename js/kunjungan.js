@@ -470,6 +470,15 @@ async function bukaRekamMedisHariIni(kId) {
     const h = kunjunganHariIni.find(x => x.id === kId);
     if (!h) return showToast("❌ Data tidak ditemukan", "error");
 
+    // FIX Bug-3: Bersihkan seluruh state pasien sebelumnya — rme_*, field form,
+    // dan window state chip lab/tindakan — sebelum mengisi data pasien baru.
+    // Tanpa ini, field & chip dari pasien A terbawa ke pasien B.
+    if (typeof clearSession === 'function') clearSession();
+    document.querySelectorAll('[data-save="true"]').forEach(el => { el.value = ''; });
+    window._reqLab       = {};
+    window._reqTindakan  = [];
+    window._reqPenunjang = [];
+
     const p = allPatients.find(x => x.id === h.pasienId) || allPatients.find(x => x.nama && h.nama && x.nama === h.nama);
     const namaPasien = (p && p.nama) ? p.nama : (h.nama || '');
 
@@ -525,13 +534,6 @@ async function bukaRekamMedisHariIni(kId) {
     // exist in the DOM when we try to fill them. Without this, those fields are
     // null and the data appears "empty" even though the fetch succeeded.
     if (typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
-
-    // FIX-DEFAULT-DATA: Reset semua state penunjang/tindakan sebelum mengisi data kunjungan.
-    // Tanpa ini, state dari kunjungan sebelumnya (window._reqLab, _reqTindakan, dll)
-    // bisa terbawa ke kunjungan baru jika clearSession tidak dipanggil.
-    if (typeof loadReqLabFromKunjungan === 'function') {
-        loadReqLabFromKunjungan(null);  // Reset semua chip ke kosong dulu
-    }
 
     try {
         const kunjunganData = await sb_getKunjunganById(currentKunjunganId);
