@@ -92,7 +92,9 @@ function _getNamaDokterLogin() {
 function _renderTemplate(tpl, data) {
     const klinik = _getInfoKlinik();
     const tgl    = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-    const kota   = klinik.kota || 'Pekanbaru';
+    // NEW-01 FIX: Jangan hardcode 'Pekanbaru' — gunakan klinik.kota dari _settingsFull.klinik_kota.
+    // Jika belum diisi di settings, string kosong lebih aman daripada nama kota yang salah.
+    const kota   = klinik.kota || '';
 
     const map = {
         '{{nama}}':          data.nama          || '—',
@@ -135,7 +137,10 @@ function renderSuratHTML(namaSurat, pasienData) {
     const tpl      = window._suratTemplates[namaSurat] || {};
     const klinik   = _getInfoKlinik();
     const tgl      = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-    const kota     = tpl.kota || klinik.kota || 'Pekanbaru';
+    // NEW-01 FIX: Sama seperti _renderTemplate — jangan fallback ke 'Pekanbaru'.
+    // tpl.kota adalah override per-surat dari editor settings; klinik.kota dari _settingsFull.
+    // String kosong lebih aman; admin cukup isi klinik_kota sekali di halaman Settings.
+    const kota     = tpl.kota || klinik.kota || '';
     const dokter   = tpl.nama_dokter || _getNamaDokterLogin() || '________________';
 
     const data = {
@@ -269,8 +274,18 @@ function loadSuratTemplates() {
 (function _waitSettingsFull() {
     if (window._settingsFull) { loadSuratTemplates(); return; }
     let tries = 0;
+    // BUG-10 FIX: gunakan flag loaded agar loadSuratTemplates tidak dipanggil
+    // lebih dari sekali jika interval masih berjalan saat kondisi berubah cepat.
+    let _loadCalled = false;
     const t = setInterval(() => {
         tries++;
+        if ((window._settingsFull || tries > 60) && !_loadCalled) {
+            _loadCalled = true;
+            clearInterval(t);
+            loadSuratTemplates();
+        }
+    }, 300);
+})();
         if (window._settingsFull || tries > 60) {
             clearInterval(t);
             loadSuratTemplates();
@@ -590,15 +605,16 @@ async function _simpanSuratTemplate(slug, namaSurat) {
 
     if (!_doHook()) {
         let tries = 0;
+        // BUG-10 FIX: _doHook() sudah idempoten via flag di dalam fungsinya,
+        // tapi kita tambahkan guard ekstra agar clearInterval terpanggil
+        // tepat sekali meski kondisi race antara tries dan _doHook().
         const t = setInterval(() => {
             tries++;
-            if (_doHook() || tries > 80) clearInterval(t);
+            const done = _doHook();
+            if (done || tries > 80) clearInterval(t);
         }, 150);
     }
 })();
-
-/**
- * Sisipkan seksi Template Surat ke halaman Settings setelah render.
  * Menggunakan DOM insertion agar tidak perlu modifikasi settings.js.
  */
 function _injectSuratTemplateSection() {
@@ -677,9 +693,11 @@ function _injectSuratTemplateSection() {
 
     if (!_doHook()) {
         let tries = 0;
+        // BUG-10 FIX: pastikan clearInterval dipanggil sekali saat kondisi terpenuhi
         const t = setInterval(() => {
             tries++;
-            if (_doHook() || tries > 60) clearInterval(t);
+            const done = _doHook();
+            if (done || tries > 60) clearInterval(t);
         }, 200);
     }
 })();

@@ -66,6 +66,9 @@ window._reqTindakan         = window._reqTindakan         || {};  // tindakan ch
 window._reqPemeriksaanExtra = window._reqPemeriksaanExtra || {};  // textarea pemeriksaan extra
 window._reqAdminExtra       = window._reqAdminExtra       || {};  // checkbox dokumen admin extra
 window._pemxActive          = window._pemxActive          || {};  // BUG-FIX: flag chip pemx aktif (terpisah dari nilai)
+// BUG-C02 FIX: in-memory store untuk nilai input lab — menggantikan ketergantungan
+// pada localStorage agar nilai tidak hilang saat _renderChipPermintaanLab() dipanggil ulang.
+window._reqLabValues        = window._reqLabValues        || {};  // { fieldId: value } in-memory
 
 // ── Item bawaan yang tidak dirender ulang ──
 const _PEMERIKSAAN_BAWAAN = [
@@ -375,7 +378,10 @@ function _renderChipPermintaanLab() {
         const active  = !!window._reqLab[chipId];
         const icon    = _pm_icon(t.nama, _LAB_ICONS, '🔬');
         // Hanya kirim chipId; _toggleLabItem akan resolve nama dari tarif cache
+        // BUG-H07 FIX: tambah data-active attribute sebagai sumber kebenaran state chip,
+        // menggantikan pencocokan inline style yang tidak reliabel di Safari.
         return `<button id="chip_${chipId}"
+            data-active="${active ? '1' : '0'}"
             onclick="event.stopPropagation();_toggleLabItem('${chipId}')"
             style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;
                 font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;margin:3px 3px 0 0;
@@ -432,10 +438,9 @@ function _renderChipPermintaanLab() {
         html += `<div id="lab_flat_inputs"></div>`;
     }
 
-    // BUG-FIX: Sebelum reset DOM (wrap.innerHTML = html), simpan nilai input
-    // lab yang sudah diisi user ke localStorage. Tanpa ini, setiap kali
-    // _renderChipPermintaanLab() dipanggil ulang (mis. saat pindah tab atau
-    // renderMedisDinamis() terpicu), nilai yang sudah diketik user akan hilang.
+    // BUG-C02 FIX: Simpan nilai input lab ke _reqLabValues (in-memory) DAN localStorage
+    // sebelum DOM di-reset via wrap.innerHTML. In-memory state adalah sumber kebenaran
+    // utama — tidak bergantung pada timing atau ketersediaan localStorage.
     labItems.forEach(t => {
         const chipId = _pm_slug('lab_req', t.nama);
         if (!window._reqLab[chipId]) return;
@@ -443,14 +448,15 @@ function _renderChipPermintaanLab() {
         const elId    = fieldId || chipId;
         const el      = document.getElementById(elId);
         if (el && el.value !== '' && el.value !== null) {
-            localStorage.setItem('rme_' + elId, el.value);
+            window._reqLabValues[elId] = el.value;       // in-memory: sumber utama
+            localStorage.setItem('rme_' + elId, el.value); // localStorage: backup
         }
     });
 
     wrap.innerHTML = html;
 
     // Re-render input untuk item yang sudah aktif
-    // Nilai akan di-restore dari localStorage di dalam _renderLabInput()
+    // Nilai akan di-restore dari _reqLabValues (in-memory) di dalam _renderLabInput()
     labItems.forEach(t => {
         const chipId = _pm_slug('lab_req', t.nama);
         if (window._reqLab[chipId]) {
@@ -477,6 +483,7 @@ function _toggleLabItem(chipId, nama) {
 
     const btn = document.getElementById('chip_' + chipId);
     if (btn) {
+        btn.dataset.active    = active ? '1' : '0'; // BUG-H07 FIX: gunakan data-active sebagai state
         btn.style.background  = active ? '#2563eb' : '#fff';
         btn.style.borderColor = active ? '#2563eb' : '#e2e8f0';
         btn.style.color       = active ? '#fff'    : 'var(--text,#334155)';
@@ -549,17 +556,30 @@ function _renderLabInput(chipId, nama) {
         ${inputHtml}`;
     inputsWrap.appendChild(div);
 
-    // Restore nilai tersimpan
+    // BUG-C02 FIX: Restore nilai dari _reqLabValues (in-memory) terlebih dahulu.
+    // Jika tidak ada di in-memory, fallback ke localStorage.
+    // Ini memastikan nilai tidak hilang saat _renderChipPermintaanLab() dipanggil ulang.
     const realFieldEl = document.getElementById(fieldId || chipId);
     if (realFieldEl) {
-        const saved = localStorage.getItem('rme_' + (fieldId || chipId));
-        if (saved !== null && saved !== '') realFieldEl.value = saved;
+        const elKey  = fieldId || chipId;
+        const inMem  = window._reqLabValues && window._reqLabValues[elKey];
+        const inLS   = localStorage.getItem('rme_' + elKey);
+        const saved  = (inMem !== undefined && inMem !== '') ? inMem
+                     : (inLS  !== null      && inLS  !== '') ? inLS
+                     : null;
+        if (saved !== null) realFieldEl.value = saved;
         realFieldEl.addEventListener('input', () => {
-            localStorage.setItem('rme_' + (fieldId || chipId), realFieldEl.value);
+            const v = realFieldEl.value;
+            window._reqLabValues = window._reqLabValues || {};
+            window._reqLabValues[elKey] = v;             // sync ke in-memory
+            localStorage.setItem('rme_' + elKey, v);     // sync ke localStorage
             if (typeof checkLabAlert === 'function') checkLabAlert();
         });
         realFieldEl.addEventListener('change', () => {
-            localStorage.setItem('rme_' + (fieldId || chipId), realFieldEl.value);
+            const v = realFieldEl.value;
+            window._reqLabValues = window._reqLabValues || {};
+            window._reqLabValues[elKey] = v;
+            localStorage.setItem('rme_' + elKey, v);
         });
     }
 
@@ -580,7 +600,10 @@ function _updateLabAccordionHeader(chipId) {
     const accBody = chip.closest('[id$="_body"]');
     if (!accBody) return;
     const sgId  = accBody.id.replace('_body', '');
-    const hasAny = accBody.querySelectorAll('button[style*="background: rgb(37, 99, 235)"], button[style*="background:#2563eb"]').length > 0;
+    // BUG-H07 FIX: Deteksi chip aktif via data-active attribute, bukan inline style.
+    // Pencocokan inline style tidak reliabel karena browser (terutama Safari) dapat
+    // menormalisasi warna ke format berbeda (rgb(), #hex, color(srgb ...)).
+    const hasAny = accBody.querySelectorAll('button[data-active="1"]').length > 0;
     const header = accBody.previousElementSibling;
     if (!header) return;
     const spanLabel = header.querySelector('span:first-child');
@@ -804,10 +827,14 @@ function _onPenunjangInput(id) {
 }
 
 function _pnj_thumbHtml(id, url) {
-    const safeUrl = _pm_escHtml(url);
-    return `<div class="pnj-foto-thumb" onclick="window.open('${safeUrl}','_blank')">
+    // BUG-M01 FIX: Simpan URL asli di data-url attribute pada thumb container,
+    // dan gunakan JSON.stringify untuk safe encoding di onclick (menangani URL
+    // dengan karakter &, ", <, > yang akan rusak jika di-escHtml lalu di-query via selector).
+    const safeUrl  = _pm_escHtml(url);
+    const jsonUrl  = JSON.stringify(url); // safe untuk embedding di onclick attribute
+    return `<div class="pnj-foto-thumb" data-url="${safeUrl}" onclick="window.open(${jsonUrl},'_blank')">
         <img src="${safeUrl}" alt="Foto" loading="lazy">
-        <button class="pnj-foto-del" onclick="event.stopPropagation();_pnj_deleteFoto('${id}','${safeUrl}')">✕</button>
+        <button class="pnj-foto-del" onclick="event.stopPropagation();_pnj_deleteFoto('${id}',${jsonUrl})">✕</button>
     </div>`;
 }
 
@@ -845,16 +872,18 @@ async function _pnj_onFotoAdd(event, id) {
 function _pnj_deleteFoto(id, url) {
     window._reqLabFoto[id] = (window._reqLabFoto[id] || []).filter(u => u !== url);
     _sbStorageDeleteFoto(url).catch(() => {});
-    // Hapus thumbnail dari DOM
-    const thumb = document.querySelector(`#foto_${id} img[src="${url}"]`);
-    if (thumb && thumb.parentElement && thumb.parentElement.classList.contains('pnj-foto-thumb')) {
-        thumb.parentElement.remove();
-    }
+    // BUG-M01 FIX: Cari thumb via data-url attribute (menyimpan URL asli),
+    // bukan via img[src="..."] yang gagal jika URL mengandung karakter HTML special.
+    const fotoArea = document.getElementById('foto_' + id);
+    if (!fotoArea) return;
+    const thumb = Array.from(fotoArea.querySelectorAll('.pnj-foto-thumb'))
+        .find(el => el.dataset.url === _pm_escHtml(url) || el.dataset.url === url);
+    if (thumb) thumb.remove();
 }
 
 function _pnj_STT(id) {
     if (!('webkitSpeechRecognition' in window)) return showToast("❌ Mikrofon tidak didukung", "error");
-    const btn = document.querySelector(`.pnj-panel #panel_${id} .pnj-stt-btn`);
+    const btn = document.querySelector(`#panel_${id} .pnj-stt-btn`); // BUG-H04 FIX: selector valid — .pnj-panel adalah class pada #panel_${id} sendiri, bukan ancestor
     const rec = new webkitSpeechRecognition();
     rec.lang = 'id-ID';
     rec.continuous = false;
@@ -1348,6 +1377,8 @@ function _isiKontenSurat(bodyEl, namaSurat) {
     const umur   = ((umurEl ? umurEl.innerText : '') || '').replace(/Umur\s*:?/i,'').trim() || '—';
     const tgl    = new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
     const klinik = window.KLINIK_NAMA || 'Klinik';
+    // BUG-C04 FIX: kota klinik dari settings, bukan hardcode "Pekanbaru"
+    const kotaKlinik = (window._settingsFull && window._settingsFull.klinik_kota) || 'Pekanbaru';
 
     // Ambil diagnosa
     const diagEl = document.getElementById('diagnosa');
@@ -1371,7 +1402,7 @@ function _isiKontenSurat(bodyEl, namaSurat) {
                 dan dianjurkan untuk istirahat.
             </p>
             <div style="text-align:right;margin-top:30px;">
-                <div style="font-size:12px;">Pekanbaru, ${tgl}</div>
+                <div style="font-size:12px;">${kotaKlinik}, ${tgl}</div>  <!-- BUG-C04 FIX: kota dari settings -->
                 <div style="font-size:12px;margin-top:4px;">Dokter Pemeriksa,</div>
                 <div style="margin-top:52px;font-size:13px;font-weight:700;border-top:1px solid #1e293b;
                     display:inline-block;min-width:150px;text-align:center;">( ________________ )</div>
@@ -1482,6 +1513,7 @@ function loadReqLabFromKunjungan(reqLabJson) {
     window._reqPemeriksaanExtra = {};
     window._reqAdminExtra       = {};
     window._pemxActive          = {}; // BUG-FIX: reset sebelum load ulang dari DB
+    window._reqLabValues        = {}; // BUG-C02 FIX: reset in-memory lab values saat sesi baru
 
     if (!reqLabJson) { _refreshAllChipUI(); return; }
 
@@ -2085,7 +2117,16 @@ function _applyLockUI() {
 //  Dipanggil dari tombol "✓ Simpan Rekam Medis" di page-medis.html
 // ══════════════════════════════════════════════════════
 
+// BUG-02 FIX: Flag atomik untuk mencegah double-submit race condition.
+// btn.disabled saja tidak cukup karena klik ganda yang cepat bisa masuk
+// sebelum async pertama selesai. Flag ini di-set secara sinkron sebelum
+// await pertama, sehingga panggilan kedua langsung return.
+let _saveAllInProgress = false;
+
 async function saveAll(showInvoice = true) {
+    if (_saveAllInProgress) return;
+    _saveAllInProgress = true;
+
     const btn = document.getElementById('btnSave');
     if (btn) { btn.disabled = true; btn.innerText = '⏳ Menyimpan...'; }
 
@@ -2253,6 +2294,9 @@ async function saveAll(showInvoice = true) {
         console.error('[Klikpro] saveAll error:', e);
         showToast('❌ Gagal menyimpan: ' + (e.message || 'Cek koneksi internet'), 'error');
     } finally {
+        // BUG-02 FIX: selalu reset flag atomik di finally agar lock tidak permanen
+        // jika terjadi exception atau return early sebelum async selesai.
+        _saveAllInProgress = false;
         if (btn) {
             btn.disabled = false;
             btn.innerText = '✓ Simpan Rekam Medis';

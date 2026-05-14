@@ -58,10 +58,32 @@ function _satuanKeSig(sat) {
         return 'patch';
     if (s === 'ovula' || s === 'ovul')
         return 'ovul';
-    return sat.length <= 6 ? sat : sat.substring(0, 6);
+    // BUG-06 FIX: satuan tambahan yang umum di klinik Indonesia
+    if (s === 'softgel' || s === 'soft gel' || s === 'sftgel')
+        return 'softgel';
+    if (s === 'emulsi' || s === 'emulsion')
+        return 'emulsi';
+    if (s === 'serbuk' || s === 'powder' || s === 'granul')
+        return 'serbuk';
+    if (s === 'tetes mata' || s === 'eye drop' || s === 'gtt mata')
+        return 'gtt mata';
+    if (s === 'tetes telinga' || s === 'ear drop' || s === 'gtt telinga')
+        return 'gtt tlg';
+    if (s === 'nebulizer' || s === 'nebul')
+        return 'nebul';
+    if (s === 'unit' || s === 'iu')
+        return 'unit';
+    // BUG-06 FIX: jangan paksa truncate ke 6 karakter — ini dapat menghasilkan
+    // satuan tidak bermakna (contoh: "Softgel" → "Softge").
+    // Gunakan nilai asli jika ≤ 10 karakter, atau singkatan huruf kapital awal kata
+    // jika terlalu panjang, sehingga hasil selalu bisa dibaca manusia.
+    if (sat.length <= 10) return sat;
+    // Buat inisial dari setiap kata (maks 6 karakter) sebagai singkatan aman
+    const initials = sat.trim().split(/\s+/).map(w => w[0]?.toUpperCase() || '').join('').substring(0, 6);
+    return initials || sat.substring(0, 6);
 }
 
-function _tampilModalResep(kunjId, namaPasien, items, tgl) {
+async function _tampilModalResep(kunjId, namaPasien, items, tgl) { // BUG-C03 FIX: async untuk await sb_getKunjunganById
 
     // ── 1. Hapus modal lama jika ada ──
     const old = document.getElementById('modalResepPro');
@@ -81,12 +103,26 @@ function _tampilModalResep(kunjId, namaPasien, items, tgl) {
     let dokterSip  = '';
     let dokterSpesialis = '';
 
-    // Cari dokter dari data kunjungan hari ini
+    // BUG-C03 FIX: Cari dokter dari kunjunganHariIni (cache hari ini).
+    // Jika tidak ditemukan (kunjungan historis), fetch langsung dari Supabase
+    // menggunakan sb_getKunjunganById() agar nama dokter selalu terisi di resep.
     const kunjData = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : [])
         .find(x => x.id === kunjId);
 
     if (kunjData && kunjData.dokterNama) {
         dokterNama = kunjData.dokterNama;
+    }
+
+    // Jika kunjungan historis (tidak ada di kunjunganHariIni), fetch dari Supabase
+    if (!dokterNama && typeof sb_getKunjunganById === 'function') {
+        try {
+            const kunjDb = await sb_getKunjunganById(kunjId);
+            if (kunjDb && kunjDb.dokterNama) {
+                dokterNama = kunjDb.dokterNama;
+            }
+        } catch(e) {
+            console.warn('[modal] _tampilModalResep: gagal fetch dokter dari DB:', e.message);
+        }
     }
 
     // Fallback: gunakan dokter pertama dari _dokterAktif
@@ -466,13 +502,9 @@ function _cetakResepIsolated() {
     if (!contentEl) { window.print(); return; }
     const content = contentEl.innerHTML;
 
-    const win = window.open('', '_blank', 'width=520,height=760');
-    if (!win) {
-        if (typeof showToast === 'function') showToast('⚠️ Izinkan popup untuk cetak resep', 'error');
-        return;
-    }
-
-    win.document.write(`<!DOCTYPE html>
+    // BUG-03 FIX: gunakan _safeOpenWindow agar ada fallback in-page print
+    // jika popup diblokir browser.
+    const _resepHtml = `<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
@@ -510,7 +542,12 @@ function _cetakResepIsolated() {
       window.onafterprint = function(){ window.close(); };
   };
 <\/script>
-</html>`);
+</html>`;
+    const { win, usedFallback } = (typeof window._safeOpenWindow === 'function')
+        ? window._safeOpenWindow(_resepHtml, { width: 520, height: 760, title: 'Resep Dokter' })
+        : { win: window.open('', '_blank', 'width=520,height=760'), usedFallback: false };
+    if (!win || usedFallback) return;
+    win.document.write(_resepHtml);
     win.document.close();
 }
 
@@ -552,14 +589,18 @@ const _escHtml = (str) => window.escHtml(str);
  * Konversi angka ke angka romawi (untuk nomor obat: No. I, No. II, dst.)
  */
 function _toRoman(num) {
+    // BUG-L04 FIX: Validasi input — 0, NaN, dan nilai negatif fallback ke 1
+    // agar resep tidak mencetak "No. " tanpa angka romawi.
+    const n = (typeof num === 'number' && isFinite(num) && num > 0) ? Math.floor(num) : 1;
     const map = [
         [1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],
         [100,'C'],[90,'XC'],[50,'L'],[40,'XL'],
         [10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']
     ];
     let result = '';
+    let rem    = n;
     for (const [val, sym] of map) {
-        while (num >= val) { result += sym; num -= val; }
+        while (rem >= val) { result += sym; rem -= val; }
     }
     return result;
 }
@@ -594,8 +635,16 @@ function _frekToLatin(frek, satuan) {
 
     if (map[f]) return map[f];
 
-    // Parse pola NxM (misal 2x2, 3x½, dll) — format: S {N} dd {M} {sig}
-    const m = f.match(/^(\d+)\s*[xX×]\s*(\d+(?:[.,]\d+)?)(.*)$/);
+    // BUG-M06 FIX: Normalisasi karakter ½ (U+00BD) ke '0.5' sebelum parsing,
+    // serta karakter ¼ (U+00BC) → '0.25' dan ¾ (U+00BE) → '0.75'.
+    // Regex sebelumnya tidak menangani karakter Unicode ini.
+    const fNorm = f
+        .replace(/½/g, '0.5')
+        .replace(/¼/g, '0.25')
+        .replace(/¾/g, '0.75');
+
+    // Parse pola NxM (misal 2x2, 3x0.5, dll) — format: S {N} dd {M} {sig}
+    const m = fNorm.match(/^(\d+)\s*[xX×]\s*(\d+(?:[.,]\d+)?)(.*)$/);
     if (m) {
         const dd   = m[1];
         const dose = m[2].replace(',', '.');
@@ -682,8 +731,11 @@ function _getNamaUserById(userId) {
 // ════════════════════════════════════════════════════════
 //  BUKA MODAL RIWAYAT
 // ════════════════════════════════════════════════════════
-function openModal(index) {
-    const r = currentRiwayat[index];
+// BUG-H05 FIX: Tambah parameter dataObj opsional.
+// Jika dataObj dikirim (dari _openDetailKunjungan), gunakan langsung tanpa
+// lookup currentRiwayat[index] — mencegah tampil data pasien yang salah.
+function openModal(index, dataObj) {
+    const r = dataObj || currentRiwayat[index];
     if (!r) return;
     if ($('modalIndex')) $('modalIndex').value = index;
 
@@ -1297,12 +1349,27 @@ async function _lihatLengkapDariModal() {
         // Tutup jika klik backdrop — BUG 2+3 FIX:
         // guard _resolve null & blokir backdrop dismiss saat requireInput aktif
         ov.addEventListener('click', e => {
-            if (e.target === ov && typeof _resolve === 'function' && !_requireInput) _resolve(false);
+            // BUG-08 FIX: gunakan _resolveAndClean agar timeout di-clear dan _resolve di-null
+            if (e.target === ov && typeof _resolve === 'function' && !_requireInput) _resolveAndClean(false);
         });
     }
 
     let _resolve = null;
     let _requireInput = false; // BUG 3 FIX: flag blokir backdrop dismiss saat DangerZone
+    // BUG-08 FIX: timeout handle agar promise tidak menggantung selamanya
+    // jika modal ditutup paksa (misalnya via navigasi atau reload partial)
+    let _timeoutHandle = null;
+    const _MODAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 menit — cukup untuk user berpikir
+
+    function _resolveAndClean(val) {
+        if (_timeoutHandle) { clearTimeout(_timeoutHandle); _timeoutHandle = null; }
+        if (typeof _resolve === 'function') {
+            const fn = _resolve;
+            _resolve = null;
+            _close();
+            setTimeout(() => fn(val), 280);
+        }
+    }
 
     function _open() {
         // _ensureDOM() sudah dipanggil sebelum _setBody(), ini hanya safety guard
@@ -1342,10 +1409,18 @@ async function _lihatLengkapDariModal() {
     // ────────────────────────────────────────
     window.showKonfirmasi = function(opts = {}) {
         return new Promise(res => {
-            _resolve = ok => {
-                _close();
-                setTimeout(() => res(ok), 280);
-            };
+            // BUG-08 FIX: _resolve sekarang melalui _resolveAndClean yang membersihkan
+            // timeout dan meng-null _resolve agar tidak bisa dipanggil dua kali.
+            _resolve = val => { res(val); };
+
+            // BUG-08 FIX: pasang timeout 5 menit — jika modal tidak direspons
+            // (misal: navigasi cepat, error JS lain), promise resolve false otomatis
+            // agar caller tidak hang selamanya.
+            if (_timeoutHandle) clearTimeout(_timeoutHandle);
+            _timeoutHandle = setTimeout(() => {
+                console.warn('[Klikpro] showKonfirmasi: timeout — modal tidak direspons dalam 5 menit, auto-resolve false');
+                _resolveAndClean(false);
+            }, _MODAL_TIMEOUT_MS);
 
             const {
                 icon         = '❓',
@@ -1414,8 +1489,8 @@ async function _lihatLengkapDariModal() {
                     inp.focus();
                 }
 
-                if (btnOk)  btnOk.onclick  = () => { if (!btnOk.disabled) _resolve(true);  };
-                if (btnCx)  btnCx.onclick  = () => _resolve(false);
+                if (btnOk)  btnOk.onclick  = () => { if (!btnOk.disabled) _resolveAndClean(true);  };
+                if (btnCx)  btnCx.onclick  = () => _resolveAndClean(false);
             }, 50);
         });
     };
@@ -2848,10 +2923,8 @@ function _previewDanCetakDokumen() {
     );
 
     const klinikNama = window.KLINIK_NAMA || 'Klinik';
-    const win = window.open('', '_blank', 'width=820,height=1000');
-    if (!win) { showToast('⚠️ Izinkan popup untuk mencetak dokumen', 'error'); return; }
-
-    win.document.write(`<!DOCTYPE html>
+    // BUG-03 FIX: bangun HTML dulu lalu gunakan _safeOpenWindow
+    const _dokHtml = `<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
@@ -2884,7 +2957,16 @@ function _previewDanCetakDokumen() {
   <button class="sec" onclick="window.close()">Tutup</button>
 </div>
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};}<\/script>
-</body></html>`);
+</body></html>`;
+    const _dok_result = (typeof window._safeOpenWindow === 'function')
+        ? window._safeOpenWindow(_dokHtml, { width: 820, height: 1000, title: _mdokNama })
+        : { win: window.open('', '_blank', 'width=820,height=1000'), usedFallback: false };
+    const win = _dok_result.win;
+    if (!win || _dok_result.usedFallback) {
+        if (!_dok_result.usedFallback) showToast('⚠️ Izinkan popup untuk mencetak dokumen', 'error');
+        return;
+    }
+    win.document.write(_dokHtml);
     win.document.close();
 
     showToast(`✅ ${_mdokNama} — dokumen dibuka untuk cetak`, 'success');
@@ -3044,9 +3126,8 @@ window._previewTemplateDummy = async function(slug, nama) {
     _extractFields(tmpl).forEach(k => { dummyFields[k] = `[${_fieldLabel(k)}]`; });
 
     const html = _renderTemplate(tmpl, dummyPasien, dummyKunj, dummyFields);
-    const win = window.open('', '_blank', 'width=820,height=1000');
-    if (!win) { showToast('⚠️ Izinkan popup untuk preview', 'error'); return; }
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    // BUG-03 FIX: bangun HTML dulu lalu gunakan _safeOpenWindow
+    const _prevHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>body{font-family:sans-serif;background:#f1f5f9;}
 .wrap{max-width:780px;margin:28px auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 4px 30px rgba(0,0,0,.1);}
 .banner{background:#fef9c3;border:1px solid #fbbf24;border-radius:8px;padding:8px 14px;font-size:12px;color:#92400e;margin-bottom:18px;}
@@ -3056,7 +3137,16 @@ window._previewTemplateDummy = async function(slug, nama) {
   <div class="banner">⚠️ Ini adalah <b>preview dengan data dummy</b>. Field dinamis ditampilkan dalam tanda kurung.</div>
   ${html}
 </div>
-</body></html>`);
+</body></html>`;
+    const _prev_result = (typeof window._safeOpenWindow === 'function')
+        ? window._safeOpenWindow(_prevHtml, { width: 820, height: 1000, title: 'Preview Template' })
+        : { win: window.open('', '_blank', 'width=820,height=1000'), usedFallback: false };
+    const win = _prev_result.win;
+    if (!win || _prev_result.usedFallback) {
+        if (!_prev_result.usedFallback) showToast('⚠️ Izinkan popup untuk preview', 'error');
+        return;
+    }
+    win.document.write(_prevHtml);
     win.document.close();
 };
 
@@ -3139,9 +3229,13 @@ window.cetakDokumenRiwayat = function(btn) {
 
     if (!_doHook()) {
         let tries = 0;
+        // BUG-10 FIX: pastikan clearInterval dipanggil tepat sekali;
+        // _doHook() sudah idempoten via flag, tapi kita simpan hasil
+        // agar interval tidak terus jalan setelah berhasil.
         const t = setInterval(() => {
             tries++;
-            if (_doHook() || tries > 50) clearInterval(t);
+            const done = _doHook();
+            if (done || tries > 50) clearInterval(t);
         }, 150);
     }
 })();
@@ -3188,9 +3282,13 @@ window.cetakDokumenRiwayat = function(btn) {
 
     if (!_doHook()) {
         let tries = 0;
+        // BUG-10 FIX: pastikan clearInterval dipanggil tepat sekali;
+        // _doHook() sudah idempoten via flag, tapi kita simpan hasil
+        // agar interval tidak terus jalan setelah berhasil.
         const t = setInterval(() => {
             tries++;
-            if (_doHook() || tries > 50) clearInterval(t);
+            const done = _doHook();
+            if (done || tries > 50) clearInterval(t);
         }, 150);
     }
 })();
@@ -3255,9 +3353,13 @@ window.cetakDokumenRiwayat = function(btn) {
 
     if (!_doHook()) {
         let tries = 0;
+        // BUG-10 FIX: pastikan clearInterval dipanggil tepat sekali;
+        // _doHook() sudah idempoten via flag, tapi kita simpan hasil
+        // agar interval tidak terus jalan setelah berhasil.
         const t = setInterval(() => {
             tries++;
-            if (_doHook() || tries > 50) clearInterval(t);
+            const done = _doHook();
+            if (done || tries > 50) clearInterval(t);
         }, 150);
     }
 })();

@@ -592,11 +592,11 @@ function cetakLaporan() {
     <div class="footer">Klikpro RME — ${_escHtml(klinikNama)}</div>
     </body></html>`;
 
-    const w = window.open('', '_blank');
-    if (!w) {
-        if (typeof showToast === 'function') showToast("⚠️ Izinkan popup untuk mencetak", "warning");
-        return;
-    }
+    const w_result = (typeof window._safeOpenWindow === 'function')
+        ? window._safeOpenWindow(printHtml, { title: 'Laporan Kunjungan' })
+        : { win: window.open('', '_blank'), usedFallback: false };
+    const w = w_result.win;
+    if (!w || w_result.usedFallback) return; // BUG-03 FIX: fallback sudah ditangani
     w.document.write(printHtml);
     w.document.close();
     w.onload = () => { w.print(); };

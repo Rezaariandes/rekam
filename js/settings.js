@@ -248,9 +248,33 @@ function _htmlIntegrasiSection() {
         <label class="cfg-label">Client Secret <span style="color:#dc2626;font-weight:400">(tidak ditampilkan ulang setelah simpan)</span></label>
         <div style="display:flex;gap:6px;">
           <input type="password" class="form-control" id="cfg_ss_client_secret"
-            placeholder="Kosongkan jika tidak ingin mengganti" style="font-size:12px;font-family:monospace;flex:1;">
+            placeholder="Kosongkan jika tidak ingin mengganti" style="font-size:12px;font-family:monospace;flex:1;"
+            autocomplete="new-password">
           <button class="btn-eye" onclick="togglePasswordVis('cfg_ss_client_secret',this)" title="Tampilkan/sembunyikan">👁️</button>
         </div>
+        <!-- BUG-04 FIX: Peringatan keamanan client secret -->
+        <div id="ss_secret_warning" style="margin-top:5px;padding:7px 10px;background:#fef9c3;border:1px solid #fbbf24;border-radius:7px;font-size:10.5px;color:#92400e;display:none;">
+          ⚠️ <b>Perhatian keamanan:</b> Client Secret dikirim via HTTPS ke database. Pastikan koneksi menggunakan <b>HTTPS</b> (bukan HTTP) dan tidak membuka DevTools Network saat menyimpan. Nilai ini tidak disimpan di browser.
+        </div>
+        <script>
+        (function() {
+          // BUG-04 FIX: tampilkan peringatan saat field mulai diisi; sembunyikan saat kosong
+          const inp = document.getElementById('cfg_ss_client_secret');
+          const warn = document.getElementById('ss_secret_warning');
+          if (inp && warn) {
+            inp.addEventListener('input', function() {
+              warn.style.display = this.value.length > 0 ? '' : 'none';
+              // Tambah peringatan ekstra jika tidak HTTPS
+              if (this.value.length > 0 && location.protocol !== 'https:' && !location.hostname.includes('localhost')) {
+                warn.style.background = '#fee2e2';
+                warn.style.borderColor = '#ef4444';
+                warn.style.color = '#991b1b';
+                warn.innerHTML = '🚨 <b>BAHAYA:</b> Halaman ini berjalan di HTTP (bukan HTTPS). Client Secret dapat terekspos. Gunakan HTTPS sebelum menyimpan data sensitif.';
+              }
+            });
+          }
+        })();
+        </script>
       </div>
       <div class="col-12" style="margin-top:4px;">
         <button class="btn-test" id="btnTestSS" onclick="testKoneksiSatuSehat()">
@@ -1180,9 +1204,16 @@ async function simpanSeksi(seksi) {
                 ss_client_id:     _getVal('cfg_ss_client_id'),
                 ss_client_secret: _getVal('cfg_ss_client_secret')
             };
-            await sb_saveSettings(payload);
-            if (payload.ocr_api_key) window.OCR_API_KEY = payload.ocr_api_key;
+            // BUG-04 FIX: hapus nilai secret dari DOM sebelum request network
+            // agar nilai tidak tertinggal di memory jika request gagal di tengah jalan.
+            // Nilai sudah terbaca ke dalam `payload` di atas, jadi aman di-clear.
             _setVal('cfg_ss_client_secret', '');
+            const _secretWarn = document.getElementById('ss_secret_warning');
+            if (_secretWarn) _secretWarn.style.display = 'none';
+            await sb_saveSettings(payload);
+            // Zero-out referensi secret dari objek payload setelah berhasil dikirim
+            if (payload.ss_client_secret) payload.ss_client_secret = '';
+            if (payload.ocr_api_key) window.OCR_API_KEY = payload.ocr_api_key;
             showToast("✅ Pengaturan integrasi disimpan", "success");
         }
 
@@ -1251,6 +1282,13 @@ async function simpanSemuaSettings() {
         window._labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
         _terapkanSettingsRuntime(payload, dokterPayload);
         _setVal('cfg_ss_client_secret', '');
+        // BUG-09 FIX: sinkronisasi eksplisit _stokAktif dan _biayaAktif dari nilai payload
+        // (yang sudah dibaca dari checkbox sebelum await), bukan dari checkbox DOM yang
+        // mungkin sudah berubah selama request berlangsung.
+        const _stokVal  = payload.stok_aktif  === '1';
+        const _biayaVal = payload.biaya_aktif === '1';
+        if (window._stokAktif  !== _stokVal)  _applyStokAktif(_stokVal);
+        if (window._biayaAktif !== _biayaVal) _applyBiayaAktif(_biayaVal);
         // ── KRITIS: terapkan hak akses ke UI setelah simpan semua ──
         if (typeof applyModuleAccess === 'function' &&
             typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {

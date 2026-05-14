@@ -60,25 +60,74 @@ function formatTglIndo(tglStr) {
 function hitungUmur(tglStr) {
     if (!tglStr) return "-";
     tglStr = String(tglStr).trim();
-    let parts = tglStr.includes('/') ? tglStr.split('/') : tglStr.split('-');
-    let bD = parts.length === 3
-        ? (parts[0].length === 4
-            ? new Date(parts[0], parts[1] - 1, parts[2])
-            : new Date(parts[2], parts[1] - 1, parts[0]))
-        : new Date(tglStr);
+    // BUG-M03 FIX: Parsing tanggal yang robust untuk semua format:
+    //   YYYY-MM-DD  (ISO dash)
+    //   YYYY/MM/DD  (ISO slash — sebelumnya salah dianggap DD/MM/YYYY)
+    //   DD/MM/YYYY  (format Indonesia)
+    // Strategi: pisahkan berdasarkan separator, deteksi format berdasarkan
+    // panjang parts[0] (4 digit = tahun di depan, 2 digit = hari di depan).
+    const sep   = tglStr.includes('/') ? '/' : '-';
+    const parts = tglStr.split(sep);
+    let bD;
+    if (parts.length === 3) {
+        const isYearFirst = parts[0].length === 4;
+        const yr  = isYearFirst ? parseInt(parts[0], 10) : parseInt(parts[2], 10);
+        const mo  = parseInt(parts[1], 10) - 1;  // 0-indexed
+        const day = isYearFirst ? parseInt(parts[2], 10) : parseInt(parts[0], 10);
+        bD = new Date(yr, mo, day);
+    } else {
+        bD = new Date(tglStr);
+    }
     if (isNaN(bD)) return "-";
-    let age = new Date().getFullYear() - bD.getFullYear();
-    let m = new Date().getMonth() - bD.getMonth();
-    if (m < 0 || (m === 0 && new Date().getDate() < bD.getDate())) age--;
+    const now = new Date();
+    let age = now.getFullYear() - bD.getFullYear();
+    const m = now.getMonth() - bD.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < bD.getDate())) age--;
     return age + " Thn";
 }
+
+// ── SAFE WINDOW OPEN — BUG-03 FIX ──
+// window.open() dapat diblokir popup blocker browser tanpa peringatan.
+// Semua kode cetak harus menggunakan helper ini agar mendapat fallback
+// yang konsisten: jika popup diblokir, konten langsung dicetak via
+// iframe tersembunyi di halaman yang sama (in-page print fallback).
+// Mengembalikan objek { win, usedFallback } agar caller bisa menyesuaikan.
+window._safeOpenWindow = function(html, opts = {}) {
+    const { width = 820, height = 1000, title = 'Cetak' } = opts;
+    const win = window.open('', '_blank', `width=${width},height=${height}`);
+    if (win) {
+        return { win, usedFallback: false };
+    }
+    // Fallback: print via hidden iframe agar tidak bergantung popup
+    if (typeof showToast === 'function') {
+        showToast('⚠️ Popup diblokir browser — menggunakan mode cetak alternatif', 'warning');
+    }
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    iframe.contentWindow.focus();
+    // Beri waktu resource (font, gambar) untuk dimuat sebelum print
+    setTimeout(() => {
+        try { iframe.contentWindow.print(); } catch(e) {}
+        setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 2000);
+    }, 400);
+    return { win: null, usedFallback: true };
+};
 
 // ── TOAST NOTIFICATION ──
 function showToast(msg, type) {
     const c = $('toastContainer');
     if (!c) return;
-    // Pastikan toastContainer selalu di atas semua overlay/modal
-    c.style.cssText = 'position:fixed;top:16px;right:16px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+    // BUG-L03 FIX: Set style hanya sekali (saat belum di-inisialisasi), bukan setiap toast.
+    // Overwrite berulang via cssText dapat menghapus style yang di-set oleh kode lain.
+    if (!c.dataset.styled) {
+        c.style.cssText = 'position:fixed;top:16px;right:16px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+        c.dataset.styled = '1';
+    }
     const t = document.createElement('div');
     t.className = `toast ${type}`;
     t.style.pointerEvents = 'auto';
@@ -167,6 +216,17 @@ function clearSession() {
     window._invoiceNama    = '';
     window._invoiceTgl     = '';
     window._statusCache    = {};
+    // BUG-M07 FIX: Reset state foto & hasil penunjang yang sebelumnya tidak direset.
+    // Tanpa ini, foto dan hasil lab dari pasien A bocor ke pasien B sampai
+    // loadReqLabFromKunjungan() dipanggil, yang tidak selalu terjadi di semua alur.
+    window._reqLabFoto     = {};
+    window._reqLabHasil    = {};
+    window._reqLabValues   = {};  // in-memory lab field values (BUG-C02)
+    // NEW-03 FIX: Reset _pendingLabValues agar nilai lab dari pasien A tidak bocor
+    // ke pasien B jika alur dibatalkan sebelum _refreshAllChipUI() selesai dieksekusi.
+    // loadReqLabFromKunjungan() memang mereset ini sendiri, namun clearSession() harus
+    // menjamin state bersih di semua jalur keluar — konsisten dengan pola BUG-M07 fix.
+    window._pendingLabValues = {};
 
     // Notifikasi modul lain (pemeriksaan-medis.js, dll) via event —
     // lebih aman daripada setInterval polling.
@@ -401,6 +461,34 @@ function switchPage(id, navEl) {
     if (id === 'pageMedis' && typeof _renderSectionLabDinamic === 'function') _renderSectionLabDinamic();
     // Selalu reset checkbox surat sakit ke unchecked saat masuk pageMedis
     if (id === 'pageMedis') { const ss = document.getElementById('suratSakit'); if (ss) ss.checked = false; }
+    // BUG-H02 FIX: Jika _tarifCache belum siap saat masuk pageMedis, tampilkan loading
+    // indicator di section chip dan trigger render ulang setelah cache terisi.
+    // Mencegah kondisi dimana user membuka pageMedis saat sb_getTarif() masih berjalan
+    // dan seluruh chip tindakan/lab/penunjang tampil kosong.
+    if (id === 'pageMedis') {
+        const _showChipLoading = () => {
+            ['sectionTindakan', 'sectionLab', 'sectionPermintaanLab'].forEach(secId => {
+                const sec = document.getElementById(secId);
+                if (sec && (!window._tarifCache || window._tarifCache.length === 0)) {
+                    if (!sec.querySelector('._tarif-loading')) {
+                        const ld = document.createElement('div');
+                        ld.className = '_tarif-loading';
+                        ld.style.cssText = 'font-size:11px;color:#94a3b8;padding:8px 0;';
+                        ld.textContent = '⏳ Memuat data tarif...';
+                        sec.prepend(ld);
+                    }
+                }
+            });
+        };
+        if (!window._tarifCache || window._tarifCache.length === 0) {
+            _showChipLoading();
+            window._ensureTarifCacheThen(() => {
+                // Hapus semua loading indicator
+                document.querySelectorAll('._tarif-loading').forEach(el => el.remove());
+                if (typeof renderMedisDinamis === 'function') renderMedisDinamis();
+            });
+        }
+    }
     // ── Floating save button: paksa tampil/sembunyikan sesuai halaman aktif ──
     // MutationObserver di page-medis.html kadang tidak trigger saat class 'active'
     // ditambahkan via JS, jadi kita trigger manual di sini.
@@ -505,7 +593,15 @@ async function loadRuntimeSettings() {
         // Load stok_aktif ke window global
         window._stokAktif = (s.stok_aktif === '1');
         if (window._stokAktif && typeof initStokModule === 'function') {
-            initStokModule().catch(() => {});
+            // BUG-H03 FIX: Setelah initStokModule() selesai, trigger re-render cards
+            // agar tombol Resep muncul. Tanpa ini, jika cards sudah dirender sebelum
+            // initStokModule() selesai (race condition), tombol Resep tidak tampil.
+            initStokModule().then(() => {
+                if (typeof renderKunjunganCards === 'function' &&
+                    typeof kunjunganHariIni !== 'undefined' && kunjunganHariIni.length > 0) {
+                    renderKunjunganCards();
+                }
+            }).catch(() => {});
         }
         const _navStok = document.getElementById('navStok');
         if (_navStok) _navStok.style.display = window._stokAktif ? '' : 'none';

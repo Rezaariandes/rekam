@@ -306,10 +306,12 @@ async function simpanObat() {
         nama,
         kategori:           document.getElementById('obat_kategori')?.value.trim()  || 'Umum',
         satuan:             document.getElementById('obat_satuan')?.value            || 'tablet',
-        harga_beli:         document.getElementById('obat_harga_beli')?.value        || 0,
-        harga_jual:         document.getElementById('obat_harga_jual')?.value        || 0,
-        stok:               document.getElementById('obat_stok')?.value             || 0,
-        stok_minimum:       document.getElementById('obat_stok_minimum')?.value     || 5,
+        // BUG-01-audit FIX: selalu parse ke Number agar tidak dikirim sebagai string ke Supabase.
+        // .value selalu string; tanpa Number() perbandingan numerik dan aritmetika di DB akan salah.
+        harga_beli:         Number(String(document.getElementById('obat_harga_beli')?.value || '0').replace(/[^0-9.]/g, '')) || 0,
+        harga_jual:         Number(String(document.getElementById('obat_harga_jual')?.value || '0').replace(/[^0-9.]/g, '')) || 0,
+        stok:               Number(String(document.getElementById('obat_stok')?.value || '0').replace(/[^0-9.]/g, '')) || 0,
+        stok_minimum:       Number(String(document.getElementById('obat_stok_minimum')?.value || '5').replace(/[^0-9.]/g, '')) || 5,
         frekuensi_default:  document.getElementById('obat_frekuensi_default')?.value || '3x1',
         keterangan:         document.getElementById('obat_keterangan')?.value.trim() || null,
         exp_date:           expRaw ? expRaw + '-01' : null  // simpan sebagai DATE YYYY-MM-01

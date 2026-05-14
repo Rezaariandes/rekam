@@ -146,6 +146,10 @@ async function fetchByDate() {
         if (data.pasien) allPatients = data.pasien;
         kunjunganHariIni = data.hariIni || [];
         renderKunjunganHariIni();
+        // BUG-M04 FIX: Re-subscribe realtime channel dengan filterDate yang baru.
+        // Channel lama masih subscribe ke tanggal sebelumnya, sehingga update DB
+        // pada tanggal yang sedang ditampilkan tidak akan masuk via realtime.
+        if (typeof window.reconnectRealtime === 'function') window.reconnectRealtime();
     } catch (e) {
         showToast("❌ Gagal memuat data kunjungan", "error");
         if (listEl) listEl.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div>Gagal memuat. Cek koneksi.</div>`;
@@ -434,8 +438,13 @@ async function bukaRekamMedisHariIni(kId) {
     if (typeof clearSession === 'function') clearSession();
     document.querySelectorAll('[data-save="true"]').forEach(el => { el.value = ''; });
     window._reqLab       = {};
-    window._reqTindakan  = [];
-    window._reqPenunjang = [];
+    window._reqTindakan  = {};   // BUG-C01 FIX: harus object, bukan array — digunakan dengan string key
+    window._reqPenunjang = {};   // BUG-C01 FIX: idem
+    // BUG-H06 FIX: Reset accordion state saat buka pasien baru agar accordion tidak
+    // tampil dalam posisi salah dari pasien sebelumnya. Harus dilakukan SETELAH
+    // clearSession() karena clearSession() sendiri juga mereset _accordionState,
+    // namun reset eksplisit di sini melindungi dari race condition async renderMedisDinamis().
+    window._accordionState = {};
 
     const p = allPatients.find(x => x.id === h.pasienId) || allPatients.find(x => x.nama && h.nama && x.nama === h.nama);
     const namaPasien = (p && p.nama) ? p.nama : (h.nama || '');
@@ -572,7 +581,12 @@ async function bukaRekamMedisHariIni(kId) {
 function _openDetailKunjungan(kId) {
     const h = (typeof kunjunganHariIni !== 'undefined' ? kunjunganHariIni : []).find(x => x.id === kId);
     if (!h) return;
-    // Map field kunjungan ke format yang dipakai openModal
+    // NEW-02 FIX: Delegasikan ke openModal kanonik di modal.js (sudah support BUG-H05 dataObj).
+    // kunjungan.js tidak lagi mendefinisikan openModal() sendiri — definisi ganda menyebabkan
+    // konflik load-order yang fragile. modal.js di-load setelah kunjungan.js, sehingga
+    // definisi modal.js yang menang; tetapi dependency implisit ini berbahaya jika urutan
+    // berubah. Solusi bersih: hapus definisi lokal, panggil saja openModal() dari modal.js.
+    // Fallback ke _openDetailModalLocal() jika modal.js belum termuat (defensive).
     const dataObj = {
         id:        h.id,
         tgl:       h.tgl,
@@ -591,27 +605,28 @@ function _openDetailKunjungan(kId) {
         terapi:     h.terapi,
         dokterNama: h.dokterNama || '',
     };
-    openModal(0, dataObj);
+    // Gunakan openModal kanonik dari modal.js jika elemen modalRiwayat sudah ada di DOM
+    // (indikator modal.js sudah dimuat); fallback ke implementasi ringkas lokal.
+    if (typeof openModal === 'function' && document.getElementById('modalRiwayat')) {
+        openModal(0, dataObj);
+    } else {
+        _openDetailModalLocal(dataObj);
+    }
 }
 
 // ════════════════════════════════════════════════════════
-//  MODAL DETAIL PASIEN (dari riwayat list)
-//  Urutan tampilan sesuai section pemeriksaan medis:
-//  1. Keluhan  2. Tanda Vital  3. Pemeriksaan Labor
-//  4. Penunjang  5. Diagnosa  6. Tindakan  7. Dokter
+//  MODAL DETAIL KUNJUNGAN — implementasi lokal (fallback)
+//  Dipakai hanya jika modal.js belum termuat saat _openDetailKunjungan dipanggil.
+//
+//  NEW-02 FIX: Definisi openModal() kanonik ADA DI modal.js — tidak didefinisikan
+//  ulang di file ini agar tidak ada konflik load-order.
+//  _openDetailKunjungan() sudah memanggil openModal() dari modal.js secara langsung,
+//  dengan fallback ke _openDetailModalLocal() jika modal.js belum siap.
+//
+//  Urutan tampilan: 1.Keluhan  2.TTV  3.Labor  4.Penunjang  5.Diagnosa  6.Tindakan  7.Dokter
 // ════════════════════════════════════════════════════════
 
-// openModal — DEFINISI KANONIK ada di sini (kunjungan.js).
-// ⚠️  modal.js §4 memiliki IIFE yang me-wrap openModal agar support fitur
-//     riwayat lanjutan. Pastikan modal.js di-load SETELAH kunjungan.js.
-//     Parameter: openModal(idx, dataObj?) — dataObj opsional (dari card kunjungan).
-function openModal(idx, dataObj) {
-    // dataObj bisa dikirim langsung (dari card kunjungan), atau cari dari currentRiwayat via idx
-    let r = dataObj || null;
-    if (!r) {
-        const list = (typeof currentRiwayat !== 'undefined' ? currentRiwayat : []);
-        r = list[idx];
-    }
+function _openDetailModalLocal(r) {
     if (!r) return;
 
     // Hapus modal lama jika ada
@@ -1043,12 +1058,8 @@ function _cetakResepIsolated() {
     if (!contentEl) { window.print(); return; }
     const content = contentEl.innerHTML;
 
-    const win = window.open('', '_blank', 'width=480,height=700');
-    if (!win) {
-        if (typeof showToast === 'function') showToast('⚠️ Izinkan popup untuk cetak resep', 'error');
-        return;
-    }
-    win.document.write(`<!DOCTYPE html>
+    // BUG-03 FIX: gunakan _safeOpenWindow agar ada fallback in-page print
+    const _html = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -1061,7 +1072,12 @@ function _cetakResepIsolated() {
 </head>
 <body>${content}</body>
 <script>window.onload = function(){ window.print(); window.onafterprint = function(){ window.close(); }; }<\/script>
-</html>`);
+</html>`;
+    const { win, usedFallback } = (typeof window._safeOpenWindow === 'function')
+        ? window._safeOpenWindow(_html, { width: 480, height: 700, title: 'Resep Obat' })
+        : { win: window.open('', '_blank', 'width=480,height=700'), usedFallback: false };
+    if (!win || usedFallback) return;
+    win.document.write(_html);
     win.document.close();
 }
 

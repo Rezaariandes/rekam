@@ -1055,10 +1055,9 @@ function printInvoice(tagihan, pasienNama, tgl) {
         ? `<img src="${escHtml(logoUrl)}" class="logo" alt="Logo">`
         : `<div class="logo-initials">${escHtml(klinikNama.substring(0,2).toUpperCase())}</div>`;
 
-    const win = window.open('', '_blank', 'width=820,height=1000');
-    if (!win) return showToast('⚠️ Izinkan popup untuk print invoice', 'error');
-
-    win.document.write(`<!DOCTYPE html><html lang="id"><head>
+    // BUG-03 FIX: bangun string HTML dulu, lalu gunakan _safeOpenWindow
+    // agar ada fallback in-page print jika popup diblokir browser.
+    const _invoiceHtml = (`<!DOCTYPE html><html lang="id"><head>
 <meta charset="utf-8">
 <title>Invoice ${noInvoice}</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1186,5 +1185,11 @@ tbody tr:not(.kat-header){border-bottom:1px solid var(--border)}
 </div>
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>
 </body></html>`);
+    const _inv_result = (typeof window._safeOpenWindow === 'function')
+        ? window._safeOpenWindow(_invoiceHtml, { width: 820, height: 1000, title: 'Invoice' })
+        : { win: window.open('', '_blank', 'width=820,height=1000'), usedFallback: false };
+    const win = _inv_result.win;
+    if (!win || _inv_result.usedFallback) return;
+    win.document.write(_invoiceHtml);
     win.document.close();
 }
