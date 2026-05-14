@@ -305,10 +305,16 @@ function canAccessMedis() {
         return false;
     }
     if (window._currentAccess) {
-        if (!window._currentAccess.includes('mod_medis_ttv') &&
-            !window._currentAccess.includes('mod_diagnosa')) {
+        // Boleh masuk pageMedis jika punya minimal satu modul medis inti
+        const medisModules = [
+            'mod_medis_identitas','mod_medis_ttv','mod_medis_anamnesa',
+            'mod_medis_fisik','mod_medis_lab','mod_medis_diagnosa',
+            'mod_medis_penunjang','mod_medis_tindakan','mod_medis_riwayat'
+        ];
+        const hasMedisAccess = medisModules.some(m => window._currentAccess.includes(m));
+        if (!hasMedisAccess) {
             if (typeof showToast === 'function')
-                showToast("⛔ Akses ditolak untuk jabatan " + loggedInUser.jabatan, "error");
+                showToast("⛔ Akses halaman pemeriksaan ditolak untuk jabatan " + loggedInUser.jabatan, "error");
             return false;
         }
         return true;
