@@ -36,6 +36,11 @@
 //    adm_        → checkbox dokumen admin extra
 //    lab_req_    → chip permintaan lab
 //
+//  ✅ Bersih dari duplikat:
+//     _pm_escHtml() — delegate ke escHtml() global (app.js)
+//     saveAll(), _applyLockUI, validasiNilaiVital, renderRiwayatList,
+//       _renderSectionLabDinamic, floating save — DIPINDAHKAN dari kunjungan.js
+//
 //  File MENGGANTIKAN (tidak perlu di-load lagi):
 //    pem-penunjang.js   → ✅ digabung di sini
 //    tin-medis.js       → ✅ digabung di sini
@@ -45,7 +50,12 @@
 //
 //  Bergantung pada (harus di-load lebih dulu):
 //    - supabase-biaya.js   → sb_getTarif
-//    - kunjungan.js        → _renderSectionLabDinamic (akan di-wrap)
+//
+//  Catatan load-order:
+//    - _renderSectionLabDinamic DIDEFINISIKAN di file ini (bukan wrap dari kunjungan.js)
+//    - kunjungan.js memanggil _renderSectionLabDinamic() saat bukaRekamMedisHariIni(),
+//      sehingga pemeriksaan-medis.js harus di-load SEBELUM kunjungan.js
+//      (atau setidaknya sebelum user membuka rekam medis pertama kali).
 // ════════════════════════════════════════════════════════
 
 'use strict';
@@ -75,13 +85,11 @@ const _PNJ_BUCKET = 'penunjang-foto';
 //  SHARED HELPERS
 // ══════════════════════════════════════════════════════
 
-// escHtml() is now defined in app.js (global). This alias keeps any
-// internal calls inside this file working even if load order changes.
+// _pm_escHtml: alias ke global escHtml() (app.js).
+// Fallback inline hanya jika app.js belum di-load (tidak seharusnya terjadi).
 function _pm_escHtml(str) {
     if (typeof escHtml === 'function') return escHtml(str);
-    return String(str || '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 /** Buat slug id dari prefix + nama */
@@ -1732,23 +1740,37 @@ function _renderSectionLabDinamic() {
 // ══════════════════════════════════════════════════════
 //  HOOK — clearSession (utils.js)
 //  Reset semua state saat pasien berganti
+//  Pola retry sama seperti hook lain — clearSession mungkin
+//  belum terdefinisi saat file ini diparse.
 // ══════════════════════════════════════════════════════
 
 (function _wrapClearSession() {
-    const _origClear = window.clearSession;
-    if (typeof _origClear !== 'function') return;
-    if (_origClear._pemMedisClearHooked) return;
+    function _doWrap() {
+        const _origClear = window.clearSession;
+        if (typeof _origClear !== 'function') return false;
+        if (_origClear._pemMedisClearHooked) return true;
 
-    window.clearSession = function() {
-        _origClear.apply(this, arguments);
-        window._reqLab              = {};
-        window._reqTindakan         = {};
-        window._reqLabHasil         = {};
-        window._reqLabFoto          = {};
-        window._reqPemeriksaanExtra = {};
-        window._reqAdminExtra       = {};
-    };
-    window.clearSession._pemMedisClearHooked = true;
+        window.clearSession = function() {
+            _origClear.apply(this, arguments);
+            window._reqLab              = {};
+            window._reqTindakan         = {};
+            window._reqLabHasil         = {};
+            window._reqLabFoto          = {};
+            window._reqPemeriksaanExtra = {};
+            window._reqAdminExtra       = {};
+        };
+        window.clearSession._pemMedisClearHooked = true;
+        return true;
+    }
+
+    if (!_doWrap()) {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!_doWrap()) {
+                let i = 0;
+                const t = setInterval(() => { if (_doWrap() || ++i > 50) clearInterval(t); }, 100);
+            }
+        });
+    }
 })();
 
 // ══════════════════════════════════════════════════════
@@ -2128,10 +2150,12 @@ async function saveAll(showInvoice = true) {
         }
 
         // Refresh riwayat pasien di pageMedis
+        // Gunakan snapshot _cPasienId (diambil di awal fungsi) bukan currentPasienId langsung,
+        // agar tidak terkena race condition jika user berpindah pasien saat simpan berlangsung.
         try {
-            if (currentPasienId) {
+            if (_cPasienId) {
                 const riwayatRows = await _sbFetch(
-                    `kunjungan?pasien_id=eq.${currentPasienId}&order=tgl.desc,waktu.desc&select=*`
+                    `kunjungan?pasien_id=eq.${_cPasienId}&order=tgl.desc,waktu.desc&select=*`
                 );
                 if (!window._usersCache || window._usersCache.length === 0) {
                     const users = await _sbFetch('users?select=id,nama,jabatan&order=nama.asc');

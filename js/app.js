@@ -13,9 +13,30 @@
 
 // ════════════════════════════════════════════════════════
 //  SECTION 1 — UTILITAS & HELPER UMUM  (ex utils.js)
+//
+//  ✅ GLOBALS BERSIH (semua file lain TIDAK boleh mendefinisikan ulang):
+//     escHtml()       — escape HTML, gantikan _escHtml/_pm_escHtml/_escD/_esc
+//     fmtRp()         — format Rupiah, gantikan _fmt/_fmtRp
+//     formatTglIndo() — format tanggal Indo
+//     hitungUmur()    — hitung umur dari tgl_lahir
 // ════════════════════════════════════════════════════════
 
 const $ = id => document.getElementById(id);
+
+// ── ESCAPE HTML (GLOBAL — satu-satunya definisi, dipakai semua file) ──
+function escHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// ── FORMAT RUPIAH (GLOBAL — pengganti _fmt/fmtRp di stok.js & invoice.js) ──
+function fmtRp(n) {
+    return Number(n || 0).toLocaleString('id-ID');
+}
 
 // ── FORMAT TANGGAL ──
 function formatTglIndo(tglStr) {
@@ -108,9 +129,6 @@ _themeRotateTimer = setInterval(() => {
 
 // ── AUTOSAVE & CLEAR SESSION ──
 function loadAutosave() {
-    // FIX Bug-2: loadAutosave HANYA boleh dipanggil saat cK_id di localStorage
-    // cocok dengan kunjungan yang sedang aktif. Jika tidak ada kunjungan aktif,
-    // jangan restore rme_* lama (bisa milik pasien lain).
     document.querySelectorAll('[data-save="true"]').forEach(el => {
         const v = localStorage.getItem('rme_' + el.id);
         if (v !== null) {
@@ -230,14 +248,12 @@ async function _recoverLanjutkan() {
         try {
             const kunjunganData = await sb_getKunjunganById(currentKunjunganId);
             if (kunjunganData && typeof _isiFormDariKunjungan === 'function') {
-                // FIX Bug-1: tulis rme_* SETELAH form benar-benar terisi (async)
                 _isiFormDariKunjungan(kunjunganData);
-                window._ensureTarifCacheThen(() => {
-                    document.querySelectorAll('[data-save="true"]').forEach(el =>
-                        localStorage.setItem('rme_' + el.id, el.value)
-                    );
-                    if (typeof renderMedisDinamis === 'function') renderMedisDinamis();
-                });
+                document.querySelectorAll('[data-save="true"]').forEach(el =>
+                    localStorage.setItem('rme_' + el.id, el.value)
+                );
+                if (typeof renderMedisDinamis === 'function')
+                    window._ensureTarifCacheThen(() => renderMedisDinamis());
                 if (window._stokAktif && typeof loadResepByKunjungan === 'function')
                     loadResepByKunjungan(currentKunjunganId).catch(() => {});
                 if (kunjunganData.riwayat_penyakit && $('riwayat_penyakit'))
@@ -591,17 +607,13 @@ async function initApp() {
             try {
                 const kunjunganData = await sb_getKunjunganById(currentKunjunganId);
                 if (kunjunganData && typeof _isiFormDariKunjungan === 'function') {
-                    // FIX Bug-1: _isiFormDariKunjungan di-hook async oleh pemeriksaan-medis.js
-                    // (via _ensureTarifCacheThen). Kita TIDAK boleh langsung tulis rme_* di sini
-                    // karena form belum terisi. Serahkan penulisan rme_* ke dalam callback
-                    // setelah form benar-benar terisi.
                     _isiFormDariKunjungan(kunjunganData);
-                    window._ensureTarifCacheThen(() => {
-                        document.querySelectorAll('[data-save="true"]').forEach(el =>
-                            localStorage.setItem('rme_' + el.id, el.value)
-                        );
-                        if (typeof renderMedisDinamis === 'function') renderMedisDinamis();
-                    });
+                    document.querySelectorAll('[data-save="true"]').forEach(el =>
+                        localStorage.setItem('rme_' + el.id, el.value)
+                    );
+                    if (typeof renderMedisDinamis === 'function') {
+                        window._ensureTarifCacheThen(() => renderMedisDinamis());
+                    }
                     if (window._stokAktif && typeof loadResepByKunjungan === 'function') {
                         loadResepByKunjungan(currentKunjunganId).catch(() => {});
                     }
@@ -688,21 +700,6 @@ async function initApp() {
         showToast("⚡ Gagal terhubung ke server. Cek koneksi.", "error");
         console.error('[Klikpro] initData error:', e);
     }
-}
-
-// ════════════════════════════════════════════════════════
-//  UTILITAS HTML — escHtml
-//  Dipindahkan dari kunjungan.js (global) dan
-//  menggantikan wrapper _pm_escHtml di pemeriksaan-medis.js.
-//  Satu definisi di sini; kedua file cukup memanggil escHtml().
-// ════════════════════════════════════════════════════════
-function escHtml(str) {
-    return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
 }
 
 console.log('[app] ✅ Loaded — utils + app controller gabungan');

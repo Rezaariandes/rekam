@@ -1,5 +1,10 @@
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — MODUL LAPORAN & STATISTIK (v1.0)
+//
+//  ✅ Bersih dari duplikat:
+//     _escHtml → delegate ke escHtml() global (app.js)
+//     _formatTglIndo → delegate ke formatTglIndo() global (app.js)
+//     _hitungUmur → delegate ke hitungUmur() global (app.js)
 //  Filter: Bulan, Tahun, Diagnosa, Dokter, JK, Status
 //  Output: Ringkasan statistik + grafik + tabel detail
 // ════════════════════════════════════════════════════════
@@ -609,11 +614,8 @@ function _valEl(id) {
     const el = document.getElementById(id);
     return el ? el.value : '';
 }
-function _escHtml(str) {
-    return String(str||'')
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// _escHtml: alias ke global escHtml (app.js) — tidak perlu definisi lokal lagi
+function _escHtml(str) { return (typeof escHtml === 'function') ? escHtml(str) : String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _potongTeks(str, maxLen) {
     if (!str || str === '—') return '—';
     return str.length > maxLen ? str.substring(0, maxLen) + '…' : str;
@@ -621,23 +623,10 @@ function _potongTeks(str, maxLen) {
 function _csvEsc(str) {
     return String(str || '').replace(/"/g, '""');
 }
-function _formatTglIndo(tglStr) {
-    if (typeof formatTglIndo === 'function') return formatTglIndo(tglStr);
-    if (!tglStr) return '—';
-    const p = tglStr.split('-');
-    if (p.length === 3 && p[0].length === 4) return `${p[2]}/${p[1]}/${p[0]}`;
-    return tglStr;
-}
-function _hitungUmur(tglStr) {
-    if (typeof hitungUmur === 'function') return hitungUmur(tglStr);
-    if (!tglStr) return '—';
-    const bD = new Date(tglStr);
-    if (isNaN(bD)) return '—';
-    let age = new Date().getFullYear() - bD.getFullYear();
-    const m = new Date().getMonth() - bD.getMonth();
-    if (m < 0 || (m === 0 && new Date().getDate() < bD.getDate())) age--;
-    return age + ' Thn';
-}
+// _formatTglIndo: delegate ke global formatTglIndo (app.js)
+function _formatTglIndo(tglStr) { return (typeof formatTglIndo === 'function') ? formatTglIndo(tglStr) : (tglStr || '—'); }
+// _hitungUmur: delegate ke global hitungUmur (app.js)
+function _hitungUmur(tglStr) { return (typeof hitungUmur === 'function') ? hitungUmur(tglStr) : '—'; }
 function _thStyle() {
     return 'padding:9px 10px;font-size:11px;font-weight:700;color:#1e293b;white-space:nowrap;border-bottom:2px solid rgba(37,99,235,0.15);';
 }

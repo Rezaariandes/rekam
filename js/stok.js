@@ -1,5 +1,9 @@
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — MODUL STOK OBAT (stok.js)
+//
+//  ✅ Bersih dari duplikat:
+//     canAccessMedis() — DIHAPUS dari sini; definisi kanonik di auth.js
+//     _fmt() — delegate ke fmtRp() global (app.js)
 //  Halaman manajemen + picker resep di page-medis
 // ════════════════════════════════════════════════════════
 
@@ -14,18 +18,9 @@ function _getResepItems() {
     return _resepItems;
 }
 
-// BUG-C FIX: canAccessMedis dipanggil di pasien.js & kunjungan.js tapi tidak pernah
-// didefinisikan di file manapun. Jabatan Kasir & ATLM tidak boleh akses pageMedis.
-function canAccessMedis() {
-    const jabatan = ((typeof loggedInUser !== 'undefined' && loggedInUser)
-        ? (loggedInUser.jabatan || '') : '').toLowerCase();
-    if (['kasir', 'atlm'].includes(jabatan)) {
-        if (typeof showToast === 'function')
-            showToast('⛔ Jabatan Anda tidak memiliki akses ke halaman pemeriksaan', 'error');
-        return false;
-    }
-    return true;
-}
+// canAccessMedis() didefinisikan di auth.js (definisi kanonik).
+// stok.js tidak perlu mendefinisikan ulang — auth.js di-load lebih dulu.
+// Pengecekan kasir/atlm sudah ditangani di bukaRekamMedisHariIni (kunjungan.js).
 
 // ════════════════════════════════════════
 //  INIT — dipanggil dari app.js saat load
@@ -707,9 +702,8 @@ async function loadResepByKunjungan(kunjunganId) {
 // ════════════════════════════════════════
 //  HELPER
 // ════════════════════════════════════════
-function _fmt(n) {
-    return Number(n || 0).toLocaleString('id-ID');
-}
+// _fmt: alias ke fmtRp() global (app.js) — tidak perlu definisi lokal
+function _fmt(n) { return (typeof fmtRp === 'function') ? fmtRp(n) : Number(n||0).toLocaleString('id-ID'); }
 
 function _hitungMargin(beli, jual) {
     if (!beli || beli == 0) return jual > 0 ? 100 : 0;

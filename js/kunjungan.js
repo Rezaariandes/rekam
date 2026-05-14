@@ -1,12 +1,29 @@
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — MODUL KUNJUNGAN PASIEN
+//
+//  ✅ Bersih dari duplikat (refaktor batch):
+//     saveAll()                  → dipindah ke pemeriksaan-medis.js
+//     _applyLockUI()             → dipindah ke pemeriksaan-medis.js
+//     _isKunjunganTerkunci()     → dipindah ke pemeriksaan-medis.js
+//     VITAL_RULES + validasiNilaiVital() → dipindah ke pemeriksaan-medis.js
+//     renderRiwayatList()        → dipindah ke pemeriksaan-medis.js
+//     _renderSectionLabDinamic() → dipindah ke pemeriksaan-medis.js
+//     Floating save IIFE         → dipindah ke pemeriksaan-medis.js
+//
+//  ⚠️  Load order wajib:
+//     pemeriksaan-medis.js HARUS di-load sebelum kunjungan.js
 //  Mengelola daftar kunjungan harian & rekam medis
 //
 //  ✅ kunjungan-patch.js sudah digabung ke file ini:
-//     - riwayat_penyakit field di saveAll() payload
 //     - Tampil tgl_lahir di banner info pasien
 //     - Indikator permintaan lab di card kunjungan
 //  File kunjungan-patch.js TIDAK perlu di-load lagi.
+//
+//  ✅ Dipindahkan ke pemeriksaan-medis.js (refaktor):
+//     - saveAll(), _applyLockUI(), _isKunjunganTerkunci()
+//     - VITAL_RULES, validasiNilaiVital()
+//     - renderRiwayatList(), _renderSectionLabDinamic()
+//     - IIFE floating save button (_floatSave, _setDirty, dll.)
 // ════════════════════════════════════════════════════════
 
 let kunjunganHariIni   = [];
@@ -545,8 +562,10 @@ async function bukaRekamMedisHariIni(kId) {
     // _hookIsiformDariKunjungan di pemeriksaan-medis.js setelah form terisi.
 
     switchPage('pageMedis', null);
-    // Terapkan lock UI setelah halaman aktif — setTimeout agar DOM render dulu
-    setTimeout(_applyLockUI, 50);
+    // Terapkan lock UI setelah halaman aktif — setTimeout agar DOM render dulu.
+    // Guard typeof: _applyLockUI didefinisikan di pemeriksaan-medis.js; jika
+    // file itu gagal dimuat, kita skip dengan aman daripada throw ReferenceError.
+    if (typeof _applyLockUI === 'function') setTimeout(_applyLockUI, 50);
 }
 
 /** Buka detail kunjungan dari card (pageKunjungan) via kunjunganHariIni */
@@ -582,6 +601,10 @@ function _openDetailKunjungan(kId) {
 //  4. Penunjang  5. Diagnosa  6. Tindakan  7. Dokter
 // ════════════════════════════════════════════════════════
 
+// openModal — DEFINISI KANONIK ada di sini (kunjungan.js).
+// ⚠️  modal.js §4 memiliki IIFE yang me-wrap openModal agar support fitur
+//     riwayat lanjutan. Pastikan modal.js di-load SETELAH kunjungan.js.
+//     Parameter: openModal(idx, dataObj?) — dataObj opsional (dari card kunjungan).
 function openModal(idx, dataObj) {
     // dataObj bisa dikirim langsung (dari card kunjungan), atau cari dari currentRiwayat via idx
     let r = dataObj || null;
@@ -1008,6 +1031,9 @@ function _tampilModalResep(kunjId, namaPasien, items, tgl) {
     document.body.appendChild(modal);
 }
 
+// _cetakResepIsolated — DEFINISI KANONIK ada di sini (kunjungan.js).
+// ⚠️  Jika modal.js mendefinisikan ulang fungsi ini, yang di-load terakhir menang.
+//     Pastikan kunjungan.js di-load SEBELUM modal.js, atau hapus definisi di modal.js.
 /**
  * BUG-11 FIX: Cetak resep via window baru yang terisolasi agar tidak mencetak
  * seluruh halaman. Pola ini sama dengan printInvoice() sehingga konsisten.

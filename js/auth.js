@@ -1,5 +1,12 @@
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — AUTENTIKASI PIN (SECURE VERSION)
+//
+//  ✅ Bersih dari duplikat:
+//     logout() — sekarang memanggil _clearSessionStorage() daripada
+//       menduplikasi removeItem. Tambahkan kunci sesi baru HANYA di
+//       _clearSessionStorage() agar logout() ikut otomatis.
+//     canAccessMedis() — DEFINISI KANONIK ada di sini.
+//       stok.js telah dihapus definisi duplikatnya.
 //  Gabungan: auth.js + auth-secure.js
 //  Sesi login user (Expire: 3 Jam)
 //  ✅ Proxy token untuk verifikasi di Edge Function
@@ -282,13 +289,11 @@ function applyRoleRestrictions() {
 }
 
 // ── LOGOUT ──
+// FIX-DUPLIKAT: logout() sekarang memanggil _clearSessionStorage()
+// daripada menduplikasi removeItem. Tambahkan kunci baru hanya di _clearSessionStorage().
 function logout() {
-    localStorage.removeItem('is_unlocked');
-    localStorage.removeItem('logged_user');
-    localStorage.removeItem('session_expiry');
-    localStorage.removeItem('session_token');
-    localStorage.removeItem('proxy_token');
-    localStorage.removeItem('rme_drName');
+    _clearSessionStorage();
+    localStorage.removeItem('rme_drName');   // hanya di logout (bukan di expired session)
     if (typeof clearSession === 'function') clearSession();
     location.reload();
 }
