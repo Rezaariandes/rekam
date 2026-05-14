@@ -738,9 +738,12 @@ async function initApp() {
         if (typeof renderKunjunganHariIni === 'function') renderKunjunganHariIni();
 
         // ── Aktifkan Supabase Realtime setelah data awal siap ──
-        // Dipanggil di sini agar kunjunganHariIni & allPatients sudah terisi
-        // sebelum pesan WebSocket pertama bisa masuk.
-        if (typeof initRealtime === 'function') initRealtime();
+        // HANYA jika user sudah login (session_jwt ada). Jika belum login
+        // (PIN screen sedang tampil), initRealtime akan dipanggil dari
+        // checkPinServer() setelah PIN berhasil diverifikasi.
+        if (typeof initRealtime === 'function' && localStorage.getItem('session_jwt')) {
+            initRealtime();
+        }
 
     } catch (e) {
         showToast("⚡ Gagal terhubung ke server. Cek koneksi.", "error");

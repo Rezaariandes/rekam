@@ -203,7 +203,12 @@ async function checkPinServer() {
 
         unlockScreen();
         applyRoleRestrictions();
-        
+
+        // Aktifkan Realtime dengan JWT yang baru.
+        // Jika sudah ada koneksi sebelumnya (sesi resume), destroy dulu agar tidak dobel.
+        if (typeof destroyRealtime === 'function') destroyRealtime();
+        if (typeof initRealtime === 'function') initRealtime();
+
         // Menarik data pasien dengan JWT yang baru!
         if (typeof fetchByDate === 'function') fetchByDate();
         

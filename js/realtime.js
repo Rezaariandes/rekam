@@ -45,43 +45,16 @@ function initRealtime() {
     }
 
     // ── SUNTIKKAN CUSTOM JWT UNTUK RLS ──
-    // Guard: jika JWT belum ada (race condition saat initPinLock belum selesai),
-    // tunda koneksi maksimal 5 detik, polling setiap 100ms.
+    // initRealtime() hanya dipanggil dari dua titik yang sudah dijamin JWT ada:
+    //   1. initApp()       → hanya jika localStorage.getItem("session_jwt") truthy
+    //   2. checkPinServer() → tepat setelah JWT disimpan ke localStorage
     const sessionJwt = localStorage.getItem('session_jwt');
-    if (sessionJwt) {
-        _sbClient.realtime.setAuth(sessionJwt);
-        _connectRealtime();
-    } else {
-        console.warn('[Realtime] Session JWT tidak ditemukan — menunggu hingga tersedia...');
-        _waitForJwtThenConnect();
-    }
-}
-
-// ════════════════════════════════════════════════════════
-//  JWT WAIT — polling hingga session_jwt tersedia
-// ════════════════════════════════════════════════════════
-function _waitForJwtThenConnect(attempt) {
-    attempt = attempt || 0;
-    const MAX_ATTEMPTS = 50; // 50 × 100ms = 5 detik
-    const jwt = localStorage.getItem('session_jwt');
-
-    if (jwt) {
-        console.log('[Realtime] ✅ JWT ditemukan setelah ' + attempt + ' polling. Menghubungkan...');
-        _sbClient.realtime.setAuth(jwt);
-        _connectRealtime();
+    if (!sessionJwt) {
+        console.warn('[Realtime] initRealtime dipanggil tanpa session_jwt — dibatalkan.');
         return;
     }
-
-    if (attempt >= MAX_ATTEMPTS) {
-        console.warn('[Realtime] ⚠️ JWT tidak tersedia setelah 5 detik. ' +
-            'Realtime berjalan tanpa auth — data mungkin dibatasi RLS. ' +
-            'Pastikan user login sebelum koneksi Realtime dimulai.');
-        // Tetap hubungkan dengan anon key agar UI tidak frozen
-        _connectRealtime();
-        return;
-    }
-
-    setTimeout(() => _waitForJwtThenConnect(attempt + 1), 100);
+    _sbClient.realtime.setAuth(sessionJwt);
+    _connectRealtime();
 }
 
 // ════════════════════════════════════════════════════════
