@@ -1,30 +1,16 @@
 // ════════════════════════════════════════════════════════
-//  KLIKPRO RME — REALTIME.JS
-//  Supabase Realtime WebSocket listener
-//
-//  Tabel yang dipantau:
-//    • kunjungan  → surgical DOM patch card harian + live-refresh pageMedis
-//    • pasien     → update cache allPatients
-//
-//  LOAD ORDER: di-load setelah supabase.js dan kunjungan.js.
-//  AKTIVASI   : initRealtime() dipanggil dari initApp() setelah
-//               sb_initData() selesai — bukan dari bootstrap.
+//  KLIKPRO RME — REALTIME.JS (OFFICIAL CLIENT VERSION)
+//  Supabase Realtime dengan JWT Auth & Server-Side Filtering
 // ════════════════════════════════════════════════════════
 
 'use strict';
 
-// ── Guard: jangan inisialisasi lebih dari sekali ──
 if (window._klikproRealtimeInit) {
     console.warn('[Realtime] Sudah diinisialisasi, skip.');
 } else {
 
 window._klikproRealtimeInit = true;
 
-// ════════════════════════════════════════════════════════
-//  SELF-CONTAINED ESCAPE HTML
-//  Tidak bergantung pada window.escHtml / app.js / supabase.js.
-//  Eliminasi ReferenceError apapun saat pesan WebSocket masuk.
-// ════════════════════════════════════════════════════════
 const _esc = (str) => {
     if (typeof window.escHtml === 'function') return window.escHtml(str);
     return String(str || '')
@@ -32,123 +18,96 @@ const _esc = (str) => {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 };
 
-let _rtSocket         = null;
-let _rtReconnectTimer = null;
-let _rtReconnectDelay = 3000;
-let _rtSbUrl          = '';
-let _rtSbKey          = '';
+// Variabel untuk menyimpan channel langganan
+let _rtChannel = null;
+let _sbClient  = null;
 
 // ════════════════════════════════════════════════════════
-//  ENTRY POINT — dipanggil dari initApp() setelah sb_initData() selesai
+//  ENTRY POINT — dipanggil dari initApp()
 // ════════════════════════════════════════════════════════
 function initRealtime() {
-    _rtSbUrl = (typeof _SB_URL !== 'undefined' ? _SB_URL : '') ||
-               (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
-    _rtSbKey = (typeof _SB_KEY !== 'undefined' ? _SB_KEY : '') ||
-               (typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : '');
+    const sbUrl = (typeof _SB_URL !== 'undefined' ? _SB_URL : '') || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+    const sbKey = (typeof _SB_KEY !== 'undefined' ? _SB_KEY : '') || (typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : '');
 
-    if (!_rtSbUrl || !_rtSbKey) {
-        console.warn('[Realtime] _SB_URL atau _SB_KEY kosong — realtime tidak aktif.');
+    if (!sbUrl || !sbKey) {
+        console.warn('[Realtime] URL atau Key kosong — realtime tidak aktif.');
         return;
     }
+
+    if (typeof supabase === 'undefined') {
+        console.warn('[Realtime] Library Supabase (CDN) belum dimuat di HTML!');
+        return;
+    }
+
+    // Inisialisasi client resmi khusus untuk Realtime
+    if (!_sbClient) {
+        _sbClient = supabase.createClient(sbUrl, sbKey);
+    }
+
+    // ── SUNTIKKAN CUSTOM JWT UNTUK RLS ──
+    const sessionJwt = localStorage.getItem('session_jwt');
+    if (sessionJwt) {
+        _sbClient.realtime.setAuth(sessionJwt);
+    } else {
+        console.warn('[Realtime] Session JWT tidak ditemukan! Data mungkin ditolak oleh RLS.');
+    }
+
     _connectRealtime();
 }
 
 // ════════════════════════════════════════════════════════
-//  KONEKSI WEBSOCKET
+//  KONEKSI & BERLANGGANAN (SUBSCRIPTION)
 // ════════════════════════════════════════════════════════
 function _connectRealtime() {
-    if (_rtSocket) {
-        try { _rtSocket.close(); } catch(e) {}
-        _rtSocket = null;
+    if (_rtChannel) {
+        _sbClient.removeChannel(_rtChannel);
     }
 
-    const wsUrl = _rtSbUrl.replace(/^https?:\/\//, 'wss://') +
-        '/realtime/v1/websocket?apikey=' + encodeURIComponent(_rtSbKey) + '&vsn=1.0.0';
+    const filterDate = _getFilterDate();
 
-    try {
-        _rtSocket = new WebSocket(wsUrl);
-    } catch(e) {
-        console.warn('[Realtime] Gagal membuat WebSocket:', e.message);
-        _scheduleReconnect();
-        return;
-    }
-
-    _rtSocket.onopen = function() {
-        _rtReconnectDelay = 3000;
-        console.log('[Realtime] Terhubung ke Supabase Realtime');
-        _rtSend({
-            topic:   'realtime:klikpro',
-            event:   'phx_join',
-            payload: {
-                config: {
-                    broadcast:        { self: false },
-                    presence:         { key: '' },
-                    postgres_changes: [
-                        { event: '*', schema: 'public', table: 'kunjungan' },
-                        { event: '*', schema: 'public', table: 'pasien' }
-                    ]
-                }
+    // Buat channel baru
+    _rtChannel = _sbClient.channel('klikpro_live_updates')
+        // 1. Pantau Kunjungan (HANYA tanggal hari ini - Filter di Server)
+        .on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'kunjungan',
+                filter: `tgl=eq.${filterDate}` // Mencegah Over-fetching!
             },
-            ref: '1'
+            (payload) => _handlePostgresChanges(payload)
+        )
+        // 2. Pantau Perubahan Data Pasien (Global)
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'pasien' },
+            (payload) => _handlePostgresChanges(payload)
+        )
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('[Realtime] 🟢 Terhubung ke Supabase Realtime (Aman & Tervalidasi)');
+            }
+            if (status === 'TIMED_OUT' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                console.warn(`[Realtime] 🟡 Status Koneksi: ${status}. Client akan mencoba reconnect otomatis.`);
+            }
         });
-    };
-
-    _rtSocket.onmessage = function(event) {
-        let msg;
-        try { msg = JSON.parse(event.data); } catch(e) { return; }
-        _handleMessage(msg);
-    };
-
-    _rtSocket.onerror = function() {};
-
-    _rtSocket.onclose = function(e) {
-        console.warn('[Realtime] Koneksi tertutup (code:', e.code, ') — reconnect...');
-        _scheduleReconnect();
-    };
-}
-
-function _rtSend(payload) {
-    if (_rtSocket && _rtSocket.readyState === WebSocket.OPEN) {
-        _rtSocket.send(JSON.stringify(payload));
-    }
-}
-
-function _scheduleReconnect() {
-    clearTimeout(_rtReconnectTimer);
-    _rtReconnectTimer = setTimeout(() => {
-        _rtReconnectDelay = Math.min(_rtReconnectDelay * 1.5, 30000);
-        _connectRealtime();
-    }, _rtReconnectDelay);
 }
 
 // ════════════════════════════════════════════════════════
 //  ROUTING PESAN
 // ════════════════════════════════════════════════════════
-function _handleMessage(msg) {
-    if (msg.event === 'heartbeat') {
-        _rtSend({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: msg.ref || '1' });
-        return;
-    }
-    if (msg.event === 'phx_reply') {
-        if (msg.payload && msg.payload.status === 'ok') console.log('[Realtime] Channel aktif:', msg.topic);
-        return;
-    }
-    if (msg.event === 'postgres_changes') {
-        const p = msg.payload || {};
-        _dispatch(p.table, p.type, p.record || {}, p.old_record || {});
-        return;
-    }
-    if (msg.payload && msg.payload.data) {
-        const d = msg.payload.data;
-        _dispatch(d.table, d.type, d.record || {}, d.old_record || {});
-    }
-}
+function _handlePostgresChanges(payload) {
+    const table  = payload.table;
+    const type   = payload.eventType; // 'INSERT', 'UPDATE', 'DELETE'
+    const record = payload.new;
+    const old    = payload.old;
 
-function _dispatch(table, type, record, old) {
-    if (!table || !type) return;
-    if (table === 'kunjungan') _onKunjunganChange(type, record, old);
-    else if (table === 'pasien') _onPasienChange(type, record, old);
+    if (table === 'kunjungan') {
+        _onKunjunganChange(type, record, old);
+    } else if (table === 'pasien') {
+        _onPasienChange(type, record, old);
+    }
 }
 
 // ════════════════════════════════════════════════════════
@@ -162,7 +121,6 @@ function _onKunjunganChange(type, record, old) {
 
 function _handleKunjunganInsert(record) {
     if (!record || !record.id) return;
-    if (record.tgl !== _getFilterDate()) return;
     if (typeof kunjunganHariIni !== 'undefined' && kunjunganHariIni.find(k => k.id === record.id)) return;
 
     const pasien = typeof allPatients !== 'undefined' ? allPatients.find(p => p.id === record.pasien_id) : null;
@@ -176,7 +134,6 @@ function _handleKunjunganInsert(record) {
 function _handleKunjunganUpdate(record) {
     if (!record || !record.id) return;
     const kId = record.id;
-    if (record.tgl && record.tgl !== _getFilterDate()) return;
 
     // 1. Patch cache
     if (typeof kunjunganHariIni !== 'undefined') {
@@ -194,9 +151,9 @@ function _handleKunjunganUpdate(record) {
     _patchBadgeObat(kId, record);
     _patchBadgeBayar(kId, record);
 
-    // 4. Re-render card list hanya jika status berubah (warna & sorting)
-    if (record.status !== undefined) {
-        if (typeof renderKunjunganHariIni === 'function') renderKunjunganHariIni();
+    // 4. Re-render card list
+    if (record.status !== undefined && typeof renderKunjunganHariIni === 'function') {
+        renderKunjunganHariIni();
     }
 
     // 5. Live-refresh form pageMedis jika kunjungan ini sedang aktif
@@ -213,33 +170,31 @@ function _handleKunjunganDelete(kId) {
 }
 
 // ════════════════════════════════════════════════════════
-//  LIVE-REFRESH PAGEMED IS
-//  Jika device lain mengupdate kunjungan yang sedang terbuka di sini,
-//  patch field form secara langsung tanpa perlu refresh halaman.
+//  LIVE-REFRESH PAGEMEDIS
 // ════════════════════════════════════════════════════════
 function _refreshPageMedisIfActive(kId, record) {
     const pageMedis = document.getElementById('pageMedis');
     if (!pageMedis || pageMedis.style.display === 'none') return;
 
-    // currentKunjunganId adalah let di kunjungan.js — tidak window-scoped.
-    // Gunakan localStorage sebagai jembatan (sudah di-set saat bukaRekamMedisHariIni).
     const activeKId = localStorage.getItem('cK_id');
     if (!activeKId || activeKId === 'null' || activeKId !== String(kId)) return;
 
-    // Patch field form jika tidak sedang dalam fokus user
+    // Patch field form JIKA TIDAK sedang diketik oleh user (Pencegahan Bug Kursor Lompat)
     const fieldMap = { td: 'td', suhu: 'suhu', nadi: 'nadi', diagnosa: 'diagnosa', keluhan: 'keluhan' };
     let didPatch = false;
     for (const [dbField, elId] of Object.entries(fieldMap)) {
         if (record[dbField] === undefined || record[dbField] === null) continue;
         const el = document.getElementById(elId);
-        if (!el || document.activeElement === el) continue;
+        
+        // GUARD: Jangan timpa teks jika elemen sedang difokuskan (diketik) oleh dokter!
+        if (!el || document.activeElement === el) continue; 
+        
         if (el.value !== String(record[dbField])) {
             el.value = record[dbField];
             didPatch = true;
         }
     }
 
-    // Patch badge status di pageMedis jika ada elemen data-rt-badge
     _patchPageMedisBadge('status_obat',  record);
     _patchPageMedisBadge('status_bayar', record);
 
@@ -259,9 +214,6 @@ function _patchPageMedisBadge(field, record) {
     el.style.color = val ? '#059669' : '#b45309';
 }
 
-// ════════════════════════════════════════════════════════
-//  SURGICAL BADGE PATCHES
-// ════════════════════════════════════════════════════════
 function _patchBadgeObat(kId, record) {
     if (record.status_obat === undefined) return;
     const badge = document.getElementById('badge_obat_' + kId);
@@ -371,16 +323,15 @@ function _mergeEntry(existing, record) {
 //  CLEANUP
 // ════════════════════════════════════════════════════════
 window.destroyRealtime = function() {
-    clearTimeout(_rtReconnectTimer);
-    if (_rtSocket) {
-        try { _rtSocket.close(1000, 'User logout'); } catch(e) {}
-        _rtSocket = null;
+    if (_rtChannel && _sbClient) {
+        _sbClient.removeChannel(_rtChannel);
+        _rtChannel = null;
     }
     window._klikproRealtimeInit = false;
-    console.log('[Realtime] Koneksi diputus.');
+    console.log('[Realtime] Koneksi Realtime diputus (Logout).');
 };
 
 window.initRealtime = initRealtime;
-console.log('[realtime] Modul siap — menunggu initRealtime() dari initApp().');
+console.log('[realtime] Modul Official Supabase Client siap.');
 
 } // end guard
