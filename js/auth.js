@@ -292,6 +292,7 @@ function applyRoleRestrictions() {
 // FIX-DUPLIKAT: logout() sekarang memanggil _clearSessionStorage()
 // daripada menduplikasi removeItem. Tambahkan kunci baru hanya di _clearSessionStorage().
 function logout() {
+    if (typeof destroyRealtime === 'function') destroyRealtime();
     _clearSessionStorage();
     localStorage.removeItem('rme_drName');   // hanya di logout (bukan di expired session)
     if (typeof clearSession === 'function') clearSession();

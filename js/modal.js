@@ -545,16 +545,8 @@ function _bagikanResep() {
 //  HELPER UTILITIES
 // ════════════════════════════════════════
 
-/** Escape HTML untuk keamanan */
-function _escHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g,  '&amp;')
-        .replace(/</g,  '&lt;')
-        .replace(/>/g,  '&gt;')
-        .replace(/"/g,  '&quot;')
-        .replace(/'/g,  '&#39;');
-}
+/** Escape HTML — delegate ke window.escHtml (definisi kanonik di supabase.js) */
+const _escHtml = (str) => window.escHtml(str);
 
 /**
  * Konversi angka ke angka romawi (untuk nomor obat: No. I, No. II, dst.)
