@@ -1,3 +1,4 @@
+
 // ════════════════════════════════════════════════════════
 // KLIKPRO RME — MODAL (GABUNGAN)
 // Urutan modul:
@@ -782,6 +783,15 @@ function openModal(index, dataObj) {
     if (fisikViewRow) fisikViewRow.style.display = hasM('mod_modal_fisik') ? '' : 'none';
     if ($('viewFisik')) $('viewFisik').innerText = r.fisik || '-';
 
+    // ── VIEW: Riwayat Penyakit Dahulu ──
+    const riwPenyakitRow = $('viewRiwayatPenyakitRow');
+    const riwPenyakitEl  = $('viewRiwayatPenyakit');
+    if (riwPenyakitRow && riwPenyakitEl) {
+        const rpVal = r.riwayat_penyakit || '';
+        riwPenyakitEl.innerText      = rpVal || '-';
+        riwPenyakitRow.style.display = rpVal ? '' : 'none';
+    }
+
     // ── VIEW: Lab ──
     const labRow = $('viewLabRow');
     const hasLab = r.lab_gds || r.lab_chol || r.lab_ua;
@@ -864,6 +874,9 @@ function openModal(index, dataObj) {
     if ($('modalKeluhan')) $('modalKeluhan').value = r.keluhan || '';
     if ($('modalFisik'))   $('modalFisik').value   = r.fisik   || '';
 
+    // Riwayat Penyakit Dahulu
+    if ($('modalRiwayatPenyakit')) $('modalRiwayatPenyakit').value = r.riwayat_penyakit || '';
+
     // Lab
     if ($('modalLabGds'))  $('modalLabGds').value  = r.lab_gds  || '';
     if ($('modalLabChol')) $('modalLabChol').value = r.lab_chol || '';
@@ -891,6 +904,12 @@ function openModal(index, dataObj) {
     if (editDiagSection) editDiagSection.style.display = hasM('mod_modal_diagnosa') ? '' : 'none';
 
     toggleEditModal(false);
+
+    // Lihat Lengkap button: tampil hanya jika user punya akses ke pageMedis
+    const btnLihatLengkap = $('btnLihatLengkap');
+    if (btnLihatLengkap) {
+        btnLihatLengkap.style.display = hasM('mod_medis_riwayat') ? '' : 'none';
+    }
 
     // Invoice button: tampil hanya jika modul biaya aktif, kunjungan punya ID, dan punya hak akses mod_modal_status_bayar
     const invRow = $('viewInvoiceRow');
@@ -991,6 +1010,7 @@ async function simpanEditModal() {
         diagnosa:   d1,
         diagnosa2:  d2,
         terapi:     $('modalTerapi') ? $('modalTerapi').value : '',
+        riwayat_penyakit: $('modalRiwayatPenyakit') ? $('modalRiwayatPenyakit').value.trim() : undefined,
         // BUG FIX: pertahankan surat_sakit & req_lab dari data lama
         // agar tidak tertimpa null saat edit modal (field ini tidak ada di form modal)
         suratSakit: r.surat_sakit || null,

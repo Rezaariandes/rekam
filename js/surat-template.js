@@ -1,3 +1,4 @@
+
 // ════════════════════════════════════════════════════════
 //  KLIKPRO RME — SURAT-TEMPLATE.JS
 //
@@ -281,12 +282,6 @@ function loadSuratTemplates() {
         tries++;
         if ((window._settingsFull || tries > 60) && !_loadCalled) {
             _loadCalled = true;
-            clearInterval(t);
-            loadSuratTemplates();
-        }
-    }, 300);
-})();
-        if (window._settingsFull || tries > 60) {
             clearInterval(t);
             loadSuratTemplates();
         }
@@ -615,6 +610,7 @@ async function _simpanSuratTemplate(slug, namaSurat) {
         }, 150);
     }
 })();
+/**
  * Menggunakan DOM insertion agar tidak perlu modifikasi settings.js.
  */
 function _injectSuratTemplateSection() {
