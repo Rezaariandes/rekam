@@ -36,11 +36,6 @@
 //    adm_        → checkbox dokumen admin extra
 //    lab_req_    → chip permintaan lab
 //
-//  ✅ Bersih dari duplikat:
-//     _pm_escHtml() — delegate ke escHtml() global (app.js)
-//     saveAll(), _applyLockUI, validasiNilaiVital, renderRiwayatList,
-//       _renderSectionLabDinamic, floating save — DIPINDAHKAN dari kunjungan.js
-//
 //  File MENGGANTIKAN (tidak perlu di-load lagi):
 //    pem-penunjang.js   → ✅ digabung di sini
 //    tin-medis.js       → ✅ digabung di sini
@@ -70,6 +65,7 @@ window._reqLabFoto          = window._reqLabFoto          || {};  // foto penunj
 window._reqTindakan         = window._reqTindakan         || {};  // tindakan chip aktif
 window._reqPemeriksaanExtra = window._reqPemeriksaanExtra || {};  // textarea pemeriksaan extra
 window._reqAdminExtra       = window._reqAdminExtra       || {};  // checkbox dokumen admin extra
+window._pemxActive          = window._pemxActive          || {};  // BUG-FIX: flag chip pemx aktif (terpisah dari nilai)
 
 // ── Item bawaan yang tidak dirender ulang ──
 const _PEMERIKSAAN_BAWAAN = [
@@ -85,11 +81,13 @@ const _PNJ_BUCKET = 'penunjang-foto';
 //  SHARED HELPERS
 // ══════════════════════════════════════════════════════
 
-// _pm_escHtml: alias ke global escHtml() (app.js).
-// Fallback inline hanya jika app.js belum di-load (tidak seharusnya terjadi).
+// escHtml() is now defined in app.js (global). This alias keeps any
+// internal calls inside this file working even if load order changes.
 function _pm_escHtml(str) {
     if (typeof escHtml === 'function') return escHtml(str);
-    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /** Buat slug id dari prefix + nama */
@@ -1053,6 +1051,17 @@ const _PEMX_ICONS = {
     'Mata': '👁️', 'THT': '👂', 'Gigi': '🦷', 'Kulit': '🧴',
 };
 
+
+// ── Helper tombol ✕ pemx — ambil slug dari data-slug, hindari masalah HTML entity ──
+// BUG-FIX: sebelumnya ✕ mengirim nama via onclick string yang sudah di-escape HTML
+window._pemxDeactivate = function(btn) {
+    const slug = btn ? (btn.dataset ? btn.dataset.slug : btn.getAttribute('data-slug')) : null;
+    if (!slug) return;
+    // Resolve nama dari tarif cache
+    const tarif = (window._tarifCache || []).find(t => _pm_slug('pemx', t.nama) === slug);
+    const nama  = tarif ? tarif.nama : slug;
+    _togglePemx(slug, nama);
+};
 function _renderSectionPemeriksaanExtra() {
     const container = document.getElementById('sectionPemeriksaanDinamis');
     if (!container) return;
@@ -1072,7 +1081,8 @@ function _renderSectionPemeriksaanExtra() {
 
     function _chipPemxHtml(t) {
         const slug   = _pm_slug('pemx', t.nama);
-        const active = !!(window._reqPemeriksaanExtra[slug] && String(window._reqPemeriksaanExtra[slug]).trim());
+        // BUG-FIX: gunakan _pemxActive flag bukan .trim() nilai
+        const active = !!(window._pemxActive && window._pemxActive[slug]);
         const icon   = _pm_icon(t.nama, _PEMX_ICONS, '🩺');
         return `<button id="chip_${slug}"
             onclick="event.stopPropagation();_togglePemx('${slug}','${_pm_escHtml(t.nama)}')"
@@ -1133,9 +1143,10 @@ function _renderSectionPemeriksaanExtra() {
     container.innerHTML = html;
 
     // Re-render textarea untuk item yang sudah aktif
+    // BUG-FIX: cek _pemxActive flag (bukan .trim()) agar chip yg aktif tapi kosong ikut dirender
     items.forEach(t => {
         const slug = _pm_slug('pemx', t.nama);
-        if (window._reqPemeriksaanExtra[slug] && String(window._reqPemeriksaanExtra[slug]).trim()) {
+        if (window._pemxActive && window._pemxActive[slug]) {
             _renderPemxInput(slug, t.nama);
         }
     });
@@ -1153,9 +1164,12 @@ window._pemxAccToggle = function(sgId) {
 };
 
 function _togglePemx(slug, nama) {
-    const isActive = !!(window._reqPemeriksaanExtra[slug] && String(window._reqPemeriksaanExtra[slug]).trim());
+    // BUG-FIX: Gunakan flag _pemxActive_ terpisah agar toggle tidak bergantung
+    // pada trim() nilai — nilai spasi/kosong tidak lagi menyebabkan chip stuck aktif.
+    const isActive = !!window._pemxActive[slug];
     if (isActive) {
-        // Nonaktifkan: hapus nilai & input
+        // Nonaktifkan
+        window._pemxActive[slug] = false;
         window._reqPemeriksaanExtra[slug] = '';
         localStorage.removeItem('rme_' + slug);
         const inputWrap = document.getElementById('pemxinput_' + slug);
@@ -1164,8 +1178,10 @@ function _togglePemx(slug, nama) {
         if (btn) { btn.style.background = '#fff'; btn.style.borderColor = '#e2e8f0'; btn.style.color = 'var(--text,#334155)'; }
         _updatePemxAccordionHeader(slug);
     } else {
-        // Aktifkan: beri nilai placeholder agar dianggap aktif, lalu render input
-        window._reqPemeriksaanExtra[slug] = window._reqPemeriksaanExtra[slug] || ' ';
+        // Aktifkan
+        window._pemxActive[slug] = true;
+        // Pertahankan nilai lama jika ada, jangan timpa dengan spasi
+        if (!window._reqPemeriksaanExtra[slug]) window._reqPemeriksaanExtra[slug] = '';
         const btn = document.getElementById('chip_' + slug);
         if (btn) { btn.style.background = '#7c3aed'; btn.style.borderColor = '#7c3aed'; btn.style.color = '#fff'; }
         _renderPemxInput(slug, nama);
@@ -1194,7 +1210,7 @@ function _renderPemxInput(slug, nama) {
     div.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <span style="font-size:11px;font-weight:700;color:#7c3aed;">${icon} ${ne}</span>
-            <button onclick="_togglePemx('${slug}','${ne}')"
+            <button data-slug="${slug}" onclick="_pemxDeactivate(this)"
                 style="background:rgba(239,68,68,0.09);border:1px solid rgba(239,68,68,0.2);border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;color:#dc2626;display:flex;align-items:center;justify-content:center;padding:0;"
                 title="Batalkan">✕</button>
         </div>
@@ -1437,15 +1453,16 @@ function getReqLabPayload() {
         if (tarif) payload['_tidname_' + k] = tarif.nama;
     });
 
-    // Pemeriksaan extra: nilai + nama asli
+    // Pemeriksaan extra: simpan jika chip aktif (flag _pemxActive), nilai boleh kosong
+    // BUG-FIX: cek _pemxActive agar chip yang sudah diklik tapi belum diisi tetap tersimpan
     const pemxTarif = _pm_getTarif('Pemeriksaan', _PEMERIKSAAN_BAWAAN);
-    Object.entries(window._reqPemeriksaanExtra || {}).forEach(([k, v]) => {
-        if (v && String(v).trim()) {
-            payload[k] = String(v).trim();
-            // Simpan nama asli pemx
-            const tarif = pemxTarif.find(t => _pm_slug('pemx', t.nama) === k);
-            if (tarif) payload['_pemxname_' + k] = tarif.nama;
-        }
+    const _pemxAct  = window._pemxActive || {};
+    pemxTarif.forEach(t => {
+        const k = _pm_slug('pemx', t.nama);
+        if (!_pemxAct[k]) return; // chip tidak aktif, skip
+        const v = (window._reqPemeriksaanExtra[k] || '').trim();
+        payload[k] = v;           // simpan string kosong sekalipun (agar restore tahu chip aktif)
+        payload['_pemxname_' + k] = t.nama;
     });
 
     // Admin extra
@@ -1468,6 +1485,7 @@ function loadReqLabFromKunjungan(reqLabJson) {
     window._reqLabFoto          = {};
     window._reqPemeriksaanExtra = {};
     window._reqAdminExtra       = {};
+    window._pemxActive          = {}; // BUG-FIX: reset sebelum load ulang dari DB
 
     if (!reqLabJson) { _refreshAllChipUI(); return; }
 
@@ -1489,7 +1507,13 @@ function loadReqLabFromKunjungan(reqLabJson) {
             window._reqLabFoto[chipId] = v;
         }
         if (k.startsWith('tindakan_'))  window._reqTindakan[k] = true;
-        if (k.startsWith('pemx_') && v) window._reqPemeriksaanExtra[k] = v;
+        if (k.startsWith('pemx_')) {
+            // BUG-FIX: restore active flag agar chip bisa di-toggle kembali
+            // _pemxActive harus true meski nilai string kosong (chip aktif tapi belum diisi)
+            window._reqPemeriksaanExtra[k] = (v === null || v === undefined) ? '' : String(v);
+            window._pemxActive = window._pemxActive || {};
+            window._pemxActive[k] = true; // chip pernah diaktifkan
+        }
         if (k.startsWith('adm_')  && v) window._reqAdminExtra[k] = true;
         // Lab accordion items (chip aktif)
         if (k.startsWith('lab_req_'))   window._reqLab[k] = true;
@@ -1758,6 +1782,7 @@ function _renderSectionLabDinamic() {
             window._reqLabFoto          = {};
             window._reqPemeriksaanExtra = {};
             window._reqAdminExtra       = {};
+            window._pemxActive          = {}; // BUG-FIX: reset active flag saat ganti pasien
         };
         window.clearSession._pemMedisClearHooked = true;
         return true;
