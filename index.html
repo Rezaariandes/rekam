@@ -259,4 +259,32 @@
                 'jsModal', 'jsUser',
                 'jsLaporan', 'jsStok', 'jsBiaya', 'jsInvoice',
                 'jsSuratTemplate',
-                'jsPemeriksaanMed
+                'jsPemeriksaanMedis',
+                'jsRealtime',
+                'jsApp',
+            ];
+
+            for (const key of jsKeys) {
+                const res = await fetch(FRAGMENT_URLS[key]);
+                if (!res.ok) throw new Error('Gagal mengunduh JS: ' + key);
+                const text = await res.text();
+                injectScript(text);
+                await new Promise(r => setTimeout(r, 0)); // yield per script
+            }
+
+            document.getElementById('app-loading').style.display = 'none';
+            document.getElementById('app-root').style.display    = '';
+
+        } catch (err) {
+            console.error('[Bootstrap] Error:', err);
+            document.getElementById('app-loading').style.display = 'none';
+            const errDiv = document.getElementById('app-error');
+            errDiv.style.display = 'flex';
+            document.getElementById('err-msg').textContent = err.message || 'Terjadi kesalahan tidak diketahui.';
+        }
+    }
+
+    bootstrap();
+    </script>
+</body>
+</html>
