@@ -101,44 +101,51 @@ const DEFAULT_ACCESS = {
     'Admin':  _ALL_MODS(), // Admin akses semua
 
     'Paramedis': [
+        // Nav
         'mod_nav_daftar','mod_nav_kunjungan',
-        // Kunjungan
+        // Kunjungan – Card
         'mod_kunjungan_identitas','mod_kunjungan_ttv','mod_kunjungan_keluhan',
+        'mod_kunjungan_lab','mod_kunjungan_dokter',
         'mod_kunjungan_status_kunjungan','mod_kunjungan_status_obat',
-        // Pemeriksaan
-        'mod_medis_identitas','mod_medis_ttv','mod_medis_anamnesa','mod_medis_fisik',
-        'mod_medis_lab','mod_medis_riwayat',
-        // Modal riwayat
+        // Modal Riwayat
         'mod_modal_identitas','mod_modal_ttv','mod_modal_alergi','mod_modal_keluhan',
         'mod_modal_fisik','mod_modal_lab','mod_modal_status_kunjungan',
+        // Pemeriksaan Medis
+        'mod_medis_identitas','mod_medis_ttv','mod_medis_anamnesa','mod_medis_fisik',
+        'mod_medis_lab','mod_medis_penunjang','mod_medis_riwayat',
     ],
 
     'Apoteker': [
+        // Nav
         'mod_nav_daftar','mod_nav_kunjungan','mod_nav_stok',
-        // Kunjungan
+        // Kunjungan – Card
         'mod_kunjungan_identitas','mod_kunjungan_status_kunjungan',
         'mod_kunjungan_status_obat','mod_kunjungan_btn_resep',
-        // Modal riwayat
+        // Modal Riwayat
         'mod_modal_identitas','mod_modal_diagnosa','mod_modal_status_kunjungan',
     ],
 
     'Kasir': [
+        // Nav
         'mod_nav_daftar','mod_nav_kunjungan','mod_nav_biaya','mod_nav_laporan',
-        // Kunjungan
+        // Kunjungan – Card
         'mod_kunjungan_identitas','mod_kunjungan_status_kunjungan',
         'mod_kunjungan_status_bayar','mod_kunjungan_btn_invoice',
-        // Modal riwayat
+        // Modal Riwayat
         'mod_modal_identitas','mod_modal_status_kunjungan','mod_modal_status_bayar',
+        // Settings
+        'mod_settings_laporan',
     ],
 
     'ATLM': [
+        // Nav
         'mod_nav_daftar','mod_nav_kunjungan',
-        // Kunjungan
+        // Kunjungan – Card
         'mod_kunjungan_identitas','mod_kunjungan_status_kunjungan','mod_kunjungan_lab',
-        // Pemeriksaan
-        'mod_medis_identitas','mod_medis_lab','mod_medis_riwayat',
-        // Modal riwayat
+        // Modal Riwayat
         'mod_modal_identitas','mod_modal_lab','mod_modal_status_kunjungan',
+        // Pemeriksaan Medis
+        'mod_medis_identitas','mod_medis_lab','mod_medis_riwayat',
     ],
 };
 
@@ -812,9 +819,9 @@ function applyModuleAccess(jabatan) {
     // ══ NAVBAR ══
     _setNavVis('navDaftar',   has('mod_nav_daftar'));
     _setNavVis('navHariIni',  has('mod_nav_kunjungan'));
-    _setNavVis('navLaporan',  has('mod_nav_laporan'));
+    _setNavVis('navLaporan',  has('mod_nav_laporan') && has('mod_settings_laporan'));
     _setNavVis('navSettings', has('mod_nav_settings'));
-    _setNavVis('navUser',     has('mod_nav_user'));
+    _setNavVis('navUser',     has('mod_nav_user')    && has('mod_settings_user'));
     // Stok & Biaya: tampil hanya jika KEDUANYA: modul aktif DAN punya hak akses
     _setNavVis('navStok',  has('mod_nav_stok')  && window._stokAktif  === true);
     _setNavVis('navBiaya', has('mod_nav_biaya') && window._biayaAktif === true);
@@ -843,11 +850,13 @@ function applyModuleAccess(jabatan) {
         klinik:        has('mod_settings_klinik'),
         akses:         has('mod_settings_akses'),
         dokter:        has('mod_settings_dokter'),
-        layanan_medis: true,
+        layanan_medis: has('mod_settings_layanan'),
         stok:          has('mod_settings_stok'),
         biaya:         has('mod_settings_biaya'),
         ai:            has('mod_settings_ai'),
         integrasi:     has('mod_settings_integrasi'),
+        user:          has('mod_settings_user'),
+        laporan:       has('mod_settings_laporan'),
     };
 
     if (typeof window._fitNav === 'function') setTimeout(window._fitNav, 200);
@@ -867,19 +876,22 @@ function _setElVis(id, visible) {
 function _applySettingsSeksiAccess() {
     const sa = window._settingsAccess || {};
     const secMap = {
-        sec_klinik:    sa.klinik    !== false,
-        sec_akses:     sa.akses     !== false,
-        sec_dokter:    sa.dokter    !== false,
-        sec_layanan_medis: true,
-        sec_stok:      sa.stok      !== false,
-        sec_biaya:     sa.biaya     !== false,
-        sec_ai:        sa.ai        !== false,
-        sec_integrasi: sa.integrasi !== false,
+        sec_klinik:        sa.klinik        !== false,
+        sec_akses:         sa.akses         !== false,
+        sec_dokter:        sa.dokter        !== false,
+        sec_layanan_medis: sa.layanan_medis !== false,
+        sec_stok:          sa.stok          !== false,
+        sec_biaya:         sa.biaya         !== false,
+        sec_ai:            sa.ai            !== false,
+        sec_integrasi:     sa.integrasi     !== false,
     };
     Object.entries(secMap).forEach(([secId, visible]) => {
         const wrap = document.getElementById(`${secId}_wrap`);
         if (wrap) wrap.style.display = visible ? '' : 'none';
     });
+    // Kontrol akses halaman User & Laporan via navItem visibility
+    _setNavVis('navUser',    (sa.user    !== false) && (window._currentAccess || []).includes('mod_nav_user'));
+    _setNavVis('navLaporan', (sa.laporan !== false) && (window._currentAccess || []).includes('mod_nav_laporan'));
 }
 
 // ── Helper escape id ──
