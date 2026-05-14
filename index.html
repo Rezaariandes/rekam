@@ -61,6 +61,7 @@
             jsInvoice:            BASE_URL + '/js/invoice.js' + '?v=' + _CB,
             jsSuratTemplate:      BASE_URL + '/js/surat-template.js' + '?v=' + _CB,
             jsPemeriksaanMedis:   BASE_URL + '/js/pemeriksaan-medis.js' + '?v=' + _CB,
+            jsRealtime:           BASE_URL + '/js/realtime.js' + '?v=' + _CB,
         };
     </script>
 
@@ -262,6 +263,7 @@
                 'jsSuratTemplate',
                 'jsPemeriksaanMedis',
                 'jsApp',
+                'jsRealtime',
             ];
 
             const jsTexts = await Promise.all(
@@ -282,6 +284,7 @@
             document.getElementById('app-root').style.display    = 'block';
 
             if (typeof initApp === 'function') initApp();
+            if (typeof initRealtime === 'function') initRealtime();
 
         } catch (err) {
             document.getElementById('app-loading').style.display = 'none';
