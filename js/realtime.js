@@ -87,6 +87,7 @@ function _connectRealtime() {
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 console.log('[Realtime] 🟢 Terhubung ke Supabase Realtime (Aman & Tervalidasi)');
+                if (typeof fetchByDate === 'function') fetchByDate();
             }
             if (status === 'TIMED_OUT' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
                 console.warn(`[Realtime] 🟡 Status Koneksi: ${status}. Client akan mencoba reconnect otomatis.`);
