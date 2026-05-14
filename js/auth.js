@@ -3,6 +3,7 @@
 //
 //  ✅ Integrasi dengan Supabase Edge Function (login-pin)
 //  ✅ Menggunakan Custom JWT untuk keamanan & Realtime RLS
+//  ✅ Penarikan data otomatis setelah login sukses
 //  Sesi login user (Expire: 3 Jam)
 // ════════════════════════════════════════════════════════
 
@@ -24,8 +25,7 @@ async function initPinLock() {
         if (parsedUser && parsedUser.id) {
             // BUG-07 FIX: Re-validasi jabatan dari server agar sesi resign langsung dicabut
             try {
-                // Catatan: Pastikan _sbFetch di supabase.js sudah di-update untuk mengirimkan 
-                // Authorization: Bearer sessionJwt (jika ada) agar RLS mengenali user ini.
+                // Catatan: _sbFetch di supabase.js menggunakan Authorization: Bearer sessionJwt
                 const rows = await _sbFetch(`users?id=eq.${parsedUser.id}&select=id,nama,jabatan&limit=1`);
                 if (rows && rows[0]) {
                     const jabatanServer = (rows[0].jabatan || '').toLowerCase();
@@ -207,6 +207,9 @@ async function checkPinServer() {
         unlockScreen();
         applyRoleRestrictions();
         
+        // ✅ Menarik data pasien dengan JWT yang baru!
+        if (typeof fetchByDate === 'function') fetchByDate();
+        
     } catch (e) {
         console.error("Gagal verifikasi PIN ke Edge Function:", e);
         showPinError("Koneksi gagal. Cek internet.");
@@ -314,7 +317,7 @@ function canAccessMedis() {
     return true;
 }
 
-// SHA-256 untuk hash PIN di browser (dipindahkan ke sini jika supabase.js telat load)
+// SHA-256 untuk hash PIN di browser
 async function _sha256(text) {
     const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
