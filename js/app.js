@@ -551,7 +551,10 @@ async function loadRuntimeSettings() {
 
 // ── INISIALISASI APLIKASI ──
 async function initApp() {
-    if (typeof initPinLock === 'function') initPinLock();
+    // ── FIX: await initPinLock agar session_jwt sudah tersimpan di localStorage
+    //    sebelum initRealtime dipanggil. Tanpa await, terjadi race condition:
+    //    initRealtime berjalan sebelum Edge Function login-pin selesai → JWT null.
+    if (typeof initPinLock === 'function') await initPinLock();
 
     const today        = new Date();
     const tzOffset     = today.getTimezoneOffset() * 60000;
