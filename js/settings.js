@@ -616,19 +616,32 @@ function _initModuleAccess() {
                    (typeof JABATAN_MEDIS !== 'undefined' ? JABATAN_MEDIS.join(', ') : 'Dokter, Admin, Paramedis, Apoteker, Kasir, ATLM');
     _jabatanList = jabStr.split(',').map(j => j.trim()).filter(j => j);
 
-    // Coba parse dari cache server
+    // Sumber data: cache server → window._moduleAccessFromServer → localStorage → DEFAULT_ACCESS
     let savedAccess = {};
     if (_settingsCache.module_access) {
         try { savedAccess = JSON.parse(_settingsCache.module_access); } catch(e) {}
     }
+    // Fallback: ambil dari window global jika settingsCache belum terisi
+    if (!Object.keys(savedAccess).length && window._moduleAccessFromServer) {
+        savedAccess = window._moduleAccessFromServer;
+    }
+    // Fallback: localStorage
+    if (!Object.keys(savedAccess).length) {
+        const stored = localStorage.getItem('kp_module_access');
+        if (stored) { try { savedAccess = JSON.parse(stored); } catch(e) {} }
+    }
 
-    // Merge dengan default
+    // Bangun _moduleAccess: gunakan savedAccess jika ada, fallback ke DEFAULT_ACCESS
     _moduleAccess = {};
     _jabatanList.forEach(jab => {
-        _moduleAccess[jab] = savedAccess[jab] ||
-                             DEFAULT_ACCESS[jab] ||
-                             ['mod_daftar','mod_kunjungan','mod_pemeriksaan_ttv'];
+        _moduleAccess[jab] = (jab in savedAccess)
+            ? savedAccess[jab]
+            : (DEFAULT_ACCESS[jab] || ['mod_nav_daftar','mod_nav_kunjungan']);
     });
+
+    // Sinkron ke window global agar applyModuleAccess selalu pakai data terbaru
+    window._moduleAccessFromServer = JSON.parse(JSON.stringify(_moduleAccess));
+    localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess));
 
     _renderModuleAccess();
 }
@@ -775,28 +788,32 @@ function _resetDefaultModul(jab) {
 
 // ── Terapkan hak akses ke seluruh UI berdasarkan jabatan login ──
 function applyModuleAccess(jabatan) {
-    // Prioritas 1: _moduleAccess (variabel lokal, diisi saat Settings dibuka)
-    let access = _moduleAccess[jabatan];
+    let access = null;
 
-    // Prioritas 2: data server yang di-inject oleh loadRuntimeSettings() via window._moduleAccessFromServer
-    if (!access && window._moduleAccessFromServer) {
-        const serverAccess = window._moduleAccessFromServer[jabatan];
-        if (serverAccess && serverAccess.length > 0) {
-            // Populate _moduleAccess dari server agar call berikutnya tidak perlu fallback
-            Object.assign(_moduleAccess, window._moduleAccessFromServer);
-            access = serverAccess;
+    // Prioritas 1: window._moduleAccessFromServer — sumber kebenaran dari DB/save terakhir
+    if (window._moduleAccessFromServer && jabatan in window._moduleAccessFromServer) {
+        access = window._moduleAccessFromServer[jabatan];
+        // Sinkron ke _moduleAccess agar konsisten
+        if (!_moduleAccess[jabatan] || JSON.stringify(_moduleAccess[jabatan]) !== JSON.stringify(access)) {
+            _moduleAccess[jabatan] = access;
         }
     }
 
-    // Prioritas 3: localStorage (cache lokal, harus sudah sinkron dengan server)
+    // Prioritas 2: _moduleAccess (lokal, diisi saat Settings dibuka atau setelah save)
+    if (!access && jabatan in _moduleAccess) {
+        access = _moduleAccess[jabatan];
+    }
+
+    // Prioritas 3: localStorage (cache lokal)
     if (!access) {
         const stored = localStorage.getItem('kp_module_access');
         if (stored) {
             try {
                 const all = JSON.parse(stored);
-                if (all[jabatan] && all[jabatan].length > 0) {
-                    // Populate _moduleAccess agar konsisten
+                if (jabatan in all) {
                     Object.assign(_moduleAccess, all);
+                    window._moduleAccessFromServer = window._moduleAccessFromServer || {};
+                    Object.assign(window._moduleAccessFromServer, all);
                     access = all[jabatan];
                 }
             } catch(e) {}
@@ -1234,6 +1251,11 @@ async function simpanSemuaSettings() {
         window._labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
         _terapkanSettingsRuntime(payload, dokterPayload);
         _setVal('cfg_ss_client_secret', '');
+        // ── KRITIS: terapkan hak akses ke UI setelah simpan semua ──
+        if (typeof applyModuleAccess === 'function' &&
+            typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
+            applyModuleAccess(loggedInUser.jabatan);
+        }
         showSettingsBanner("✅ Semua pengaturan berhasil disimpan!", "success");
         showToast("✅ Semua pengaturan disimpan", "success");
     } catch (e) {
