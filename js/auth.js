@@ -23,9 +23,8 @@ async function initPinLock() {
         try { parsedUser = JSON.parse(storedUser); } catch(e) {}
 
         if (parsedUser && parsedUser.id) {
-            // BUG-07 FIX: Re-validasi jabatan dari server agar sesi resign langsung dicabut
+            // Re-validasi jabatan dari server agar sesi resign langsung dicabut
             try {
-                // Catatan: _sbFetch di supabase.js menggunakan Authorization: Bearer sessionJwt
                 const rows = await _sbFetch(`users?id=eq.${parsedUser.id}&select=id,nama,jabatan&limit=1`);
                 if (rows && rows[0]) {
                     const jabatanServer = (rows[0].jabatan || '').toLowerCase();
@@ -177,13 +176,11 @@ async function checkPinServer() {
         loggedInUser = data.user;
         const customJwtToken = data.token; // Custom JWT dari server
 
-        // Blokir login jika jabatan sudah resign
         if ((loggedInUser.jabatan || '').toLowerCase() === 'sudah resign') {
             showPinError("Akun ini sudah tidak aktif.");
             return;
         }
 
-        // Sesi 3 jam
         const expiry = Date.now() + (3 * 60 * 60 * 1000);
 
         // Simpan sesi dan JWT Asli ke localStorage
@@ -192,7 +189,7 @@ async function checkPinServer() {
         localStorage.setItem('session_expiry', expiry);
         localStorage.setItem('session_jwt',    customJwtToken);
 
-        // Jika Anda menggunakan Supabase JS Official Client untuk Realtime
+        // Set Auth untuk Realtime WebSocket
         if (typeof supabase !== 'undefined' && supabase.realtime) {
             supabase.realtime.setAuth(customJwtToken);
         }
@@ -207,7 +204,7 @@ async function checkPinServer() {
         unlockScreen();
         applyRoleRestrictions();
         
-        // ✅ Menarik data pasien dengan JWT yang baru!
+        // Menarik data pasien dengan JWT yang baru!
         if (typeof fetchByDate === 'function') fetchByDate();
         
     } catch (e) {
@@ -241,23 +238,15 @@ function unlockScreen() {
     }
 }
 
-// ════════════════════════════════════════════════════════
-//  PEMBATASAN AKSES BERDASARKAN JABATAN
-// ════════════════════════════════════════════════════════
 function applyRoleRestrictions() {
     if (!loggedInUser) return;
-
     const jabatan = loggedInUser.jabatan;
-
     if (typeof applyModuleAccess === 'function') {
         applyModuleAccess(jabatan);
         return;
     }
 
-    // ── FALLBACK LAMA ──
-    const bolehMedis  = (typeof JABATAN_MEDIS !== 'undefined')
-                        ? JABATAN_MEDIS.includes(jabatan)
-                        : true;
+    const bolehMedis  = (typeof JABATAN_MEDIS !== 'undefined') ? JABATAN_MEDIS.includes(jabatan) : true;
     const isParamedis = jabatan === 'Paramedis';
 
     const btnNext = document.getElementById('btnNext');
@@ -280,7 +269,6 @@ function applyRoleRestrictions() {
     }
 }
 
-// ── LOGOUT ──
 function logout() {
     if (typeof destroyRealtime === 'function') destroyRealtime();
     _clearSessionStorage();
@@ -289,7 +277,6 @@ function logout() {
     location.reload();
 }
 
-// ── CEK AKSES SEBELUM KE pageMedis ──
 function canAccessMedis() {
     if (!loggedInUser) {
         if (typeof showToast === 'function') showToast("⛔ Anda belum login.", "error");
@@ -317,7 +304,6 @@ function canAccessMedis() {
     return true;
 }
 
-// SHA-256 untuk hash PIN di browser
 async function _sha256(text) {
     const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
