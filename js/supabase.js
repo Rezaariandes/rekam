@@ -1,20 +1,14 @@
 // ════════════════════════════════════════════════════════
-//  KLIKPRO RME — SUPABASE CLIENT (CONSOLIDATED)
+//  KLIKPRO RME — SUPABASE CLIENT (CONSOLIDATED & SECURED)
 //
-//  ✅ supabase-secure.js → sudah digabung (auth, user, dokter)
-//  ✅ supabase-patch.js  → sudah digabung (riwayat_penyakit)
-//  ✅ supabase-stok.js   → sudah digabung (modul stok obat)
-//  ✅ supabase-biaya.js  → sudah digabung (modul pembiayaan)
-//  Cukup load 1 file ini saja — file-file di atas TIDAK perlu di-load lagi.
+//  ✅ Integrasi dengan Supabase Edge Function (Custom JWT)
+//  ✅ supabase-secure.js, supabase-patch.js, supabase-stok.js, 
+//     supabase-biaya.js sudah digabung.
+//  Cukup load 1 file ini saja.
 // ════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════
-//  SHARED UTILITIES — didefinisikan di sini (diload pertama)
-//  agar tersedia untuk settings.js, pemeriksaan-medis.js,
-//  laporan.js, invoice.js, stok.js, dll.
-//
-//  app.js TIDAK perlu mendefinisikan ulang — cukup pakai
-//  window.escHtml / window.fmtRp / window.accToggle yang sudah ada.
+//  SHARED UTILITIES
 // ════════════════════════════════════════════════════════
 
 /** Escape HTML — satu-satunya definisi kanonik. */
@@ -38,9 +32,6 @@ if (typeof window.fmtRp !== 'function') {
 
 /**
  * Generic accordion toggle.
- * Semua modul (pemeriksaan-medis, settings) cukup panggil:
- *   accToggle(id)  — toggle elemen #<id>_body + rotasi #<id>_arrow
- * State disimpan di window._accordionState[id].
  */
 window.accToggle = function accToggle(id) {
     if (!window._accordionState) window._accordionState = {};
@@ -55,9 +46,6 @@ window.accToggle = function accToggle(id) {
 
 /**
  * Badge status kunjungan — satu-satunya definisi kanonik.
- * Dipakai di kunjungan.js dan laporan.js.
- *
- * @param {'selesai'|'lunas'|'menunggu'} type
  */
 window.badgeKunjungan = function badgeKunjungan(type) {
     switch (type) {
@@ -72,16 +60,24 @@ window.badgeKunjungan = function badgeKunjungan(type) {
 };
 
 // ════════════════════════════════════════════════════════
+// SUPABASE CLIENT & FETCH WRAPPER
+// ════════════════════════════════════════════════════════
 
 const _SB_URL = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
 const _SB_KEY = typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : '';
 
-// ── Helper fetch ke Supabase REST API ──
+// ── Helper fetch ke Supabase REST API (DIUPDATE UNTUK JWT) ──
 async function _sbFetch(path, opts = {}) {
+    // 1. Ambil Custom JWT dari localStorage yang diset oleh login-pin
+    const jwtToken = localStorage.getItem('session_jwt');
+    
+    // 2. Tentukan header Authorization: Jika ada JWT, gunakan itu. Jika tidak, fallback ke Anon Key.
+    const authHeader = jwtToken ? 'Bearer ' + jwtToken : 'Bearer ' + _SB_KEY;
+
     const res = await fetch(_SB_URL + '/rest/v1/' + path, {
         headers: {
-            'apikey':        _SB_KEY,
-            'Authorization': 'Bearer ' + _SB_KEY,
+            'apikey':        _SB_KEY,         // Apikey tetap dibutuhkan oleh API Gateway Supabase
+            'Authorization': authHeader,      // Authorization header menentukan role RLS (authenticated/anon)
             'Content-Type':  'application/json',
             'Prefer':        opts.prefer || 'return=representation',
             ...(opts.headers || {})
@@ -89,6 +85,7 @@ async function _sbFetch(path, opts = {}) {
         method: opts.method || 'GET',
         body:   opts.body ? JSON.stringify(opts.body) : undefined
     });
+    
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Supabase error ' + res.status);
@@ -105,7 +102,6 @@ async function sb_getSettings() {
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
 
-    // Set global flags agar modul stok, biaya, dan chip kunjungan bisa tampil
     const _toBool = v => v === true || v === 'true' || v === '1';
     window._stokAktif  = _toBool(settings['stok_aktif']);
     window._biayaAktif = _toBool(settings['biaya_aktif']);
@@ -115,7 +111,6 @@ async function sb_getSettings() {
     return { status: 'success', settings, dokter };
 }
 
-/** Muat ulang flags modul dari konfigurasi — bisa dipanggil kapan saja */
 async function sb_initFlags() {
     try {
         const rows = await _sbFetch('konfigurasi?select=key,value');
@@ -137,13 +132,10 @@ async function sb_saveSettings(payload) {
                    'ss_org_id','ss_client_id','ss_client_secret',
                    'ai_gemini','ai_groq','ai_openrouter','ai_openai','ai_mistral',
                    'module_access','lab_aktif','stok_aktif','biaya_aktif','klinik_logo'];
+                   
     for (const key of keys) {
         if (payload[key] === undefined) continue;
         if (key === 'ss_client_secret' && !payload[key]) continue;
-        // FIX: Ganti PATCH ke UPSERT (POST + Prefer: resolution=merge-duplicates).
-        // PATCH ke ?key=eq.xxx mengembalikan HTTP 200 dengan 0 rows affected jika key
-        // belum ada di tabel konfigurasi — data tidak tersimpan tanpa ada error sama sekali.
-        // UPSERT memastikan baris dibuat jika belum ada, atau diupdate jika sudah ada.
         updates.push(
             _sbFetch('konfigurasi', {
                 method: 'POST',
@@ -154,10 +146,8 @@ async function sb_saveSettings(payload) {
     }
     await Promise.all(updates);
 
-    // BUG FIX: Perbaikan syntax DELETE dokter — path filter harus masuk ke URL, bukan headers
     if (payload.dokter) {
         const dokterList = JSON.parse(payload.dokter);
-        // Hapus semua dokter yang ada
         await _sbFetch('dokter?id=neq.00000000-0000-0000-0000-000000000000', {
             method: 'DELETE',
             prefer: 'return=minimal'
@@ -177,15 +167,6 @@ async function sb_getUsers() {
     return { status: 'success', data };
 }
 
-async function sb_verifyPin(userId, pin) {
-    const hashed = await _sha256(pin);
-    const rows = await _sbFetch(`users?id=eq.${userId}&pin_hash=eq.${hashed}&select=id,nama,jabatan`);
-    if (rows.length > 0) {
-        return { isValid: true, user: rows[0] };
-    }
-    return { isValid: false };
-}
-
 async function sb_saveUser(payload) {
     const { userId, nama, jabatan, pin } = payload;
     const pinHash = pin ? await _sha256(pin) : null;
@@ -198,7 +179,6 @@ async function sb_saveUser(payload) {
         await _sbFetch(`users?id=eq.${userId}`, { method: 'PATCH', body, prefer: 'return=minimal' });
         return { status: 'success', userId };
     } else {
-        // Gunakan return=representation agar mendapat ID user yang baru dibuat
         const rows = await _sbFetch('users', {
             method: 'POST',
             body: { nama, jabatan, pin_hash: pinHash },
@@ -209,8 +189,6 @@ async function sb_saveUser(payload) {
     }
 }
 
-// ── HAPUS USER PERMANEN ──
-// BUG-01 FIX: Fungsi ini sebelumnya tidak ada, menyebabkan tombol hapus user selalu error.
 async function sb_deleteUser(userId) {
     await _sbFetch(`users?id=eq.${userId}`, {
         method: 'DELETE',
@@ -219,12 +197,7 @@ async function sb_deleteUser(userId) {
     return { status: 'success' };
 }
 
-// ── TAMBAH DOKTER DARI REGISTRASI USER BARU ──
-// Dipanggil oleh user.js saat user baru dengan jabatan Dokter berhasil dibuat.
-// Fungsi ini menambahkan entri ke tabel dokter dengan user_id terhubung
-// sehingga dokter tidak perlu di-input ulang di halaman Settings.
 async function sb_tambahDokterDariUser({ nama, jabatan, nik, ihs, sip, spesialis, user_id }) {
-    // Cek apakah sudah ada dokter dengan user_id yang sama (hindari duplikasi)
     const existing = await _sbFetch(`dokter?user_id=eq.${user_id}&select=id`);
     if (existing && existing.length > 0) return { status: 'already_exists' };
 
@@ -236,14 +209,12 @@ async function sb_tambahDokterDariUser({ nama, jabatan, nik, ihs, sip, spesialis
     return { status: 'success' };
 }
 
-/** Ambil data dokter berdasarkan user_id (untuk form edit user) */
 async function sb_getDokterByUserId(userId) {
     if (!userId) return null;
     const rows = await _sbFetch(`dokter?user_id=eq.${userId}&select=*&limit=1`);
     return rows.length > 0 ? rows[0] : null;
 }
 
-/** Update atau buat data dokter dari modal edit user */
 async function sb_upsertDokterFromUser({ userId, nama, nik, ihs, sip, spesialis }) {
     const existing = await _sbFetch(`dokter?user_id=eq.${userId}&select=id`);
     const body = { nama, nik: nik||'', ihs: ihs||'', sip: sip||'', spesialis: spesialis||'', user_id: userId, jabatan: 'Dokter' };
@@ -256,27 +227,24 @@ async function sb_upsertDokterFromUser({ userId, nama, nik, ihs, sip, spesialis 
     }
 }
 
-/** Hapus data dokter saja (tanpa hapus user), dipakai saat jabatan berubah dari Dokter */
 async function sb_deleteDokterByUserId(userId) {
     await _sbFetch(`dokter?user_id=eq.${userId}`, { method: 'DELETE', prefer: 'return=minimal' });
     return { status: 'success' };
 }
 
-/** Hapus dokter berdasarkan nama (case-insensitive) — fallback jika user_id tidak terhubung */
 async function sb_deleteDokterByNama(nama) {
     if (!nama) return { status: 'skip' };
     await _sbFetch(`dokter?nama=ilike.${encodeURIComponent(nama)}`, { method: 'DELETE', prefer: 'return=minimal' });
     return { status: 'success' };
 }
 
-// SHA-256 untuk hash PIN di browser
 async function _sha256(text) {
     const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
 // ═══════════════════════════════════════
-//  PASIEN
+//  PASIEN & KUNJUNGAN
 // ═══════════════════════════════════════
 async function sb_initData(filterDate) {
     const [pasien, kunjungan, users] = await Promise.all([
@@ -285,7 +253,6 @@ async function sb_initData(filterDate) {
         _sbFetch('users?select=id,nama,jabatan&order=nama.asc')
     ]);
 
-    // Simpan ke window global agar modul lain bisa resolve nama dokter
     window._usersCache = users || [];
 
     const hariIni = kunjungan.map(k => {
@@ -302,7 +269,6 @@ async function sb_initData(filterDate) {
             user_id: k.user_id || null,
             req_lab: k.req_lab || null,
             dokterNama,
-            // Status obat & bayar — disimpan di Supabase agar persist lintas sesi
             status_obat:  !!k.status_obat,
             status_bayar: !!k.status_bayar
         };
@@ -327,10 +293,6 @@ async function sb_checkAndUpsertPasien(payload) {
         if (rows.length) pasienRow = rows[0];
     }
     if (!pasienRow) {
-        // BUG-10 FIX: Nama pasien dengan karakter & # ? bisa menyebabkan Supabase
-        // misparsing query. Trim dulu, lalu encodeURIComponent untuk encode semua karakter
-        // khusus (& → %26, # → %23, ? → %3F, + → %2B).
-        // NIK sudah dicoba di atas dan tidak ketemu — ini fallback terakhir.
         const namaTrim    = (nama || '').trim();
         const namaEncoded = encodeURIComponent(namaTrim);
         const rows = await _sbFetch(`pasien?nama=eq.${namaEncoded}&limit=1`);
@@ -351,25 +313,15 @@ async function sb_checkAndUpsertPasien(payload) {
         });
     }
 
-    // ── Ambil atau buat kunjungan hari ini ──
-    // ROOT CAUSE FIX: ignore-duplicates hanya bekerja jika tabel kunjungan punya
-    // UNIQUE constraint (pasien_id, tgl) di database. Jika constraint belum ada,
-    // Supabase tetap insert duplikat. Solusi: SELALU cek lebih dulu via SELECT,
-    // baru insert jika memang belum ada. Ini tidak bergantung pada constraint apapun.
     let kunjunganHariIni = null;
     if (createVisitToday && localDate) {
-        // Langkah 1: cek apakah sudah ada kunjungan hari ini untuk pasien ini
         const existing = await _sbFetch(
             `kunjungan?pasien_id=eq.${pasienRow.id}&tgl=eq.${localDate}&select=*&limit=1`
         );
 
         if (existing && existing.length > 0) {
-            // Sudah ada → pakai yang existing, JANGAN buat baru
             kunjunganHariIni = existing[0];
         } else {
-            // Belum ada → insert baru
-            // Tetap pakai ignore-duplicates sebagai safety net untuk race condition
-            // (misal: dua klik cepat bersamaan)
             try {
                 const inserted = await _sbFetch('kunjungan', {
                     method: 'POST',
@@ -379,14 +331,12 @@ async function sb_checkAndUpsertPasien(payload) {
                 if (inserted && inserted.length > 0) {
                     kunjunganHariIni = inserted[0];
                 } else {
-                    // Race condition: insert diabaikan karena ada yang masuk duluan
                     const fallback = await _sbFetch(
                         `kunjungan?pasien_id=eq.${pasienRow.id}&tgl=eq.${localDate}&select=*&limit=1`
                     );
                     kunjunganHariIni = (fallback && fallback.length > 0) ? fallback[0] : null;
                 }
             } catch(e) {
-                // Kalau insert error (mis. constraint violation) → fallback fetch
                 const fallback = await _sbFetch(
                     `kunjungan?pasien_id=eq.${pasienRow.id}&tgl=eq.${localDate}&select=*&limit=1`
                 );
@@ -399,10 +349,6 @@ async function sb_checkAndUpsertPasien(payload) {
         `kunjungan?pasien_id=eq.${pasienRow.id}&order=tgl.desc,waktu.desc&select=*`
     );
 
-    // BUG-04 FIX: _mapKunjungan memanggil _resolveDokterNama() yang bergantung pada
-    // window._usersCache. Jika sb_checkAndUpsertPasien dipanggil sebelum sb_initData
-    // (misalnya saat reload pageMedis), cache kosong dan dokterNama selalu null.
-    // Solusi: isi cache dari server jika belum terisi.
     if (!window._usersCache || window._usersCache.length === 0) {
         try {
             const users = await _sbFetch('users?select=id,nama,jabatan&order=nama.asc');
@@ -412,7 +358,6 @@ async function sb_checkAndUpsertPasien(payload) {
         }
     }
 
-    // Mapper helper agar konsisten
     const _mapKunjungan = r => ({
         id: r.id, tgl: r.tgl, waktu: r.waktu,
         user_id: r.user_id || null,
@@ -433,7 +378,6 @@ async function sb_checkAndUpsertPasien(payload) {
             jk: pasienRow.jk, tgl_lahir: pasienRow.tgl_lahir, alamat: pasienRow.alamat,
             alergi: pasienRow.alergi || ''
         },
-        // kunjunganHariIni: data kunjungan aktif (lengkap) untuk di-populate ke form
         kunjunganHariIni: kunjunganHariIni ? _mapKunjungan(kunjunganHariIni) : null,
         riwayat: riwayat.map(_mapKunjungan)
     };
@@ -454,12 +398,6 @@ async function sb_savePasienOnly(payload) {
     }
 }
 
-// ═══════════════════════════════════════
-//  KUNJUNGAN
-// ═══════════════════════════════════════
-
-// ── Helper: resolve nama dokter pemeriksa dari user_id → window._usersCache ──
-// Mengembalikan nama dokter (string) jika user jabatan=Dokter, null jika bukan
 function _resolveDokterNama(userId) {
     if (!userId) return null;
     const users = window._usersCache || [];
@@ -468,7 +406,6 @@ function _resolveDokterNama(userId) {
     return (u.jabatan && u.jabatan.toLowerCase() === 'dokter') ? u.nama : null;
 }
 
-// ── Ambil satu kunjungan lengkap by ID (untuk populate form pemeriksaan) ──
 async function sb_getKunjunganById(kunjunganId) {
     const rows = await _sbFetch(`kunjungan?id=eq.${kunjunganId}&select=*&limit=1`);
     if (!rows.length) return null;
@@ -497,14 +434,7 @@ async function sb_saveKunjungan(payload) {
         keluhan, fisik, diagnosa, diagnosa2, terapi, suratSakit,
         alergi, req_lab, riwayat_penyakit
     } = payload;
-    // Catatan: field lab_* individual (lab_gds, lab_chol, dst.) TIDAK lagi
-    // disimpan sebagai kolom terpisah di tabel kunjungan. Semua hasil lab
-    // dikemas ke dalam kolom req_lab (JSON) oleh getReqLabPayload() di
-    // pemeriksaan-medis.js. Ini menghindari error schema-cache Supabase
-    // dan konsisten dengan arsitektur dinamis lab.
 
-    // BUG E FIX: Guard — jangan PATCH pasien jika pasienId tidak valid
-    // BUG EXTRA: Jangan PATCH jika nama kosong — mencegah korupsi data pasien
     if (pasienId && pasienId !== 'null' && pasienId !== 'undefined' && nama) {
         await _sbFetch(`pasien?id=eq.${pasienId}`, {
             method: 'PATCH',
@@ -513,21 +443,9 @@ async function sb_saveKunjungan(payload) {
         });
     }
 
-    // BUG A FIX: Konversi string kosong '' ke null untuk kolom numerik di Supabase
-    // Supabase menolak '' pada kolom INTEGER/NUMERIC — harus null
     const _num = v => (v === '' || v === null || v === undefined) ? null : v;
-
     const isSelesai = diagnosa && terapi;
 
-    // ══════════════════════════════════════════════════════════
-    //  GUARD TANGGAL — Root cause fix: tanggal kunjungan berubah
-    // ══════════════════════════════════════════════════════════
-    // Masalah: beberapa jalur kode selalu mengisi localDate = hari ini,
-    // terlepas apakah ini edit kunjungan lama atau baru.
-    // Solusi berlapis:
-    // 1. kunjunganId ada → PATCH saja, tgl/waktu/pasien_id tidak disentuh.
-    // 2. kunjunganId null → cek DB: jika sudah ada kunjungan pasienId+tanggal,
-    //    PATCH itu. Jika belum ada, INSERT baru.
     let _finalKunjId  = kunjunganId || null;
     let _insertFields = {};
 
@@ -556,9 +474,6 @@ async function sb_saveKunjungan(payload) {
         suhu:  _num(suhu),
         bb:    _num(bb),
         tb:    _num(tb),
-        // ── Lab: disimpan sepenuhnya dalam req_lab (JSON) ──
-        // Field lab_* individual sudah dihapus dari kolom tabel kunjungan.
-        // Semua hasil lab dikemas oleh getReqLabPayload() di pemeriksaan-medis.js.
         keluhan: keluhan || null,
         fisik:   fisik   || null,
         diagnosa:  diagnosa  || null,
@@ -570,10 +485,8 @@ async function sb_saveKunjungan(payload) {
         status: isSelesai ? 'Selesai' : 'Menunggu'
     };
 
-    // Eksekusi: PATCH jika _finalKunjId ada, INSERT jika belum ada
     let kId = _finalKunjId;
     if (_finalKunjId) {
-        // Hapus paksa field yang tidak boleh diubah (double-guard)
         delete body.tgl;
         delete body.waktu;
         delete body.pasien_id;
@@ -590,11 +503,7 @@ async function sb_saveKunjungan(payload) {
 
 // ════════════════════════════════════════════════════════
 //  MODUL STOK OBAT
-//  (digabung dari supabase-stok.js)
-//  Tabel: obat, resep_item
 // ════════════════════════════════════════════════════════
-
-/** Ambil semua obat, urut nama */
 async function sb_getObat({ search = '', kategori = '' } = {}) {
     let path = 'obat?select=*&order=nama.asc';
     if (search)   path += `&nama=ilike.*${encodeURIComponent(search)}*`;
@@ -602,13 +511,11 @@ async function sb_getObat({ search = '', kategori = '' } = {}) {
     return await _sbFetch(path);
 }
 
-/** Ambil satu obat by ID */
 async function sb_getObatById(id) {
     const rows = await _sbFetch(`obat?id=eq.${id}&limit=1`);
     return rows[0] || null;
 }
 
-/** Simpan obat (insert atau update) */
 async function sb_saveObat(payload) {
     const {
         id, nama, kategori, satuan, harga_beli, harga_jual,
@@ -641,7 +548,6 @@ async function sb_saveObat(payload) {
     }
 }
 
-/** Hapus obat by ID */
 async function sb_deleteObat(id) {
     await _sbFetch(`obat?id=eq.${id}`, {
         method: 'DELETE', prefer: 'return=minimal'
@@ -649,17 +555,13 @@ async function sb_deleteObat(id) {
     return { status: 'success' };
 }
 
-/** Kurangi stok setelah resep disimpan */
 async function sb_kurangiStok(obatId, jumlah) {
-    // Pakai RPC agar atomic (hindari race condition)
-    // Fallback: PATCH langsung jika RPC belum tersedia
     try {
         await _sbFetch(`rpc/kurangi_stok_obat`, {
             method: 'POST',
             body: { p_obat_id: obatId, p_jumlah: Number(jumlah) }
         });
     } catch (e) {
-        // Fallback manual: ambil stok sekarang lalu PATCH
         const obat = await sb_getObatById(obatId);
         if (obat) {
             const newStok = Math.max(0, (obat.stok || 0) - Number(jumlah));
@@ -673,7 +575,6 @@ async function sb_kurangiStok(obatId, jumlah) {
     return { status: 'success' };
 }
 
-/** Tambah stok (pembelian/restock) */
 async function sb_tambahStok(obatId, jumlah, harga_beli_baru) {
     const obat = await sb_getObatById(obatId);
     if (!obat) throw new Error('Obat tidak ditemukan');
@@ -685,11 +586,6 @@ async function sb_tambahStok(obatId, jumlah, harga_beli_baru) {
     return { status: 'success' };
 }
 
-// ═══════════════════════════════════════
-//  RESEP ITEM (per Kunjungan)
-// ═══════════════════════════════════════
-
-/** Ambil item resep untuk satu kunjungan */
 async function sb_getResepByKunjungan(kunjunganId) {
     const rows = await _sbFetch(
         `resep_item?kunjungan_id=eq.${kunjunganId}&select=*,obat(id,nama,satuan,harga_jual)&order=created_at.asc`
@@ -697,10 +593,7 @@ async function sb_getResepByKunjungan(kunjunganId) {
     return rows;
 }
 
-/** Simpan seluruh resep untuk satu kunjungan (replace semua) */
 async function sb_saveResep(kunjunganId, items) {
-    // BUG-B FIX: Baca resep lama dulu sebelum dihapus, agar bisa hitung selisih stok.
-    // Sebelumnya: setiap simpan selalu kurangi stok penuh → stok berkurang ganda saat edit.
     let resepLama = [];
     try {
         resepLama = await _sbFetch(
@@ -708,13 +601,11 @@ async function sb_saveResep(kunjunganId, items) {
         );
     } catch(e) { resepLama = []; }
 
-    // Hapus resep lama
     await _sbFetch(`resep_item?kunjungan_id=eq.${kunjunganId}`, {
         method: 'DELETE', prefer: 'return=minimal'
     });
 
     if (!items || items.length === 0) {
-        // Kalau resep dikosongkan, kembalikan stok lama
         for (const lama of resepLama) {
             if (lama.obat_id && lama.jumlah) {
                 const obat = await sb_getObatById(lama.obat_id).catch(() => null);
@@ -745,9 +636,6 @@ async function sb_saveResep(kunjunganId, items) {
         method: 'POST', body: rows, prefer: 'return=minimal'
     });
 
-    // BUG-B FIX: Hitung selisih jumlah per obat antara resep lama dan baru.
-    // Hanya kurangi stok jika jumlah baru > jumlah lama (tambahan), atau
-    // kembalikan stok jika jumlah baru < jumlah lama (pengurangan).
     const lamaMap = {};
     resepLama.forEach(r => {
         if (r.obat_id) lamaMap[r.obat_id] = (lamaMap[r.obat_id] || 0) + Number(r.jumlah);
@@ -760,10 +648,8 @@ async function sb_saveResep(kunjunganId, items) {
         const selisih    = jumlahBaru - jumlahLama;
 
         if (selisih > 0) {
-            // Tambah lebih banyak dari sebelumnya → kurangi stok sebesar selisih
             await sb_kurangiStok(item.obat_id, selisih).catch(() => {});
         } else if (selisih < 0) {
-            // Dikurangi → kembalikan stok sebesar |selisih|
             const obat = await sb_getObatById(item.obat_id).catch(() => null);
             if (obat) {
                 await _sbFetch(`obat?id=eq.${item.obat_id}`, {
@@ -773,11 +659,9 @@ async function sb_saveResep(kunjunganId, items) {
                 }).catch(() => {});
             }
         }
-        // Jika selisih = 0, stok tidak perlu diubah
-        delete lamaMap[item.obat_id]; // tandai sudah diproses
+        delete lamaMap[item.obat_id]; 
     }
 
-    // Obat yang ada di resep lama tapi tidak ada di resep baru → kembalikan stok penuh
     for (const [obatId, jumlahLama] of Object.entries(lamaMap)) {
         const obat = await sb_getObatById(obatId).catch(() => null);
         if (obat && jumlahLama > 0) {
@@ -792,23 +676,12 @@ async function sb_saveResep(kunjunganId, items) {
     return { status: 'success' };
 }
 
-/** Ambil daftar kategori obat yang ada */
 async function sb_getKategoriObat() {
     const rows = await _sbFetch('obat?select=kategori&order=kategori.asc');
     const unique = [...new Set(rows.map(r => r.kategori).filter(Boolean))];
     return unique;
 }
 
-
-// ═══════════════════════════════════════
-//  IMPORT OBAT DARI EXCEL (bulk insert)
-// ═══════════════════════════════════════
-
-/** Import array obat dari hasil parse Excel ke Supabase.
- *  Setiap item: { nama, kategori, satuan, harga_beli, harga_jual,
- *                 stok, stok_minimum, frekuensi_default, keterangan, exp_date }
- *  Return: { sukses, gagal, errors }
- */
 async function sb_importObat(rows) {
     let sukses = 0, gagal = 0;
     const errors = [];
@@ -832,16 +705,11 @@ async function sb_importObat(rows) {
 
 // ════════════════════════════════════════════════════════
 //  MODUL PEMBIAYAAN
-//  (digabung dari supabase-biaya.js)
-//  Tabel: tarif_layanan, tagihan, tagihan_item
 // ════════════════════════════════════════════════════════
-
-/** Ambil semua tarif layanan */
 async function sb_getTarif() {
     return await _sbFetch('tarif_layanan?select=*&order=kategori.asc,nama.asc');
 }
 
-/** Simpan tarif (upsert by id) */
 async function sb_saveTarif(payload) {
     const { id, nama, kategori, harga, keterangan, aktif, sub_group, sub_group_order, sub_group_2 } = payload;
     const body = {
@@ -867,7 +735,6 @@ async function sb_saveTarif(payload) {
     }
 }
 
-/** Hapus tarif */
 async function sb_deleteTarif(id) {
     await _sbFetch(`tarif_layanan?id=eq.${id}`, {
         method: 'DELETE', prefer: 'return=minimal'
@@ -875,11 +742,6 @@ async function sb_deleteTarif(id) {
     return { status: 'success' };
 }
 
-// ═══════════════════════════════════════
-//  TAGIHAN (per Kunjungan)
-// ═══════════════════════════════════════
-
-/** Ambil tagihan + item untuk satu kunjungan */
 async function sb_getTagihan(kunjunganId) {
     const rows = await _sbFetch(
         `tagihan?kunjungan_id=eq.${kunjunganId}&select=*,tagihan_item(*)`
@@ -887,14 +749,11 @@ async function sb_getTagihan(kunjunganId) {
     return rows[0] || null;
 }
 
-/** Buat atau update tagihan untuk kunjungan */
 async function sb_saveTagihan(kunjunganId, pasienId, items, diskon, catatan) {
-    // Hitung total
     const subtotal = items.reduce((s, i) => s + (Number(i.jumlah) * Number(i.harga_satuan)), 0);
     const nominalDiskon = Number(diskon) || 0;
     const total = Math.max(0, subtotal - nominalDiskon);
 
-    // Cek apakah tagihan sudah ada
     const existing = await _sbFetch(
         `tagihan?kunjungan_id=eq.${kunjunganId}&select=id&limit=1`
     );
@@ -915,7 +774,6 @@ async function sb_saveTagihan(kunjunganId, pasienId, items, diskon, catatan) {
         await _sbFetch(`tagihan?id=eq.${tagihanId}`, {
             method: 'PATCH', body: tagihanBody, prefer: 'return=minimal'
         });
-        // Hapus item lama
         await _sbFetch(`tagihan_item?tagihan_id=eq.${tagihanId}`, {
             method: 'DELETE', prefer: 'return=minimal'
         });
@@ -926,7 +784,6 @@ async function sb_saveTagihan(kunjunganId, pasienId, items, diskon, catatan) {
         tagihanId = rows[0]?.id;
     }
 
-    // Insert item baru
     if (items.length > 0 && tagihanId) {
         const itemRows = items.map(i => ({
             tagihan_id:   tagihanId,
@@ -945,7 +802,6 @@ async function sb_saveTagihan(kunjunganId, pasienId, items, diskon, catatan) {
     return { status: 'success', tagihanId, total };
 }
 
-/** Update status pembayaran tagihan */
 async function sb_updateStatusTagihan(tagihanId, status) {
     await _sbFetch(`tagihan?id=eq.${tagihanId}`, {
         method: 'PATCH',
@@ -955,7 +811,6 @@ async function sb_updateStatusTagihan(tagihanId, status) {
     return { status: 'success' };
 }
 
-/** Ambil semua tagihan untuk laporan keuangan */
 async function sb_getLaporanTagihan(tglMulai, tglSelesai) {
     let path = `tagihan?select=*,tagihan_item(*),pasien(nama,nik)&order=created_at.desc`;
     if (tglMulai)   path += `&created_at=gte.${tglMulai}T00:00:00`;
@@ -963,22 +818,15 @@ async function sb_getLaporanTagihan(tglMulai, tglSelesai) {
     return await _sbFetch(path);
 }
 
-/** Auto-generate item tagihan dari data kunjungan */
 async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
-    // Ambil tarif aktif
     const tarif = await sb_getTarif();
-
     const tarifAktif = tarif.filter(t => t.aktif);
-
     const items = [];
 
     const addItem = (nama, kategori, harga, jumlah = 1, ket = null) => {
         items.push({ nama_item: nama, kategori, jumlah, harga_satuan: Number(harga) || 0, keterangan: ket });
     };
 
-    // 0. ── PEMERIKSAAN & KONSULTASI DOKTER (Rp 50.000) ──
-    // Otomatis ditambahkan paling atas tagihan jika salah satu kolom
-    // section pemeriksaan medis terisi (TTV, keluhan, fisik, atau diagnosa).
     const hasTtv     = kunjunganData.td || kunjunganData.nadi || kunjunganData.suhu;
     const hasKeluhan = kunjunganData.keluhan;
     const hasFisik   = kunjunganData.fisik;
@@ -989,35 +837,26 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
         addItem('Pemeriksaan & Konsultasi Dokter', 'Pemeriksaan', 50000);
     }
 
-    // 1. Tarif pemeriksaan vital sign
     if (hasTtv) {
         const t = tarifAktif.find(x => x.kategori === 'Pemeriksaan' && x.nama === 'Vital Sign');
         if (t) addItem('Pemeriksaan Vital Sign', 'Pemeriksaan', t.harga);
     }
 
-    // 2a. Anamnesa
     if (hasKeluhan) {
         const t = tarifAktif.find(x => x.kategori === 'Pemeriksaan' && x.nama === 'Anamnesa');
         if (t) addItem('Anamnesa (Keluhan Utama)', 'Pemeriksaan', t.harga);
     }
 
-    // 2b. Pemeriksaan fisik
     if (hasFisik) {
         const t = tarifAktif.find(x => x.kategori === 'Pemeriksaan' && x.nama === 'Pemeriksaan Fisik');
         if (t) addItem('Pemeriksaan Fisik Umum', 'Pemeriksaan', t.harga);
     }
 
-    // 2c. Konsultasi dokter
     if (hasDiag) {
         const t = tarifAktif.find(x => x.kategori === 'Pemeriksaan' && x.nama === 'Konsultasi Medis');
         if (t) addItem('Konsultasi / Visite Dokter', 'Pemeriksaan', t.harga);
     }
 
-    // 3. Tarif lab per item — baca dari req_lab JSON (bukan kolom lab_* terpisah)
-    // Semua hasil lab dikemas dalam req_lab oleh getReqLabPayload() di pemeriksaan-medis.js.
-    // Format req_lab: { "lab_hasil_gds": "120", "lab_hasil_kolesterol": "200", ... }
-    // atau key hasil dinamis sesuai slug yang dibuat _pm_slug().
-    // Mapping: nama tarif → key yang mungkin ada di req_lab
     const labFields = [
         { key: 'lab_gds',       slugs: ['lab_hasil_gds', 'lab_gds'],               nama: 'GDS' },
         { key: 'lab_chol',      slugs: ['lab_hasil_kolesterol', 'lab_chol'],        nama: 'Kolesterol' },
@@ -1041,7 +880,6 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
         { key: 'lab_creatinin', slugs: ['lab_hasil_creatinin', 'lab_creatinin'],    nama: 'Creatinin' }
     ];
 
-    // Parse req_lab sekali saja
     let reqLabObj = {};
     try {
         if (kunjunganData.req_lab) {
@@ -1052,7 +890,6 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
     } catch(e) { reqLabObj = {}; }
 
     labFields.forEach(f => {
-        // Cek: ada nilai di req_lab (lewat salah satu slug) atau di kunjunganData langsung (legacy)
         const hasInReqLab = f.slugs.some(s => reqLabObj[s] && reqLabObj[s] !== '—' && String(reqLabObj[s]).trim() !== '');
         const hasLegacy   = kunjunganData[f.key] && kunjunganData[f.key] !== '—';
         if (!hasInReqLab && !hasLegacy) return;
@@ -1060,29 +897,23 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
         if (t) addItem('Lab: ' + f.nama, 'Laboratorium', t.harga);
     });
 
-    // 4. ── PEMERIKSAAN PENUNJANG ──
-    // Ambil dari tabel penunjang_item berdasarkan kunjunganId
     try {
         const penunjangRows = await _sbFetch(`penunjang_item?kunjungan_id=eq.${kunjunganId}&select=jenis`);
         penunjangRows.forEach(r => {
             if (!r.jenis) return;
-            // Cari tarif di kategori Penunjang dengan nama yang sama
             const t = tarifAktif.find(x => x.kategori === 'Penunjang' && x.nama === r.jenis);
             const harga = t ? t.harga : 0;
             addItem('Penunjang: ' + r.jenis, 'Penunjang', harga);
         });
-    } catch(e) { /* penunjang_item mungkin belum ada saat migrasi pertama */ }
+    } catch(e) {}
 
-    // 5. ── TINDAKAN MEDIS ──
-    // Ambil dari tabel tindakan_item berdasarkan kunjunganId
     try {
         const tindakanRows = await _sbFetch(`tindakan_item?kunjungan_id=eq.${kunjunganId}&select=*`);
         tindakanRows.forEach(r => {
             addItem(r.nama_tindakan, 'Tindakan', r.harga_satuan, r.jumlah || 1, r.catatan || null);
         });
-    } catch(e) { /* tindakan_item mungkin belum ada saat migrasi pertama */ }
+    } catch(e) {}
 
-    // 6. Obat dari resep (jika modul stok aktif)
     if (window._stokAktif) {
         try {
             const resepRows = await sb_getResepByKunjungan(kunjunganId);
@@ -1092,7 +923,6 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
         } catch(e) {}
     }
 
-    // 7. Surat keterangan
     if (kunjunganData.surat_sakit === 'YA' || kunjunganData.suratSakit === 'YA') {
         const t = tarifAktif.find(x => x.kategori === 'Administrasi' && x.nama === 'Surat Keterangan Sakit');
         if (t) addItem('Surat Keterangan Sakit', 'Administrasi', t.harga);
@@ -1101,13 +931,7 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
     return items;
 }
 
-// ═══════════════════════════════════════
-//  PENUNJANG ITEM (per Kunjungan)
-// ═══════════════════════════════════════
-
-/** Simpan seluruh penunjang untuk satu kunjungan (replace) */
 async function sb_savePenunjang(kunjunganId, items) {
-    // Hapus lama dulu
     await _sbFetch(`penunjang_item?kunjungan_id=eq.${kunjunganId}`, {
         method: 'DELETE', prefer: 'return=minimal'
     });
@@ -1125,11 +949,6 @@ async function sb_savePenunjang(kunjunganId, items) {
     return { status: 'success' };
 }
 
-// ═══════════════════════════════════════
-//  TINDAKAN ITEM (per Kunjungan)
-// ═══════════════════════════════════════
-
-/** Simpan seluruh tindakan untuk satu kunjungan (replace) */
 async function sb_saveTindakanKunjungan(kunjunganId, items) {
     await _sbFetch(`tindakan_item?kunjungan_id=eq.${kunjunganId}`, {
         method: 'DELETE', prefer: 'return=minimal'
@@ -1150,11 +969,6 @@ async function sb_saveTindakanKunjungan(kunjunganId, items) {
     return { status: 'success' };
 }
 
-// ═══════════════════════════════════════
-//  JENIS TINDAKAN (Master — dari Settings)
-// ═══════════════════════════════════════
-
-/** Simpan/upsert seluruh daftar jenis tindakan dari halaman Settings */
 async function sb_saveTindakanList(list) {
     if (!Array.isArray(list)) return;
     for (const item of list) {

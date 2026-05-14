@@ -1,74 +1,53 @@
 // ════════════════════════════════════════════════════════
-//  KLIKPRO RME — AUTENTIKASI PIN (SECURE VERSION)
+//  KLIKPRO RME — AUTENTIKASI PIN (JWT EDGE FUNCTION VERSION)
 //
-//  ✅ Bersih dari duplikat:
-//     logout() — sekarang memanggil _clearSessionStorage() daripada
-//       menduplikasi removeItem. Tambahkan kunci sesi baru HANYA di
-//       _clearSessionStorage() agar logout() ikut otomatis.
-//     canAccessMedis() — DEFINISI KANONIK ada di sini.
-//       stok.js telah dihapus definisi duplikatnya.
-//  Gabungan: auth.js + auth-secure.js
+//  ✅ Integrasi dengan Supabase Edge Function (login-pin)
+//  ✅ Menggunakan Custom JWT untuk keamanan & Realtime RLS
 //  Sesi login user (Expire: 3 Jam)
-//  ✅ Proxy token untuk verifikasi di Edge Function
 // ════════════════════════════════════════════════════════
 
-// Nilai ini harus sama dengan PROXY_SECRET di Supabase Edge Function
-const _LOCAL_TOKEN_SEED = 'Kp7mR2xN9vL4wQ8jT3bY6hF1eA5cZ0sD';
-
 let currentPinInput = "";
-let loggedInUser    = null; // { nama, jabatan }
-
-// ── Helper: Buat proxy token format "userId:expiry:hmac" ──
-async function _makeProxyToken(userId, expiry) {
-    const hmac = await _sha256(`${userId}:${expiry}:${_LOCAL_TOKEN_SEED}`);
-    return `${userId}:${expiry}:${hmac}`;
-}
+let loggedInUser    = null; // { nama, jabatan, id }
 
 // ── INISIALISASI PIN LOCK (CEK SESI 3 JAM) ──
-// BUG-02 FIX: Sesi divalidasi dengan token HMAC (userId + expiry) yang disimpan
-// bersamaan dengan is_unlocked. Manipulasi localStorage saja tidak cukup karena
-// token harus cocok dengan yang dibuat saat login berhasil.
 async function initPinLock() {
     const isUnlocked    = localStorage.getItem('is_unlocked');
     const expiryTime    = localStorage.getItem('session_expiry');
-    const sessionToken  = localStorage.getItem('session_token');
+    const sessionJwt    = localStorage.getItem('session_jwt'); // Menggunakan JWT Asli
     const storedUser    = localStorage.getItem('logged_user');
     const now           = Date.now();
 
-    if (isUnlocked === 'true' && expiryTime && now < parseInt(expiryTime) && sessionToken && storedUser) {
+    if (isUnlocked === 'true' && expiryTime && now < parseInt(expiryTime) && sessionJwt && storedUser) {
         let parsedUser = null;
         try { parsedUser = JSON.parse(storedUser); } catch(e) {}
 
-        let tokenValid = false;
         if (parsedUser && parsedUser.id) {
-            const expectedToken = await _sha256(parsedUser.id + expiryTime);
-            tokenValid = (sessionToken === expectedToken);
-        }
-
-        if (!tokenValid) {
-            _clearSessionStorage();
-        } else {
             // BUG-07 FIX: Re-validasi jabatan dari server agar sesi resign langsung dicabut
             try {
-                if (parsedUser && parsedUser.id) {
-                    const rows = await _sbFetch(`users?id=eq.${parsedUser.id}&select=id,nama,jabatan&limit=1`);
-                    if (rows && rows[0]) {
-                        const jabatanServer = (rows[0].jabatan || '').toLowerCase();
-                        if (jabatanServer === 'sudah resign') {
-                            _clearSessionStorage();
-                            showToast && showToast("⛔ Akun Anda sudah tidak aktif.", "error");
-                            _tampilkanPinScreen();
-                            return;
-                        }
-                        parsedUser.jabatan = rows[0].jabatan;
-                        localStorage.setItem('logged_user', JSON.stringify(parsedUser));
+                // Catatan: Pastikan _sbFetch di supabase.js sudah di-update untuk mengirimkan 
+                // Authorization: Bearer sessionJwt (jika ada) agar RLS mengenali user ini.
+                const rows = await _sbFetch(`users?id=eq.${parsedUser.id}&select=id,nama,jabatan&limit=1`);
+                if (rows && rows[0]) {
+                    const jabatanServer = (rows[0].jabatan || '').toLowerCase();
+                    if (jabatanServer === 'sudah resign') {
+                        _clearSessionStorage();
+                        showToast && showToast("⛔ Akun Anda sudah tidak aktif.", "error");
+                        _tampilkanPinScreen();
+                        return;
                     }
+                    parsedUser.jabatan = rows[0].jabatan;
+                    localStorage.setItem('logged_user', JSON.stringify(parsedUser));
                 }
             } catch(e) {
                 console.warn('[Klikpro] Gagal re-validasi jabatan dari server:', e.message);
             }
 
             loggedInUser = parsedUser;
+
+            // Jika library supabase-js resmi dimuat, set Auth untuk Realtime WebSocket
+            if (typeof supabase !== 'undefined' && supabase.realtime) {
+                supabase.realtime.setAuth(sessionJwt);
+            }
 
             const pinScreen = document.getElementById('pinScreen');
             if (pinScreen) pinScreen.style.display = 'none';
@@ -91,8 +70,7 @@ function _clearSessionStorage() {
     localStorage.removeItem('is_unlocked');
     localStorage.removeItem('logged_user');
     localStorage.removeItem('session_expiry');
-    localStorage.removeItem('session_token');
-    localStorage.removeItem('proxy_token');
+    localStorage.removeItem('session_jwt'); // Hapus JWT
 }
 
 function _tampilkanPinScreen() {
@@ -103,7 +81,6 @@ function _tampilkanPinScreen() {
 }
 
 // ── MENGAMBIL DAFTAR USER DARI SUPABASE ──
-// BUG-05 FIX: Filter user "Sudah Resign" agar tidak muncul di dropdown login.
 async function loadLoginUsers() {
     const select = document.getElementById('loginUserSelect');
     if (!select) return;
@@ -160,7 +137,7 @@ function updatePinDots() {
     }
 }
 
-// ── VERIFIKASI PIN KE SUPABASE ──
+// ── VERIFIKASI PIN KE SUPABASE EDGE FUNCTION ──
 async function checkPinServer() {
     const select = document.getElementById('loginUserSelect');
     const userId = select ? select.value : '';
@@ -177,47 +154,61 @@ async function checkPinServer() {
     }
 
     try {
-        const res = await sb_verifyPin(userId, currentPinInput);
+        const pin_hash = await _sha256(currentPinInput);
 
-        if (res.isValid) {
-            loggedInUser = res.user;
+        // Panggil Edge Function login-pin
+        const edgeUrl = _SB_URL + '/functions/v1/login-pin';
+        const response = await fetch(edgeUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + _SB_KEY // Anon key sebagai preflight
+            },
+            body: JSON.stringify({ userId: userId, pin_hash: pin_hash })
+        });
 
-            // BUG-06 FIX: Blokir login jika jabatan sudah resign,
-            // meski PIN cocok (edge case: resign tapi PIN belum dihapus).
-            if ((loggedInUser.jabatan || '').toLowerCase() === 'sudah resign') {
-                showPinError("Akun ini sudah tidak aktif.");
-                return;
-            }
-
-            // Sesi 3 jam
-            const expiry = Date.now() + (3 * 60 * 60 * 1000);
-
-            // BUG-02 FIX: Session token dari user ID + expiry
-            const sessionToken = await _sha256(loggedInUser.id + String(expiry));
-
-            // Proxy token untuk verifikasi di Edge Function
-            const proxyToken = await _makeProxyToken(loggedInUser.id, String(expiry));
-
-            localStorage.setItem('is_unlocked',    'true');
-            localStorage.setItem('logged_user',    JSON.stringify(loggedInUser));
-            localStorage.setItem('session_expiry', expiry);
-            localStorage.setItem('session_token',  sessionToken);
-            localStorage.setItem('proxy_token',    proxyToken);
-
-            if (res.user) {
-                const label = res.user.nama + " (" + res.user.jabatan + ")";
-                const drEl  = document.getElementById('drName');
-                if (drEl) drEl.innerText = label;
-                localStorage.setItem('rme_drName', label);
-            }
-
-            unlockScreen();
-            applyRoleRestrictions();
-        } else {
-            showPinError("PIN Salah! Coba lagi.");
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            showPinError(errData.error || "PIN Salah atau Koneksi Gagal!");
+            return;
         }
+
+        const data = await response.json();
+        loggedInUser = data.user;
+        const customJwtToken = data.token; // Custom JWT dari server
+
+        // Blokir login jika jabatan sudah resign
+        if ((loggedInUser.jabatan || '').toLowerCase() === 'sudah resign') {
+            showPinError("Akun ini sudah tidak aktif.");
+            return;
+        }
+
+        // Sesi 3 jam
+        const expiry = Date.now() + (3 * 60 * 60 * 1000);
+
+        // Simpan sesi dan JWT Asli ke localStorage
+        localStorage.setItem('is_unlocked',    'true');
+        localStorage.setItem('logged_user',    JSON.stringify(loggedInUser));
+        localStorage.setItem('session_expiry', expiry);
+        localStorage.setItem('session_jwt',    customJwtToken);
+
+        // Jika Anda menggunakan Supabase JS Official Client untuk Realtime
+        if (typeof supabase !== 'undefined' && supabase.realtime) {
+            supabase.realtime.setAuth(customJwtToken);
+        }
+
+        if (loggedInUser) {
+            const label = loggedInUser.nama + " (" + loggedInUser.jabatan + ")";
+            const drEl  = document.getElementById('drName');
+            if (drEl) drEl.innerText = label;
+            localStorage.setItem('rme_drName', label);
+        }
+
+        unlockScreen();
+        applyRoleRestrictions();
+        
     } catch (e) {
-        console.error("Gagal verifikasi PIN:", e);
+        console.error("Gagal verifikasi PIN ke Edge Function:", e);
         showPinError("Koneksi gagal. Cek internet.");
     }
 }
@@ -249,8 +240,6 @@ function unlockScreen() {
 
 // ════════════════════════════════════════════════════════
 //  PEMBATASAN AKSES BERDASARKAN JABATAN
-//  Menggunakan applyModuleAccess() dari settings.js (sistem baru)
-//  + fallback ke logika lama jika settings.js belum load
 // ════════════════════════════════════════════════════════
 function applyRoleRestrictions() {
     if (!loggedInUser) return;
@@ -289,12 +278,10 @@ function applyRoleRestrictions() {
 }
 
 // ── LOGOUT ──
-// FIX-DUPLIKAT: logout() sekarang memanggil _clearSessionStorage()
-// daripada menduplikasi removeItem. Tambahkan kunci baru hanya di _clearSessionStorage().
 function logout() {
     if (typeof destroyRealtime === 'function') destroyRealtime();
     _clearSessionStorage();
-    localStorage.removeItem('rme_drName');   // hanya di logout (bukan di expired session)
+    localStorage.removeItem('rme_drName'); 
     if (typeof clearSession === 'function') clearSession();
     location.reload();
 }
@@ -306,7 +293,6 @@ function canAccessMedis() {
         return false;
     }
     if (window._currentAccess) {
-        // Boleh masuk pageMedis jika punya minimal satu modul medis inti
         const medisModules = [
             'mod_medis_identitas','mod_medis_ttv','mod_medis_anamnesa',
             'mod_medis_fisik','mod_medis_lab','mod_medis_diagnosa',
@@ -326,4 +312,10 @@ function canAccessMedis() {
         return false;
     }
     return true;
+}
+
+// SHA-256 untuk hash PIN di browser (dipindahkan ke sini jika supabase.js telat load)
+async function _sha256(text) {
+    const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
