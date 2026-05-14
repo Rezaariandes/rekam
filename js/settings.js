@@ -249,32 +249,14 @@ function _htmlIntegrasiSection() {
         <div style="display:flex;gap:6px;">
           <input type="password" class="form-control" id="cfg_ss_client_secret"
             placeholder="Kosongkan jika tidak ingin mengganti" style="font-size:12px;font-family:monospace;flex:1;"
-            autocomplete="new-password">
+            autocomplete="new-password"
+            oninput="_onSecretInput(this)">
           <button class="btn-eye" onclick="togglePasswordVis('cfg_ss_client_secret',this)" title="Tampilkan/sembunyikan">👁️</button>
         </div>
-        <!-- BUG-04 FIX: Peringatan keamanan client secret -->
+        <!-- BUG-04 FIX: Peringatan keamanan client secret — ditampilkan via _onSecretInput() -->
         <div id="ss_secret_warning" style="margin-top:5px;padding:7px 10px;background:#fef9c3;border:1px solid #fbbf24;border-radius:7px;font-size:10.5px;color:#92400e;display:none;">
           ⚠️ <b>Perhatian keamanan:</b> Client Secret dikirim via HTTPS ke database. Pastikan koneksi menggunakan <b>HTTPS</b> (bukan HTTP) dan tidak membuka DevTools Network saat menyimpan. Nilai ini tidak disimpan di browser.
         </div>
-        <script>
-        (function() {
-          // BUG-04 FIX: tampilkan peringatan saat field mulai diisi; sembunyikan saat kosong
-          const inp = document.getElementById('cfg_ss_client_secret');
-          const warn = document.getElementById('ss_secret_warning');
-          if (inp && warn) {
-            inp.addEventListener('input', function() {
-              warn.style.display = this.value.length > 0 ? '' : 'none';
-              // Tambah peringatan ekstra jika tidak HTTPS
-              if (this.value.length > 0 && location.protocol !== 'https:' && !location.hostname.includes('localhost')) {
-                warn.style.background = '#fee2e2';
-                warn.style.borderColor = '#ef4444';
-                warn.style.color = '#991b1b';
-                warn.innerHTML = '🚨 <b>BAHAYA:</b> Halaman ini berjalan di HTTP (bukan HTTPS). Client Secret dapat terekspos. Gunakan HTTPS sebelum menyimpan data sensitif.';
-              }
-            });
-          }
-        })();
-        </script>
       </div>
       <div class="col-12" style="margin-top:4px;">
         <button class="btn-test" id="btnTestSS" onclick="testKoneksiSatuSehat()">
@@ -1719,6 +1701,33 @@ function hideSettingsBanner() {
         el.style.opacity = '0';
         el.style.transition = 'opacity 0.3s';
         setTimeout(() => { el.style.display = 'none'; el.style.opacity = '1'; }, 300);
+    }
+}
+
+// BUG-04 FIX: handler peringatan keamanan Client Secret.
+// Dipanggil via oninput="..." di HTML yang di-inject via innerHTML.
+// Tidak boleh inline <script> di dalam template literal karena browser
+// tidak mengeksekusi <script> yang di-set via innerHTML, dan injectScript
+// yang mencoba mengeksekusinya akan gagal parse dengan SyntaxError.
+function _onSecretInput(inp) {
+    const warn = document.getElementById('ss_secret_warning');
+    if (!warn) return;
+    if (!inp.value.length) {
+        warn.style.display = 'none';
+        return;
+    }
+    warn.style.display = '';
+    const isHttp = location.protocol !== 'https:' && !location.hostname.includes('localhost');
+    if (isHttp) {
+        warn.style.background   = '#fee2e2';
+        warn.style.borderColor  = '#ef4444';
+        warn.style.color        = '#991b1b';
+        warn.innerHTML = '🚨 <b>BAHAYA:</b> Halaman ini berjalan di HTTP (bukan HTTPS). Client Secret dapat terekspos. Gunakan HTTPS sebelum menyimpan data sensitif.';
+    } else {
+        warn.style.background   = '#fef9c3';
+        warn.style.borderColor  = '#fbbf24';
+        warn.style.color        = '#92400e';
+        warn.innerHTML = '⚠️ <b>Perhatian keamanan:</b> Client Secret dikirim via HTTPS ke database. Pastikan tidak membuka DevTools Network saat menyimpan. Nilai ini tidak disimpan di browser.';
     }
 }
 
