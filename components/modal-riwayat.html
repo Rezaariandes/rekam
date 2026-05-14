@@ -1,3 +1,4 @@
+
 <div class="modal-overlay" id="modalRiwayat" onclick="if(event.target===this) closeModal()">
     <div class="modal-content">
         <div style="width:40px;height:4px;background:#e2e8f0;border-radius:2px;margin:0 auto 18px;"></div>
@@ -32,6 +33,12 @@
             <div class="detail-row">
                 <div class="detail-label">🩺 Pemeriksaan Fisik</div>
                 <div class="detail-value" id="viewFisik"></div>
+            </div>
+
+            <!-- Riwayat Penyakit Dahulu -->
+            <div class="detail-row" id="viewRiwayatPenyakitRow" style="display:none;">
+                <div class="detail-label">📋 Riwayat Penyakit</div>
+                <div class="detail-value" id="viewRiwayatPenyakit"></div>
             </div>
 
             <!-- Laboratorium — disembunyikan jika tidak ada data -->
@@ -165,6 +172,12 @@
                     <label class="form-label small fw-bold text-muted text-uppercase mb-1">Asam Urat <span style="font-size:9px;">(mg/dL)</span></label>
                     <input type="number" id="modalLabUa" class="form-control" placeholder="—" step="0.1" min="0" max="30">
                 </div>
+            </div>
+
+            <!-- Riwayat Penyakit Dahulu -->
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Riwayat Penyakit Dahulu</label>
+                <textarea id="modalRiwayatPenyakit" class="form-control" rows="2" placeholder="Riwayat penyakit / kondisi kronis..."></textarea>
             </div>
 
             <!-- 📝 Diagnosa & Terapi — disembunyikan jika Paramedis -->
