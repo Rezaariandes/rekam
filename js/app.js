@@ -734,6 +734,11 @@ async function initApp() {
 
         if (typeof renderKunjunganHariIni === 'function') renderKunjunganHariIni();
 
+        // ── Aktifkan Supabase Realtime setelah data awal siap ──
+        // Dipanggil di sini agar kunjunganHariIni & allPatients sudah terisi
+        // sebelum pesan WebSocket pertama bisa masuk.
+        if (typeof initRealtime === 'function') initRealtime();
+
     } catch (e) {
         showToast("⚡ Gagal terhubung ke server. Cek koneksi.", "error");
         console.error('[Klikpro] initData error:', e);
