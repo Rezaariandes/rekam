@@ -1647,6 +1647,15 @@ function _renderSectionLabDinamic() {
                     renderMedisDinamis();
                     loadReqLabFromKunjungan(typeof reqObj === 'object' ? JSON.stringify(reqObj) : reqObj);
 
+                    // BUG-FIX RESEP: load resep dari DB setelah sectionResep dirender oleh
+                    // renderMedisDinamis() di atas. Sebelumnya loadResepByKunjungan hanya
+                    // dipanggil di _recoverLanjutkan (path refresh), bukan saat buka kunjungan
+                    // pertama kali — akibatnya resep tidak muncul sampai halaman di-refresh.
+                    if (window._stokAktif && typeof loadResepByKunjungan === 'function') {
+                        const _kId = (typeof currentKunjunganId !== 'undefined') ? currentKunjunganId : null;
+                        if (_kId) loadResepByKunjungan(_kId).catch(e => console.warn('[resep] gagal load:', e.message));
+                    }
+
                     // Restore riwayat_penyakit
                     if (kunjunganData.riwayat_penyakit && document.getElementById('riwayat_penyakit')) {
                         document.getElementById('riwayat_penyakit').value = kunjunganData.riwayat_penyakit;
