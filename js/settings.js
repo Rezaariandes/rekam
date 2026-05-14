@@ -768,17 +768,35 @@ function _resetDefaultModul(jab) {
 
 // ── Terapkan hak akses ke seluruh UI berdasarkan jabatan login ──
 function applyModuleAccess(jabatan) {
+    // Prioritas 1: _moduleAccess (variabel lokal, diisi saat Settings dibuka)
     let access = _moduleAccess[jabatan];
 
-    // Fallback dari localStorage jika settings belum load
-    if (!access) {
-        const stored = localStorage.getItem('kp_module_access');
-        if (stored) {
-            try { const all = JSON.parse(stored); access = all[jabatan] || null; } catch(e) {}
+    // Prioritas 2: data server yang di-inject oleh loadRuntimeSettings() via window._moduleAccessFromServer
+    if (!access && window._moduleAccessFromServer) {
+        const serverAccess = window._moduleAccessFromServer[jabatan];
+        if (serverAccess && serverAccess.length > 0) {
+            // Populate _moduleAccess dari server agar call berikutnya tidak perlu fallback
+            Object.assign(_moduleAccess, window._moduleAccessFromServer);
+            access = serverAccess;
         }
     }
 
-    // Fallback terakhir ke DEFAULT_ACCESS
+    // Prioritas 3: localStorage (cache lokal, harus sudah sinkron dengan server)
+    if (!access) {
+        const stored = localStorage.getItem('kp_module_access');
+        if (stored) {
+            try {
+                const all = JSON.parse(stored);
+                if (all[jabatan] && all[jabatan].length > 0) {
+                    // Populate _moduleAccess agar konsisten
+                    Object.assign(_moduleAccess, all);
+                    access = all[jabatan];
+                }
+            } catch(e) {}
+        }
+    }
+
+    // Prioritas 4: DEFAULT_ACCESS sebagai last resort
     if (!access) access = DEFAULT_ACCESS[jabatan] || ['mod_nav_daftar','mod_nav_kunjungan'];
 
     // Simpan ke window globals
@@ -1080,8 +1098,14 @@ async function simpanSeksi(seksi) {
                 _moduleAccess[jab] = newAccess;
             });
             await sb_saveSettings({ module_access: JSON.stringify(_moduleAccess) });
-            // Simpan juga ke localStorage agar bisa dipakai tanpa reload settings
+            // Sinkron ke localStorage dan window global agar langsung berlaku
             localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess));
+            window._moduleAccessFromServer = JSON.parse(JSON.stringify(_moduleAccess));
+            // Terapkan langsung ke UI untuk user yang sedang login
+            if (typeof applyModuleAccess === 'function' &&
+                typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
+                applyModuleAccess(loggedInUser.jabatan);
+            }
             showToast("✅ Hak akses per jabatan disimpan", "success");
 
         } else if (seksi === 'dokter') {
@@ -1194,6 +1218,7 @@ async function simpanSemuaSettings() {
     try {
         await sb_saveSettings(payload);
         localStorage.setItem('kp_module_access', JSON.stringify(_moduleAccess));
+        window._moduleAccessFromServer = JSON.parse(JSON.stringify(_moduleAccess));
         window._labAktif = window._labAktif || { lab_gds: true, lab_chol: true, lab_ua: true };
         _terapkanSettingsRuntime(payload, dokterPayload);
         _setVal('cfg_ss_client_secret', '');

@@ -518,6 +518,26 @@ async function loadRuntimeSettings() {
         // Recalc nav layout setelah item ditampilkan/disembunyikan
         if (typeof window._fitNav === 'function') setTimeout(window._fitNav, 200);
 
+        // ── KRITIS: populate _moduleAccess dari server SEBELUM applyModuleAccess ──
+        // _moduleAccess adalah variabel di settings.js yang hanya diisi saat halaman
+        // Settings dibuka (_initModuleAccess). Tanpa ini, applyModuleAccess selalu
+        // fallback ke localStorage/DEFAULT_ACCESS dan mengabaikan setting dari DB.
+        if (s.module_access) {
+            try {
+                const parsedAccess = JSON.parse(s.module_access);
+                // Simpan ke window global agar applyModuleAccess bisa baca langsung
+                window._moduleAccessFromServer = parsedAccess;
+                // Jika settings.js sudah load, isi _moduleAccess langsung
+                if (typeof _moduleAccess !== 'undefined') {
+                    Object.assign(_moduleAccess, parsedAccess);
+                }
+                // Update localStorage agar konsisten
+                localStorage.setItem('kp_module_access', JSON.stringify(parsedAccess));
+            } catch(e) {
+                console.warn('[loadRuntimeSettings] Gagal parse module_access:', e.message);
+            }
+        }
+
         // Terapkan hak akses modul setelah settings dimuat
         if (typeof applyModuleAccess === 'function' &&
             typeof loggedInUser !== 'undefined' && loggedInUser && loggedInUser.jabatan) {
