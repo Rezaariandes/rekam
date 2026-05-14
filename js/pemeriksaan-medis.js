@@ -145,15 +145,32 @@ function checkTensi() {
     if (d >= 90)  dEl.classList.add('is-high'); else dEl.classList.remove('is-high');
 }
 
-/** Tampilkan alert jika nilai lab (GDS, Kolesterol, Asam Urat) di luar normal */
+/** Tampilkan alert jika nilai lab di luar normal — hanya peringatan, tidak memblokir simpan */
 function checkLabAlert() {
     const gds  = parseFloat(document.getElementById('lab_gds')  ? document.getElementById('lab_gds').value  : '');
     const chol = parseFloat(document.getElementById('lab_chol') ? document.getElementById('lab_chol').value : '');
     const ua   = parseFloat(document.getElementById('lab_ua')   ? document.getElementById('lab_ua').value   : '');
     const alerts = [];
-    if (!isNaN(gds))  { if (gds  >= 200) alerts.push(`⚠️ GDS ${gds} mg/dL (Tinggi)`);  else if (gds < 70) alerts.push(`⚠️ GDS ${gds} mg/dL (Rendah)`); }
-    if (!isNaN(chol)) { if (chol >= 200) alerts.push(`⚠️ Kolesterol ${chol} mg/dL (Tinggi)`); }
-    if (!isNaN(ua))   { if (ua   >  7.0) alerts.push(`⚠️ Asam Urat ${ua} mg/dL (Tinggi)`); }
+    if (!isNaN(gds))  { if (gds  >= 200) alerts.push('⚠️ GDS ' + gds + ' mg/dL (Tinggi)');  else if (gds < 70) alerts.push('⚠️ GDS ' + gds + ' mg/dL (Rendah)'); }
+    if (!isNaN(chol)) { if (chol >= 200) alerts.push('⚠️ Kolesterol ' + chol + ' mg/dL (Tinggi)'); }
+    if (!isNaN(ua))   { if (ua   >  7.0) alerts.push('⚠️ Asam Urat ' + ua + ' mg/dL (Tinggi)'); }
+
+    // BUG-FIX: Tambahkan peringatan untuk field lab dinamis lainnya (HB, Trombosit, dll.)
+    // Ini HANYA peringatan visual — tidak memblokir tombol simpan.
+    if (typeof LAB_WARN_RULES !== 'undefined') {
+        const skipIds = ['lab_gds', 'lab_chol', 'lab_ua'];
+        Object.entries(LAB_WARN_RULES).forEach(function(entry) {
+            const id = entry[0]; const rule = entry[1];
+            if (skipIds.indexOf(id) !== -1) return;
+            const el = document.getElementById(id);
+            if (!el || el.value === '' || el.tagName === 'SELECT') return;
+            const val = parseFloat(el.value);
+            if (!isNaN(val) && (val < rule.min || val > rule.max)) {
+                alerts.push('⚠️ ' + rule.label + ': ' + val + ' ' + rule.unit);
+            }
+        });
+    }
+
     const el = document.getElementById('labAlert');
     if (!el) return;
     if (alerts.length > 0) { el.innerHTML = alerts.join(' &nbsp;|&nbsp; '); el.style.display = 'block'; }
@@ -415,9 +432,25 @@ function _renderChipPermintaanLab() {
         html += `<div id="lab_flat_inputs"></div>`;
     }
 
+    // BUG-FIX: Sebelum reset DOM (wrap.innerHTML = html), simpan nilai input
+    // lab yang sudah diisi user ke localStorage. Tanpa ini, setiap kali
+    // _renderChipPermintaanLab() dipanggil ulang (mis. saat pindah tab atau
+    // renderMedisDinamis() terpicu), nilai yang sudah diketik user akan hilang.
+    labItems.forEach(t => {
+        const chipId = _pm_slug('lab_req', t.nama);
+        if (!window._reqLab[chipId]) return;
+        const fieldId = _LAB_NAMA_TO_FIELD[t.nama];
+        const elId    = fieldId || chipId;
+        const el      = document.getElementById(elId);
+        if (el && el.value !== '' && el.value !== null) {
+            localStorage.setItem('rme_' + elId, el.value);
+        }
+    });
+
     wrap.innerHTML = html;
 
     // Re-render input untuk item yang sudah aktif
+    // Nilai akan di-restore dari localStorage di dalam _renderLabInput()
     labItems.forEach(t => {
         const chipId = _pm_slug('lab_req', t.nama);
         if (window._reqLab[chipId]) {
@@ -1840,6 +1873,13 @@ function _renderSectionLabDinamic() {
 //  Rentang absolut yang masih physiologically possible
 // ══════════════════════════════════════════════════════
 
+// ── VITAL_RULES: hanya untuk tanda vital (TTV + antropometri) ──
+// BUG-FIX: Field lab_* DIHAPUS dari sini karena nilai lab klinis bisa sangat
+// bervariasi dan ekstrem (mis. GDS=10 pada hipoglikemia berat, Trombosit=3
+// pada ITP). Validasi range lab yang terlalu ketat menyebabkan tombol simpan
+// rekam medis TIDAK BISA ditekan ketika salah satu isian laboratorium diisi.
+// Solusi: lab hanya memunculkan peringatan visual (checkLabAlert), tidak
+// memblokir proses simpan.
 const VITAL_RULES = {
     sistol:        { min: 50,   max: 300,  label: 'Sistol',              unit: 'mmHg' },
     diastol:       { min: 30,   max: 200,  label: 'Diastol',             unit: 'mmHg' },
@@ -1848,6 +1888,11 @@ const VITAL_RULES = {
     rr:            { min: 5,    max: 60,   label: 'Laju Napas',          unit: 'x/mnt' },
     bb:            { min: 1,    max: 300,  label: 'Berat Badan',         unit: 'kg' },
     tb:            { min: 30,   max: 250,  label: 'Tinggi Badan',        unit: 'cm' },
+    // lab_* SENGAJA TIDAK ADA DI SINI — lihat komentar BUG-FIX di atas.
+};
+
+// ── LAB_WARN_RULES: hanya untuk peringatan visual, tidak memblokir simpan ──
+const LAB_WARN_RULES = {
     lab_gds:       { min: 20,   max: 800,  label: 'GDS',                 unit: 'mg/dL' },
     lab_chol:      { min: 50,   max: 800,  label: 'Kolesterol',          unit: 'mg/dL' },
     lab_ua:        { min: 1,    max: 20,   label: 'Asam Urat',           unit: 'mg/dL' },
@@ -1856,9 +1901,7 @@ const VITAL_RULES = {
     lab_leukosit:  { min: 0.5,  max: 100,  label: 'Leukosit',            unit: 'ribu/µL' },
     lab_eritrosit: { min: 0.5,  max: 10,   label: 'Eritrosit',           unit: 'juta/µL' },
     lab_hematokrit:{ min: 5,    max: 70,   label: 'Hematokrit',          unit: '%' },
-    // lab_hiv, lab_sifilis, lab_hepatitis SENGAJA TIDAK DIMASUKKAN di sini —
-    // field tersebut adalah <select> (Non-Reaktif/Reaktif), bukan angka,
-    // sehingga parseFloat() akan menghasilkan NaN dan memblokir simpan.
+    // lab_hiv, lab_sifilis, lab_hepatitis adalah <select> — tidak perlu range
     lab_hdl:       { min: 5,    max: 200,  label: 'HDL',                 unit: 'mg/dL' },
     lab_ldl:       { min: 10,   max: 500,  label: 'LDL',                 unit: 'mg/dL' },
     lab_tg:        { min: 10,   max: 2000, label: 'Trigliserida',        unit: 'mg/dL' },
@@ -2363,4 +2406,4 @@ async function saveAll(showInvoice = true) {
     window._floatResetDirty = function() { _setDirty(false); };
 })();
 
-console.log('[pemeriksaan-medis] ✅ Loaded — konsolidasi penunjang, tindakan, dokumen, pemx, lab chip');
+console.log('[pemeriksaan-medis] ✅ Loaded — konsolidasi penunjang, tindakan, dokumen, pemx, lab chip | BUG-FIX: lab tidak lagi memblokir tombol simpan');
