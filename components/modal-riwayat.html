@@ -28,7 +28,7 @@
                 <div class="detail-value" id="viewKeluhan"></div>
             </div>
 
-            <!-- Riwayat Penyakit Dahulu (Baru) -->
+            <!-- Riwayat Penyakit Dahulu -->
             <div class="detail-row" id="viewRiwayatPenyakitRow">
                 <div class="detail-label">🕰️ Riwayat Penyakit Dahulu</div>
                 <div class="detail-value" id="viewRiwayatPenyakit"></div>
@@ -69,9 +69,9 @@
                 🔒 <span id="editLockMsg"></span>
             </div>
 
-            <!-- Invoice button -->
+            <!-- Invoice button - Menutup modal riwayat saat diklik agar invoice muncul di depan -->
             <div id="viewInvoiceRow" style="margin-bottom:10px;display:none;">
-                <button onclick="_viewInvoiceFromModal()"
+                <button onclick="closeModal(); _viewInvoiceFromModal()"
                     style="width:100%;padding:10px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:11px;font-size:12.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
                     🧾 Lihat & Print Invoice
                 </button>
@@ -79,9 +79,6 @@
 
             <div class="d-flex gap-2 mt-3">
                 <button class="btn-custom" style="flex:1;background:#e2e8f0;color:#475569;" onclick="closeModal()">Tutup</button>
-                <button class="btn-custom" id="btnLihatLengkap"
-                    style="flex:1;background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;"
-                    onclick="_lihatLengkapDariModal()">🔍 Lihat Lengkap</button>
                 <button class="btn-custom btn-warning-custom" id="btnToggleEdit" style="flex:1;" onclick="toggleEditModal(true)">✏️ Edit Data</button>
             </div>
         </div>
