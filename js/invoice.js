@@ -13,10 +13,8 @@
 //  biaya.js hanya mengurus tarif layanan & kalkulasi.
 // ════════════════════════════════════════════════════════
 
-/** Format angka ke Rupiah tanpa simbol, misal 15000 → "15.000" */
-function _fmtRp(n) {
-    return Number(n || 0).toLocaleString('id-ID');
-}
+// _fmtRp — definisi kanonik ada di supabase.js sebagai window.fmtRp.
+const _fmtRp = (n) => window.fmtRp(n);
 
 // ════════════════════════════════════════
 //  STATE MODAL TAGIHAN (input baru)

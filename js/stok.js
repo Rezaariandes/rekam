@@ -703,7 +703,8 @@ async function loadResepByKunjungan(kunjunganId) {
 //  HELPER
 // ════════════════════════════════════════
 // _fmt: alias ke fmtRp() global (app.js) — tidak perlu definisi lokal
-function _fmt(n) { return (typeof fmtRp === 'function') ? fmtRp(n) : Number(n||0).toLocaleString('id-ID'); }
+// _fmt — definisi kanonik ada di supabase.js sebagai window.fmtRp.
+const _fmt = (n) => window.fmtRp(n);
 
 function _hitungMargin(beli, jual) {
     if (!beli || beli == 0) return jual > 0 ? 100 : 0;

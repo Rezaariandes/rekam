@@ -407,9 +407,7 @@ function _renderTabelDetail(data, labelBulan) {
 
     const tbody = `<tbody>` + data.map((r, i) => {
         const jkLabel  = r.jk === 'L' ? '♂️ L' : r.jk === 'P' ? '♀️ P' : r.jk;
-        const statusBadge = r.status === 'Selesai'
-            ? `<span style="background:#ecfdf5;color:#059669;border:1px solid #6ee7b7;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">✅ Selesai</span>`
-            : `<span style="background:#fef9c3;color:#854d0e;border:1px solid #fde047;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">⏳ Menunggu</span>`;
+        const statusBadge = window.badgeKunjungan(r.status === 'Selesai' ? 'selesai' : 'menunggu');
         const diagGabung = [r.diagnosa, r.diagnosa2].filter(d => d && d !== '—' && d !== '').join(' | ');
         const tglFmt = r.tgl ? _formatTglIndo(r.tgl) : '—';
         const ttvStr = _buildTTV(r);
@@ -615,7 +613,8 @@ function _valEl(id) {
     return el ? el.value : '';
 }
 // _escHtml: alias ke global escHtml (app.js) — tidak perlu definisi lokal lagi
-function _escHtml(str) { return (typeof escHtml === 'function') ? escHtml(str) : String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// _escHtml — definisi kanonik ada di supabase.js sebagai window.escHtml.
+const _escHtml = (str) => window.escHtml(str);
 function _potongTeks(str, maxLen) {
     if (!str || str === '—') return '—';
     return str.length > maxLen ? str.substring(0, maxLen) + '…' : str;

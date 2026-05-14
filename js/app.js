@@ -23,20 +23,27 @@
 
 const $ = id => document.getElementById(id);
 
-// ── ESCAPE HTML (GLOBAL — satu-satunya definisi, dipakai semua file) ──
-function escHtml(str) {
-    return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+// ── ESCAPE HTML — definisi kanonik ada di supabase.js (diload lebih dulu).
+// Guard ini mencegah redefinisi jika urutan load berubah.
+if (typeof window.escHtml !== 'function') {
+    window.escHtml = function escHtml(str) {
+        return String(str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
 }
+const escHtml = window.escHtml;
 
-// ── FORMAT RUPIAH (GLOBAL — pengganti _fmt/fmtRp di stok.js & invoice.js) ──
-function fmtRp(n) {
-    return Number(n || 0).toLocaleString('id-ID');
+// ── FORMAT RUPIAH — definisi kanonik ada di supabase.js (diload lebih dulu).
+if (typeof window.fmtRp !== 'function') {
+    window.fmtRp = function fmtRp(n) {
+        return Number(n || 0).toLocaleString('id-ID');
+    };
 }
+const fmtRp = window.fmtRp;
 
 // ── FORMAT TANGGAL ──
 function formatTglIndo(tglStr) {
@@ -153,6 +160,17 @@ function clearSession() {
     if (sistol)  sistol.classList.remove('is-high');
     if (diastol) diastol.classList.remove('is-high');
     _updateRecoverBanner(); // Sembunyikan banner setelah sesi bersih
+
+    // Bersihkan state global agar tidak bocor ke pasien berikutnya
+    window._accordionState = {};
+    window._invoiceData    = null;
+    window._invoiceNama    = '';
+    window._invoiceTgl     = '';
+    window._statusCache    = {};
+
+    // Notifikasi modul lain (pemeriksaan-medis.js, dll) via event —
+    // lebih aman daripada setInterval polling.
+    document.dispatchEvent(new CustomEvent('klikpro:clearSession'));
 }
 
 // ── BANNER RECOVER: tampil di pageDaftar jika ada draft pasien belum selesai ──

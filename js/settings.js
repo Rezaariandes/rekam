@@ -409,14 +409,8 @@ function _buildAccordion(id, title, subtitle, bodyHtml, saveAction) {
 // ────────────────────────────────────────
 //  TOGGLE ACCORDION
 // ────────────────────────────────────────
-function toggleSettingsSection(id) {
-    const body  = $(`${id}_body`);
-    const arrow = $(`${id}_arrow`);
-    if (!body) return;
-    const isOpen = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
-}
+// toggleSettingsSection — digantikan oleh window.accToggle (supabase.js).
+function toggleSettingsSection(id) { window.accToggle(id); }
 
 // ────────────────────────────────────────
 //  HTML SEKSI: IDENTITAS KLINIK
@@ -706,6 +700,10 @@ function _renderModuleAccess() {
     }).join('');
 }
 
+// toggleJabatanAccess — digantikan oleh window.accToggle.
+// HTML menggunakan id="jab_body_X" dan id="jab_arrow_X", jadi base id = "jab_X"
+// agar accToggle menambahkan "_body"/"_arrow" dengan benar... tapi HTML sudah
+// menggunakan "jab_body_" sebagai prefix. Wrapper kecil ini menjaga kompatibilitas.
 function toggleJabatanAccess(jabEscId) {
     const body  = $(`jab_body_${jabEscId}`);
     const arrow = $(`jab_arrow_${jabEscId}`);
@@ -713,6 +711,8 @@ function toggleJabatanAccess(jabEscId) {
     const isOpen = body.style.display !== 'none';
     body.style.display = isOpen ? 'none' : 'block';
     if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+    if (!window._accordionState) window._accordionState = {};
+    window._accordionState[`jab_${jabEscId}`] = !isOpen;
 }
 
 function _onModuleCheckChange(jab, modId, checked, checkboxEl) {
@@ -1031,6 +1031,9 @@ function updateAiKey(provider, idx, val) {
     if (dot) dot.className = 'ai-status-dot' + (hasKey ? ' has-key' : '');
 }
 
+// toggleAiSection — digantikan oleh window.accToggle.
+// HTML menggunakan id="section_<provider>_body" tidak ada; body langsung id="section_<provider>".
+// accToggle menambah "_body", jadi kita wrap manual agar tidak ubah HTML.
 function toggleAiSection(provider) {
     const body = $(`section_${provider}`);
     if (!body) return;
@@ -1639,14 +1642,7 @@ function _setVal(id, val) {
     if (el) el.value = val || '';
 }
 
-function escHtml(str) {
-    return String(str||'')
-        .replace(/&/g,'&amp;')
-        .replace(/"/g,'&quot;')
-        .replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;');
-}
-
+// escHtml — didefinisikan di supabase.js (diload lebih dulu), tidak perlu duplikasi di sini.
 
 // ════════════════════════════════════════
 //  STOK OBAT — SETTINGS

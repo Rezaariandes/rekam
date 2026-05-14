@@ -8,6 +8,71 @@
 //  Cukup load 1 file ini saja — file-file di atas TIDAK perlu di-load lagi.
 // ════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════
+//  SHARED UTILITIES — didefinisikan di sini (diload pertama)
+//  agar tersedia untuk settings.js, pemeriksaan-medis.js,
+//  laporan.js, invoice.js, stok.js, dll.
+//
+//  app.js TIDAK perlu mendefinisikan ulang — cukup pakai
+//  window.escHtml / window.fmtRp / window.accToggle yang sudah ada.
+// ════════════════════════════════════════════════════════
+
+/** Escape HTML — satu-satunya definisi kanonik. */
+if (typeof window.escHtml !== 'function') {
+    window.escHtml = function escHtml(str) {
+        return String(str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
+}
+
+/** Format Rupiah — satu-satunya definisi kanonik. */
+if (typeof window.fmtRp !== 'function') {
+    window.fmtRp = function fmtRp(n) {
+        return Number(n || 0).toLocaleString('id-ID');
+    };
+}
+
+/**
+ * Generic accordion toggle.
+ * Semua modul (pemeriksaan-medis, settings) cukup panggil:
+ *   accToggle(id)  — toggle elemen #<id>_body + rotasi #<id>_arrow
+ * State disimpan di window._accordionState[id].
+ */
+window.accToggle = function accToggle(id) {
+    if (!window._accordionState) window._accordionState = {};
+    const body  = document.getElementById(id + '_body');
+    const arrow = document.getElementById(id + '_arrow');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+    window._accordionState[id] = !isOpen;
+};
+
+/**
+ * Badge status kunjungan — satu-satunya definisi kanonik.
+ * Dipakai di kunjungan.js dan laporan.js.
+ *
+ * @param {'selesai'|'lunas'|'menunggu'} type
+ */
+window.badgeKunjungan = function badgeKunjungan(type) {
+    switch (type) {
+        case 'selesai':
+            return `<span style="background:#ecfdf5;color:#059669;border:1px solid #6ee7b7;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">✅ Selesai</span>`;
+        case 'lunas':
+            return `<span style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">✓ LUNAS</span>`;
+        case 'menunggu':
+        default:
+            return `<span style="background:#fef9c3;color:#854d0e;border:1px solid #fde047;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">⏳ Menunggu</span>`;
+    }
+};
+
+// ════════════════════════════════════════════════════════
+
 const _SB_URL = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
 const _SB_KEY = typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : '';
 
@@ -904,29 +969,38 @@ async function sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData) {
         items.push({ nama_item: nama, kategori, jumlah, harga_satuan: Number(harga) || 0, keterangan: ket });
     };
 
+    // 0. ── PEMERIKSAAN & KONSULTASI DOKTER (Rp 50.000) ──
+    // Otomatis ditambahkan paling atas tagihan jika salah satu kolom
+    // section pemeriksaan medis terisi (TTV, keluhan, fisik, atau diagnosa).
+    const hasTtv     = kunjunganData.td || kunjunganData.nadi || kunjunganData.suhu;
+    const hasKeluhan = kunjunganData.keluhan;
+    const hasFisik   = kunjunganData.fisik;
+    const hasDiag    = kunjunganData.diag || kunjunganData.diagnosa;
+
+    const adaPemeriksaanMedis = hasTtv || hasKeluhan || hasFisik || hasDiag;
+    if (adaPemeriksaanMedis) {
+        addItem('Pemeriksaan & Konsultasi Dokter', 'Pemeriksaan', 50000);
+    }
+
     // 1. Tarif pemeriksaan vital sign
-    const hasTtv = kunjunganData.td || kunjunganData.nadi || kunjunganData.suhu;
     if (hasTtv) {
         const t = tarifAktif.find(x => x.kategori === 'Pemeriksaan' && x.nama === 'Vital Sign');
         if (t) addItem('Pemeriksaan Vital Sign', 'Pemeriksaan', t.harga);
     }
 
     // 2a. Anamnesa
-    const hasKeluhan = kunjunganData.keluhan;
     if (hasKeluhan) {
         const t = tarifAktif.find(x => x.kategori === 'Pemeriksaan' && x.nama === 'Anamnesa');
         if (t) addItem('Anamnesa (Keluhan Utama)', 'Pemeriksaan', t.harga);
     }
 
     // 2b. Pemeriksaan fisik
-    const hasFisik = kunjunganData.fisik;
     if (hasFisik) {
         const t = tarifAktif.find(x => x.kategori === 'Pemeriksaan' && x.nama === 'Pemeriksaan Fisik');
         if (t) addItem('Pemeriksaan Fisik Umum', 'Pemeriksaan', t.harga);
     }
 
     // 2c. Konsultasi dokter
-    const hasDiag = kunjunganData.diag || kunjunganData.diagnosa;
     if (hasDiag) {
         const t = tarifAktif.find(x => x.kategori === 'Pemeriksaan' && x.nama === 'Konsultasi Medis');
         if (t) addItem('Konsultasi / Visite Dokter', 'Pemeriksaan', t.harga);

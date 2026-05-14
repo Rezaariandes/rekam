@@ -81,14 +81,9 @@ const _PNJ_BUCKET = 'penunjang-foto';
 //  SHARED HELPERS
 // ══════════════════════════════════════════════════════
 
-// escHtml() is now defined in app.js (global). This alias keeps any
-// internal calls inside this file working even if load order changes.
-function _pm_escHtml(str) {
-    if (typeof escHtml === 'function') return escHtml(str);
-    return String(str || '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// escHtml() didefinisikan di supabase.js (diload pertama).
+// Alias ini hanya untuk menjaga kompatibilitas pemanggilan internal.
+const _pm_escHtml = (str) => window.escHtml(str);
 
 /** Buat slug id dari prefix + nama */
 function _pm_slug(prefix, nama) {
@@ -431,16 +426,8 @@ function _renderChipPermintaanLab() {
     });
 }
 
-window._labAccToggle = function(sgId) {
-    if (!window._accordionState) window._accordionState = {};
-    const body  = document.getElementById(sgId + '_body');
-    const arrow = document.getElementById(sgId + '_arrow');
-    if (!body) return;
-    const isOpen = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
-    window._accordionState[sgId] = !isOpen;
-};
+// _labAccToggle — digantikan oleh window.accToggle (supabase.js).
+window._labAccToggle = function(sgId) { window.accToggle(sgId); };
 
 /** Toggle item lab: aktif → tampilkan input; nonaktif → hapus input & clear field */
 function _toggleLabItem(chipId, nama) {
@@ -701,16 +688,8 @@ function renderSectionPermintaanLab() {
     });
 }
 
-window._pnjAccToggle = function(sgId) {
-    if (!window._accordionState) window._accordionState = {};
-    const body  = document.getElementById(sgId + '_body');
-    const arrow = document.getElementById(sgId + '_arrow');
-    if (!body) return;
-    const isOpen = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
-    window._accordionState[sgId] = !isOpen;
-};
+// _pnjAccToggle — digantikan oleh window.accToggle (supabase.js).
+window._pnjAccToggle = function(sgId) { window.accToggle(sgId); };
 
 function _togglePenunjang(id) {
     window._reqLab[id] = !window._reqLab[id];
@@ -996,16 +975,8 @@ function _renderSectionTindakan() {
     container.appendChild(div);
 }
 
-window._tidAccToggle = function(sgId) {
-    if (!window._accordionState) window._accordionState = {};
-    const body  = document.getElementById(sgId + '_body');
-    const arrow = document.getElementById(sgId + '_arrow');
-    if (!body) return;
-    const isOpen = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
-    window._accordionState[sgId] = !isOpen;
-};
+// _tidAccToggle — digantikan oleh window.accToggle (supabase.js).
+window._tidAccToggle = function(sgId) { window.accToggle(sgId); };
 
 function _toggleTindakan(id) {
     // Toggle eksplisit — pastikan false jika sebelumnya truthy
@@ -1152,16 +1123,8 @@ function _renderSectionPemeriksaanExtra() {
     });
 }
 
-window._pemxAccToggle = function(sgId) {
-    if (!window._accordionState) window._accordionState = {};
-    const body  = document.getElementById(sgId + '_body');
-    const arrow = document.getElementById(sgId + '_arrow');
-    if (!body) return;
-    const isOpen = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
-    window._accordionState[sgId] = !isOpen;
-};
+// _pemxAccToggle — digantikan oleh window.accToggle (supabase.js).
+window._pemxAccToggle = function(sgId) { window.accToggle(sgId); };
 
 function _togglePemx(slug, nama) {
     // BUG-FIX: Gunakan flag _pemxActive_ terpisah agar toggle tidak bergantung
@@ -1689,7 +1652,10 @@ function _renderSectionLabDinamic() {
         document.addEventListener('DOMContentLoaded', () => {
             if (!_doHook()) {
                 let i = 0;
-                const t = setInterval(() => { if (_doHook() || ++i > 50) clearInterval(t); }, 100);
+                const t = setInterval(() => {
+                    if (_doHook()) { clearInterval(t); return; }
+                    if (++i > 50) { clearInterval(t); console.warn('[pemeriksaan-medis] Hook timeout: fungsi target tidak dimuat dalam 5 detik.'); }
+                }, 100);
             }
         });
     }
@@ -1756,7 +1722,10 @@ function _renderSectionLabDinamic() {
         document.addEventListener('DOMContentLoaded', () => {
             if (!_doHook()) {
                 let i = 0;
-                const t = setInterval(() => { if (_doHook() || ++i > 50) clearInterval(t); }, 100);
+                const t = setInterval(() => {
+                    if (_doHook()) { clearInterval(t); return; }
+                    if (++i > 50) { clearInterval(t); console.warn('[pemeriksaan-medis] Hook timeout: fungsi target tidak dimuat dalam 5 detik.'); }
+                }, 100);
             }
         });
     }
@@ -1777,33 +1746,51 @@ function _renderSectionLabDinamic() {
 //  belum terdefinisi saat file ini diparse.
 // ══════════════════════════════════════════════════════
 
-(function _wrapClearSession() {
-    function _doWrap() {
-        const _origClear = window.clearSession;
-        if (typeof _origClear !== 'function') return false;
-        if (_origClear._pemMedisClearHooked) return true;
+//  HOOK — clearSession (app.js)
+//  Reset semua state saat pasien berganti.
+//  Karena app.js diload SETELAH pemeriksaan-medis.js, kita daftarkan
+//  callback via event 'klikpro:clearSession' alih-alih interval polling.
+//  app.js dispatch event ini dari dalam clearSession().
+// ══════════════════════════════════════════════════════
 
+(function _hookClearSession() {
+    /** Reset seluruh state per-pasien milik modul ini. */
+    function _resetPemMedisState() {
+        window._reqLab              = {};
+        window._reqTindakan         = {};
+        window._reqLabHasil         = {};
+        window._reqLabFoto          = {};
+        window._reqPemeriksaanExtra = {};
+        window._reqAdminExtra       = {};
+        window._pemxActive          = {};
+        window._accordionState      = {};
+        // Bersihkan invoice & status cache agar tidak bocor ke pasien berikutnya
+        window._invoiceData         = null;
+        window._invoiceNama         = '';
+        window._invoiceTgl          = '';
+        window._statusCache         = {};
+    }
+
+    // Cara 1: wrap langsung jika clearSession sudah tersedia
+    function _tryWrap() {
+        const _orig = window.clearSession;
+        if (typeof _orig !== 'function' || _orig._pemMedisClearHooked) return false;
         window.clearSession = function() {
-            _origClear.apply(this, arguments);
-            window._reqLab              = {};
-            window._reqTindakan         = {};
-            window._reqLabHasil         = {};
-            window._reqLabFoto          = {};
-            window._reqPemeriksaanExtra = {};
-            window._reqAdminExtra       = {};
-            window._pemxActive          = {}; // BUG-FIX: reset active flag saat ganti pasien
+            _orig.apply(this, arguments);
+            _resetPemMedisState();
         };
         window.clearSession._pemMedisClearHooked = true;
         return true;
     }
 
-    if (!_doWrap()) {
-        document.addEventListener('DOMContentLoaded', () => {
-            if (!_doWrap()) {
-                let i = 0;
-                const t = setInterval(() => { if (_doWrap() || ++i > 50) clearInterval(t); }, 100);
-            }
-        });
+    // Cara 2: fallback via custom event (tidak perlu interval — event ini di-dispatch
+    // oleh app.js setelah clearSession dipanggil sehingga tidak ada leak).
+    document.addEventListener('klikpro:clearSession', _resetPemMedisState);
+
+    // Coba wrap saat file diparse; jika belum tersedia, coba lagi setelah DOM siap.
+    // Tidak menggunakan setInterval agar tidak ada goroutine liar yang terus berjalan.
+    if (!_tryWrap()) {
+        document.addEventListener('DOMContentLoaded', _tryWrap);
     }
 })();
 
@@ -1827,7 +1814,10 @@ function _renderSectionLabDinamic() {
     if (!_doHook()) {
         document.addEventListener('DOMContentLoaded', () => {
             if (!_doHook()) {
-                let i = 0; const t = setInterval(() => { if (_doHook() || ++i > 50) clearInterval(t); }, 100);
+                let i = 0; const t = setInterval(() => {
+                    if (_doHook()) { clearInterval(t); return; }
+                    if (++i > 50) { clearInterval(t); console.warn('[pemeriksaan-medis] Hook timeout: initPageBiaya tidak dimuat dalam 5 detik.'); }
+                }, 100);
             }
         });
     }
