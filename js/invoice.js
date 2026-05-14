@@ -27,6 +27,50 @@ let _tagihanItems      = [];
 let _tagihanDiskon     = 0;
 
 // ════════════════════════════════════════
+//  _isKnownAutoItem — deteksi apakah item bisa di-generate otomatis
+//  dari rekam medis (bukan ditambah manual oleh user).
+//  Digunakan saat merge tagihan untuk memutuskan item mana yang
+//  harus dihapus jika sudah tidak ada di rekam medis terkini.
+// ════════════════════════════════════════
+function _isKnownAutoItem(namaItem, kategori) {
+    if (!namaItem) return false;
+    const n = namaItem.toLowerCase().trim();
+    const k = (kategori || '').toLowerCase();
+
+    // Kategori yang sepenuhnya auto-generated
+    if (k === 'obat' || k === 'tindakan' || k === 'penunjang' || k === 'lab' || k === 'laboratorium') return true;
+
+    // Item Pemeriksaan auto dari base function
+    const autoPemeriksaan = [
+        'pemeriksaan & konsultasi dokter',
+        'pemeriksaan vital sign',
+        'anamnesa (keluhan utama)',
+        'pemeriksaan fisik umum',
+        'konsultasi / visite dokter',
+    ];
+    if (autoPemeriksaan.includes(n)) return true;
+
+    // Item Pemeriksaan extra dari pemeriksaan-medis hook (slug pemx_*)
+    if (k === 'pemeriksaan') {
+        const pmTarif = (typeof _pm_getTarif === 'function')
+            ? _pm_getTarif('Pemeriksaan', window._PEMERIKSAAN_BAWAAN || [])
+            : [];
+        if (pmTarif.some(t => (t.nama || '').toLowerCase() === n)) return true;
+    }
+
+    // Item Administrasi auto (Surat Keterangan Sakit + adm extra dari slug adm_*)
+    if (k === 'administrasi') {
+        if (n === 'surat keterangan sakit') return true;
+        const admTarif = (typeof _pm_getTarif === 'function')
+            ? _pm_getTarif('Administrasi', window._ADMINISTRASI_BAWAAN || [])
+            : [];
+        if (admTarif.some(t => (t.nama || '').toLowerCase() === n)) return true;
+    }
+
+    return false;
+}
+
+// ════════════════════════════════════════
 //  openModalTagihan — dipanggil setelah simpan rekam medis
 //  Menggantikan showTagihanModal lama di biaya.js
 // ════════════════════════════════════════
@@ -48,34 +92,60 @@ async function openModalTagihan(kunjunganId, pasienId, pasienNama, tgl, kunjunga
     try { existingTagihan = await sb_getTagihan(kunjunganId); } catch(e) { /* ignore */ }
 
     if (existingTagihan && existingTagihan.tagihan_item && existingTagihan.tagihan_item.length > 0) {
-        // Tagihan sudah ada — generate item baru dari rekam medis terkini untuk merge
+        // Tagihan sudah ada — generate item terkini dari rekam medis sebagai sumber kebenaran
         let generatedItems = [];
         try {
             generatedItems = await sb_autoTagihanFromKunjungan(kunjunganId, kunjunganData || {});
         } catch(e) { generatedItems = []; }
 
-        // Mulai dari item yang sudah tersimpan di DB
+        // Tandai semua item hasil generate sebagai auto
+        generatedItems.forEach(gi => { gi._isAuto = true; });
+
+        // Set nama item yang saat ini ada di rekam medis (auto)
+        const generatedNames = new Set(generatedItems.map(gi => (gi.nama_item || '').toLowerCase().trim()));
+
+        // Item yang tersimpan di DB
         const dbItems = existingTagihan.tagihan_item.map(it => ({
             nama_item:    it.nama_item,
             kategori:     it.kategori,
             jumlah:       Number(it.jumlah) || 1,
             harga_satuan: Number(it.harga_satuan) || 0,
-            keterangan:   it.keterangan || null
+            keterangan:   it.keterangan || null,
+            _isAuto:      it._isAuto === true || it.is_auto === true
         }));
 
-        // Merge: tambahkan item dari rekam medis baru yang belum ada di tagihan
-        const existingNames = new Set(dbItems.map(i => i.nama_item.toLowerCase().trim()));
-        const newItems = generatedItems.filter(gi =>
-            !existingNames.has((gi.nama_item || '').toLowerCase().trim())
+        // Item manual = yang ada di DB tapi TIDAK ada di generatedNames
+        // Logika: jika item DB tidak dikenal sebagai auto (tidak ada di generated),
+        // dianggap manual → tetap dipertahankan.
+        // Jika item DB dulu auto (ada di generated sebelumnya) tapi sekarang
+        // tidak ada lagi di generated → item dihapus dari rekam medis → HAPUS dari tagihan.
+        const manualItems = dbItems.filter(db => {
+            const key = (db.nama_item || '').toLowerCase().trim();
+            // Pertahankan jika TIDAK ada di daftar yang bisa di-auto-generate sama sekali,
+            // artinya item ini ditambah manual oleh user.
+            return !generatedNames.has(key) && !_isKnownAutoItem(db.nama_item, db.kategori);
+        });
+
+        // Item auto terkini yang belum ada di manualItems
+        const manualNames = new Set(manualItems.map(i => i.nama_item.toLowerCase().trim()));
+        const autoItems = generatedItems.filter(gi =>
+            !manualNames.has((gi.nama_item || '').toLowerCase().trim())
         );
 
-        _tagihanItems = [...dbItems, ...newItems];
+        const addedCount  = autoItems.filter(gi => !dbItems.some(db => db.nama_item.toLowerCase().trim() === gi.nama_item.toLowerCase().trim())).length;
+        const removedCount = dbItems.filter(db => {
+            const key = db.nama_item.toLowerCase().trim();
+            return _isKnownAutoItem(db.nama_item, db.kategori) && !generatedNames.has(key);
+        }).length;
+
+        _tagihanItems = [...manualItems, ...autoItems];
         _tagihanDiskon = Number(existingTagihan.diskon) || 0;
         window._tagihanCatatanInit = existingTagihan.catatan || '';
 
-        if (newItems.length > 0) {
-            showToast(`ℹ️ ${newItems.length} item baru dari rekam medis ditambahkan ke tagihan`, 'info');
-        }
+        const msgs = [];
+        if (addedCount  > 0) msgs.push(`${addedCount} item baru ditambahkan`);
+        if (removedCount > 0) msgs.push(`${removedCount} item dihapus sesuai rekam medis`);
+        if (msgs.length > 0) showToast(`ℹ️ ${msgs.join(', ')}`, 'info');
     } else {
         // Tagihan belum ada — generate otomatis dari rekam medis
         try {
