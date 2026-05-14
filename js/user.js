@@ -375,15 +375,21 @@ async function hapusUser() {
     if (btn) { btn.disabled = true; btn.innerText = "Menghapus..."; }
 
     try {
+        // Cek jabatan sebelum dihapus (cache masih ada)
+        const userHapus     = userListCache.find(x => x.id === id);
+        const isDokterHapus = userHapus && (userHapus.jabatan || '').toLowerCase() === 'dokter';
+
+        // Hapus user dari tabel users
         await sb_deleteUser(id);
 
-        // Cek apakah user ini adalah Dokter agar toast lebih informatif
-        const userHapus   = userListCache.find(x => x.id === id);
-        const isDokterHapus = userHapus && (userHapus.jabatan || '').toLowerCase() === 'dokter';
+        // Jika user adalah Dokter, hapus juga dari tabel dokter
+        if (isDokterHapus && typeof sb_deleteDokterByUserId === 'function') {
+            await sb_deleteDokterByUserId(id);
+        }
 
         showToast(
             isDokterHapus
-                ? `🗑️ Akun Dokter "${nama}" & data dokter terkait berhasil dihapus`
+                ? `🗑️ Akun Dokter "${nama}" & data dokter berhasil dihapus`
                 : `🗑️ Akun "${nama}" berhasil dihapus`,
             "success"
         );
@@ -395,6 +401,15 @@ async function hapusUser() {
         if (modal) modal.classList.remove('show');
         renderUserList();
         if (typeof loadLoginUsers === "function") loadLoginUsers();
+
+        // Refresh daftar dokter di halaman Settings jika sedang terbuka
+        if (isDokterHapus) {
+            try {
+                const data = await sb_getSettings();
+                if (data.dokter) window._dokterAktif = data.dokter;
+                if (typeof _renderDokterList === 'function') _renderDokterList();
+            } catch(e) {}
+        }
     } catch (e) {
         showToast("❌ Gagal menghapus user: " + (e.message || ''), "error");
     } finally {
