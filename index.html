@@ -8,14 +8,10 @@
     <script>
         const SUPABASE_URL = 'https://aqqlxytpryuwdggadjlt.supabase.co';
         let   SUPABASE_ANON_KEY = '';   // diisi saat bootstrap via Edge Function
-        const supabaseClient    = null;
-
-        const BASE_URL = 'https://raw.githubusercontent.com/Rezaariandes/rekam/main';
-
+        
         // ── CACHE BUSTER — timestamp otomatis, selalu ambil file terbaru ──
-        // Dibulatkan per 10 menit agar tidak refetch setiap detik,
-        // tapi selalu fresh setelah deploy baru.
         const _CB = Math.floor(Date.now() / 600000);
+        const BASE_URL = 'https://raw.githubusercontent.com/Rezaariandes/rekam/main';
 
         let KLINIK_NAMA   = 'Klinik Klikpro';
         let KLINIK_TITLE  = 'Klikpro RME V 2.0';
@@ -65,6 +61,8 @@
         };
     </script>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,800;1,700&display=swap" rel="stylesheet">
@@ -261,41 +259,4 @@
                 'jsModal', 'jsUser',
                 'jsLaporan', 'jsStok', 'jsBiaya', 'jsInvoice',
                 'jsSuratTemplate',
-                'jsPemeriksaanMedis',
-                'jsApp',
-                'jsRealtime',
-            ];
-
-            const jsTexts = await Promise.all(
-                jsKeys.map(key =>
-                    fetch(FRAGMENT_URLS[key]).then(r => {
-                        if (!r.ok) throw new Error('Gagal mengunduh modul: ' + key);
-                        return r.text();
-                    })
-                )
-            );
-
-            setLoadStep('Menginisialisasi sistem...');
-            for (const scriptText of jsTexts) {
-                try { injectScript(scriptText); } catch (e) { console.warn('Peringatan modul:', e); }
-            }
-
-            document.getElementById('app-loading').style.display = 'none';
-            document.getElementById('app-root').style.display    = 'block';
-
-            if (typeof initApp === 'function') initApp();
-
-        } catch (err) {
-            document.getElementById('app-loading').style.display = 'none';
-            document.getElementById('app-error').style.display   = 'flex';
-            document.getElementById('err-msg').textContent =
-                err.message + '. Pastikan koneksi internet aktif dan URL GitHub di konfigurasi sudah benar.';
-            console.error('[Klikpro Bootstrap Error]', err);
-        }
-    }
-
-    window.addEventListener('DOMContentLoaded', bootstrap);
-    </script>
-
-</body>
-</html>
+                'jsPemeriksaanMed
