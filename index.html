@@ -275,6 +275,10 @@
             document.getElementById('app-loading').style.display = 'none';
             document.getElementById('app-root').style.display    = '';
 
+            // ── Jalankan app setelah semua JS siap ──
+            await new Promise(r => setTimeout(r, 0)); // flush microtask queue
+            if (typeof initApp === 'function') initApp();
+
         } catch (err) {
             console.error('[Bootstrap] Error:', err);
             document.getElementById('app-loading').style.display = 'none';
