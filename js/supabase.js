@@ -262,6 +262,13 @@ async function sb_deleteDokterByUserId(userId) {
     return { status: 'success' };
 }
 
+/** Hapus dokter berdasarkan nama (case-insensitive) — fallback jika user_id tidak terhubung */
+async function sb_deleteDokterByNama(nama) {
+    if (!nama) return { status: 'skip' };
+    await _sbFetch(`dokter?nama=ilike.${encodeURIComponent(nama)}`, { method: 'DELETE', prefer: 'return=minimal' });
+    return { status: 'success' };
+}
+
 // SHA-256 untuk hash PIN di browser
 async function _sha256(text) {
     const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));

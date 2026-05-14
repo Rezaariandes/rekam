@@ -382,9 +382,17 @@ async function hapusUser() {
         // Hapus user dari tabel users
         await sb_deleteUser(id);
 
-        // Jika user adalah Dokter, hapus juga dari tabel dokter
-        if (isDokterHapus && typeof sb_deleteDokterByUserId === 'function') {
-            await sb_deleteDokterByUserId(id);
+        // Jika user adalah Dokter:
+        // 1. Hapus dari tabel dokter berdasarkan user_id (untuk dokter yang dibuat dari akun)
+        // 2. Fallback: hapus berdasarkan nama (untuk dokter yang ditambah manual di Settings
+        //    yang mungkin tidak punya user_id terhubung)
+        if (isDokterHapus) {
+            if (typeof sb_deleteDokterByUserId === 'function') {
+                await sb_deleteDokterByUserId(id);
+            }
+            if (typeof sb_deleteDokterByNama === 'function' && nama && nama !== 'user ini') {
+                await sb_deleteDokterByNama(nama);
+            }
         }
 
         showToast(
@@ -402,13 +410,18 @@ async function hapusUser() {
         renderUserList();
         if (typeof loadLoginUsers === "function") loadLoginUsers();
 
-        // Refresh daftar dokter di halaman Settings jika sedang terbuka
+        // Refresh daftar dokter di panel Settings agar langsung sinkron
         if (isDokterHapus) {
             try {
-                const data = await sb_getSettings();
-                if (data.dokter) window._dokterAktif = data.dokter;
+                const freshData = await sb_getSettings();
+                // Update cache global dokter aktif
+                window._dokterAktif = freshData.dokter || [];
+                // Jika halaman Settings sedang terbuka: perbarui _dokterList dan render ulang
+                if (typeof window._dokterList !== 'undefined') {
+                    window._dokterList = freshData.dokter || [];
+                }
                 if (typeof _renderDokterList === 'function') _renderDokterList();
-            } catch(e) {}
+            } catch(e) { console.warn("[hapusUser] Gagal refresh dokter list:", e.message); }
         }
     } catch (e) {
         showToast("❌ Gagal menghapus user: " + (e.message || ''), "error");

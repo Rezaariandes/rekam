@@ -612,9 +612,7 @@ function _valEl(id) {
     const el = document.getElementById(id);
     return el ? el.value : '';
 }
-// _escHtml: alias ke global escHtml (app.js) — tidak perlu definisi lokal lagi
-// _escHtml — definisi kanonik ada di supabase.js sebagai window.escHtml.
-const _escHtml = (str) => window.escHtml(str);
+// _escHtml: gunakan function declaration dari modal.js — tidak redeclare di sini
 function _potongTeks(str, maxLen) {
     if (!str || str === '—') return '—';
     return str.length > maxLen ? str.substring(0, maxLen) + '…' : str;
