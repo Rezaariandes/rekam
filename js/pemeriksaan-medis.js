@@ -1856,9 +1856,9 @@ const VITAL_RULES = {
     lab_leukosit:  { min: 0.5,  max: 100,  label: 'Leukosit',            unit: 'ribu/µL' },
     lab_eritrosit: { min: 0.5,  max: 10,   label: 'Eritrosit',           unit: 'juta/µL' },
     lab_hematokrit:{ min: 5,    max: 70,   label: 'Hematokrit',          unit: '%' },
-    lab_hiv:       { min: 0,    max: 10,   label: 'HIV (index)',          unit: '' },
-    lab_sifilis:   { min: 0,    max: 10,   label: 'Sifilis (index)',      unit: '' },
-    lab_hepatitis: { min: 0,    max: 10,   label: 'Hepatitis B (index)', unit: '' },
+    // lab_hiv, lab_sifilis, lab_hepatitis SENGAJA TIDAK DIMASUKKAN di sini —
+    // field tersebut adalah <select> (Non-Reaktif/Reaktif), bukan angka,
+    // sehingga parseFloat() akan menghasilkan NaN dan memblokir simpan.
     lab_hdl:       { min: 5,    max: 200,  label: 'HDL',                 unit: 'mg/dL' },
     lab_ldl:       { min: 10,   max: 500,  label: 'LDL',                 unit: 'mg/dL' },
     lab_tg:        { min: 10,   max: 2000, label: 'Trigliserida',        unit: 'mg/dL' },
@@ -1874,7 +1874,8 @@ function validasiNilaiVital() {
     const errors = [];
     Object.entries(VITAL_RULES).forEach(([id, rule]) => {
         const el = document.getElementById(id);
-        if (!el || el.value === '') return;
+        // Lewati jika elemen tidak ada, kosong, atau berupa <select> (nilai non-numerik)
+        if (!el || el.value === '' || el.tagName === 'SELECT') return;
         const val = parseFloat(el.value);
         if (isNaN(val)) { errors.push(`${rule.label}: bukan angka valid`); return; }
         if (val < rule.min || val > rule.max) {
@@ -2008,6 +2009,7 @@ function _applyLockUI() {
             btnSave.style.cssText = 'width:100%;padding:12px;border-radius:12px;font-size:13px;font-weight:800;background:#e2e8f0;color:#94a3b8;border:none;cursor:not-allowed;';
         } else {
             btnSave.innerText     = '✓ Simpan Rekam Medis';
+            // Selalu reset cssText agar style terkunci tidak terjebak jika dipanggil ulang
             btnSave.style.cssText = '';
         }
     }
@@ -2208,7 +2210,12 @@ async function saveAll(showInvoice = true) {
         console.error('[Klikpro] saveAll error:', e);
         showToast('❌ Gagal menyimpan: ' + (e.message || 'Cek koneksi internet'), 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerText = '✓ Simpan Rekam Medis'; }
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = '✓ Simpan Rekam Medis';
+            // Reset inline style agar tidak terjebak di state terkunci dari _applyLockUI
+            btn.style.cssText = '';
+        }
     }
 }
 
