@@ -1,4 +1,3 @@
-
 <div class="modal-overlay" id="modalRiwayat" onclick="if(event.target===this) closeModal()">
     <div class="modal-content">
         <div style="width:40px;height:4px;background:#e2e8f0;border-radius:2px;margin:0 auto 18px;"></div>
@@ -17,7 +16,7 @@
                 <div class="detail-value" id="viewTtv"></div>
             </div>
 
-            <!-- Riwayat Alergi (dalam blok TTV) -->
+            <!-- Riwayat Alergi -->
             <div class="detail-row" id="viewAlergiRow">
                 <div class="detail-label" style="color:#b45309;">⚠️ Riwayat Alergi</div>
                 <div class="detail-value" id="viewAlergi" style="color:#b45309;font-weight:600;"></div>
@@ -29,19 +28,19 @@
                 <div class="detail-value" id="viewKeluhan"></div>
             </div>
 
+            <!-- Riwayat Penyakit Dahulu (Baru) -->
+            <div class="detail-row" id="viewRiwayatPenyakitRow">
+                <div class="detail-label">🕰️ Riwayat Penyakit Dahulu</div>
+                <div class="detail-value" id="viewRiwayatPenyakit"></div>
+            </div>
+
             <!-- Pemeriksaan Fisik -->
             <div class="detail-row">
                 <div class="detail-label">🩺 Pemeriksaan Fisik</div>
                 <div class="detail-value" id="viewFisik"></div>
             </div>
 
-            <!-- Riwayat Penyakit Dahulu -->
-            <div class="detail-row" id="viewRiwayatPenyakitRow" style="display:none;">
-                <div class="detail-label">📋 Riwayat Penyakit</div>
-                <div class="detail-value" id="viewRiwayatPenyakit"></div>
-            </div>
-
-            <!-- Laboratorium — disembunyikan jika tidak ada data -->
+            <!-- Laboratorium (Dinamis) -->
             <div class="detail-row" id="viewLabRow" style="display:none;">
                 <div class="detail-label">🔬 Laboratorium</div>
                 <div class="detail-value" id="viewLab"></div>
@@ -59,13 +58,13 @@
                 <div class="detail-value" id="viewTerapi"></div>
             </div>
 
-            <!-- Dokter Pemeriksa — disembunyikan jika tidak ada data -->
+            <!-- Dokter Pemeriksa -->
             <div class="detail-row" id="viewDokterRow" style="display:none;">
                 <div class="detail-label">👨‍⚕️ Dokter Pemeriksa</div>
                 <div class="detail-value" id="viewDokterPemeriksa"></div>
             </div>
 
-            <!-- Notifikasi kunci edit (>2 hari atau bukan pemilik/dokter) -->
+            <!-- Notifikasi kunci edit -->
             <div id="editLockNotif" style="display:none;font-size:11px;padding:8px 12px;border-radius:10px;background:rgba(239,68,68,0.08);color:#dc2626;border:1px solid rgba(239,68,68,0.2);margin-bottom:10px;line-height:1.6;">
                 🔒 <span id="editLockMsg"></span>
             </div>
@@ -132,57 +131,46 @@
                 </div>
             </div>
 
-            <!-- ⚠️ Riwayat Alergi (bagian dari seksi TTV) -->
+            <!-- ⚠️ Riwayat Alergi -->
             <div class="mb-3" style="background:rgba(180,83,9,0.06);border:1px solid rgba(180,83,9,0.2);border-radius:10px;padding:10px 12px;">
                 <label class="form-label small fw-bold mb-1" style="color:#b45309;">⚠️ Riwayat Alergi</label>
-                <input type="text" id="modalAlergi" class="form-control" placeholder="Contoh: Penisilin, Sulfa, Udang — kosongkan jika tidak ada" style="border-color:rgba(180,83,9,0.3);">
-                <div style="font-size:10px;color:#92400e;margin-top:4px;">Isi jika pasien memiliki alergi obat atau makanan</div>
+                <input type="text" id="modalAlergi" class="form-control" placeholder="Alergi obat/makanan..." style="border-color:rgba(180,83,9,0.3);">
             </div>
 
-            <!-- 🗣️ Keluhan -->
-            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
-                <span>🗣️ Keluhan Pasien</span>
+            <!-- 🗣️ Keluhan & Riwayat -->
+            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 8px;">
+                <span>🗣️ Keluhan & Riwayat</span>
             </div>
-            <div class="mb-3">
-                <textarea id="modalKeluhan" class="form-control" rows="2" placeholder="Keluhan utama..."></textarea>
+            <div class="mb-2">
+                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Keluhan Utama</label>
+                <textarea id="modalKeluhan" class="form-control" rows="2" placeholder="Keluhan pasien..."></textarea>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Riwayat Penyakit Dahulu</label>
+                <textarea id="modalRiwayatPenyakit" class="form-control" rows="2" placeholder="Contoh: Hipertensi, DM, Asma..."></textarea>
             </div>
 
             <!-- 🩺 Pemeriksaan Fisik -->
-            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 8px;">
                 <span>🩺 Pemeriksaan Fisik</span>
             </div>
             <div class="mb-3">
                 <textarea id="modalFisik" class="form-control" rows="2" placeholder="Hasil pemeriksaan fisik..."></textarea>
             </div>
 
-            <!-- 🔬 Laboratorium -->
-            <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
-                <span>🔬 Hasil Laboratorium</span>
-            </div>
-            <div class="row g-2 mb-3">
-                <div class="col-4">
-                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">GDS <span style="font-size:9px;">(mg/dL)</span></label>
-                    <input type="number" id="modalLabGds" class="form-control" placeholder="—" min="0" max="999">
+            <!-- 🔬 Laboratorium (Dinamis) -->
+            <div id="modalLabEditSection">
+                <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 8px;">
+                    <span>🔬 Hasil Laboratorium</span>
                 </div>
-                <div class="col-4">
-                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Kolesterol <span style="font-size:9px;">(mg/dL)</span></label>
-                    <input type="number" id="modalLabChol" class="form-control" placeholder="—" min="0" max="999">
-                </div>
-                <div class="col-4">
-                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Asam Urat <span style="font-size:9px;">(mg/dL)</span></label>
-                    <input type="number" id="modalLabUa" class="form-control" placeholder="—" step="0.1" min="0" max="30">
+                <div id="modalLabEditContainer" class="row g-2 mb-3">
+                    <!-- Field lab akan dirender secara dinamis oleh script modal -->
                 </div>
             </div>
 
-            <!-- Riwayat Penyakit Dahulu -->
-            <div class="mb-3">
-                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Riwayat Penyakit Dahulu</label>
-                <textarea id="modalRiwayatPenyakit" class="form-control" rows="2" placeholder="Riwayat penyakit / kondisi kronis..."></textarea>
-            </div>
-
-            <!-- 📝 Diagnosa & Terapi — disembunyikan jika Paramedis -->
+            <!-- 📝 Diagnosa & Terapi -->
             <div id="modalEditDiagSection">
-                <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:0 0 8px;display:flex;align-items:center;gap:6px;">
+                <div class="section-divider" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 8px;">
                     <span>📝 Diagnosa & Terapi</span>
                 </div>
                 <div class="row g-2 mb-3">
